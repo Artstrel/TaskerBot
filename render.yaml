@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: taskerbot
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt
+    healthCheckPath: /
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DEFAULT_AI_PROVIDER
+        value: groq
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./data/taskerbot.db
+      - key: WEBAPP_URL
+        sync: false
+      - key: PORT
+        value: 8000
+    disk:
+      name: taskerbot-storage
+      mountPath: /app/data
+      sizeGB: 1

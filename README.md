@@ -140,6 +140,26 @@ ngrok http 8000
 
 ---
 
+## 🚀 Деплой через GitHub
+
+Репозиторий полностью настроен для автоматической сборки и деплоя через GitHub:
+
+### Вариант 1. Автоматический деплой на GitHub Pages (Frontend)
+В репозиторий добавлен workflow [.github/workflows/deploy-pages.yml](.github/workflows/deploy-pages.yml).
+1. Перейдите в ваш репозиторий на GitHub: **Settings** -> **Pages**.
+2. В секции **Build and deployment** выберите:
+   * **Source**: `GitHub Actions`.
+3. При каждом коммите в ветку `main` фронтенд будет автоматически собираться и публиковаться по адресу:  
+   👉 `https://artstrel.github.io/TaskerBot/`
+
+### Вариант 2. Полный деплой Бэкенда + Бота в Render.com (1 клик из GitHub)
+Для круглосуточной работы бота и API в репозиторий добавлен файл [render.yaml](render.yaml):
+1. Зарегистрируйтесь на [Render.com](https://render.com/) через GitHub.
+2. Нажмите **New +** -> **Blueprint**.
+3. Выберите ваш репозиторий `TaskerBot`.
+4. Укажите ваши секретные ключи (`BOT_TOKEN`, `GROQ_API_KEY`, `GEMINI_API_KEY`) в мастере настройки.
+5. Render автоматически соберёт `Dockerfile`, смонтирует диск для базы данных SQLite и выдаст постоянный HTTPS-домен (например, `https://taskerbot.onrender.com`), который можно сразу указать в меню бота через @BotFather!
+
 ## 📂 Архитектура и структура файлов
 
 ```

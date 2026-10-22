@@ -12,7 +12,20 @@ const getTelegramUser = () => {
 
 export const currentUser = getTelegramUser();
 
-const API_BASE = '/api';
+const getApiBase = () => {
+  if (typeof window !== 'undefined') {
+    if (import.meta.env.VITE_API_BASE) {
+      return import.meta.env.VITE_API_BASE.replace(/\/+$/, '');
+    }
+    const custom = localStorage.getItem('tasker_custom_backend');
+    if (custom) {
+      return custom.replace(/\/+$/, '') + '/api';
+    }
+  }
+  return '/api';
+};
+
+const API_BASE = getApiBase();
 
 export const hapticFeedback = (style = 'medium') => {
   if (typeof window !== 'undefined' && window.Telegram?.WebApp?.HapticFeedback) {
