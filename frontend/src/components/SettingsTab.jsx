@@ -3,6 +3,7 @@ import {
   Globe,
   Check,
   Server,
+  Key,
 } from 'lucide-react';
 import {
   fetchUserSettings,
@@ -11,6 +12,10 @@ import {
   hapticFeedback,
   getCustomBackendUrl,
   setCustomBackendUrl,
+  getGeminiKey,
+  setGeminiKey,
+  getGroqKey,
+  setGroqKey,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -19,6 +24,8 @@ export default function SettingsTab({ onRefresh }) {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [customBackend, setCustomBackend] = useState(getCustomBackendUrl());
   const [backendInput, setBackendInput] = useState(getCustomBackendUrl());
+  const [geminiKeyInput, setGeminiKeyInput] = useState(getGeminiKey());
+  const [groqKeyInput, setGroqKeyInput] = useState(getGroqKey());
 
   const loadSettings = useCallback(async () => {
     try {
@@ -51,6 +58,14 @@ export default function SettingsTab({ onRefresh }) {
     setCustomBackendUrl('');
     setCustomBackend('');
     setBackendInput('');
+    triggerSaved();
+    if (onRefresh) onRefresh();
+  };
+
+  const handleSaveAiKeys = () => {
+    hapticFeedback('medium');
+    setGeminiKey(geminiKeyInput);
+    setGroqKey(groqKeyInput);
     triggerSaved();
     if (onRefresh) onRefresh();
   };
@@ -333,19 +348,19 @@ export default function SettingsTab({ onRefresh }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {[
             {
-              id: 'groq',
-              name: 'Groq (Whisper-turbo + Llama 3.3)',
-              badge: 'Молниеносно ~0.3с',
-              desc: 'Рекомендуется: моментальная транскрипция голосовых и быстрый разбор.',
+              id: 'gemini',
+              name: 'Google Gemini 3.5 Flash',
+              badge: 'Рекомендуется',
+              desc: 'Мощная мультимодальная модель Google: точный разбор дат, целей и привычек.',
             },
             {
-              id: 'gemini',
-              name: 'Google Gemini (Flash-Lite / 2.5)',
-              badge: 'Мультимодальный',
-              desc: 'Широкий контекст понимания естественного языка от Google.',
+              id: 'groq',
+              name: 'Groq (Whisper + GPT-OSS)',
+              badge: 'Молниеносно ~0.3с',
+              desc: 'Моментальная транскрипция аудио Whisper и быстрый разбор текста.',
             },
           ].map((prov) => {
-            const isSelected = (settings.ai_provider || 'groq') === prov.id;
+            const isSelected = (settings.ai_provider || 'gemini') === prov.id;
             return (
               <div
                 key={prov.id}
@@ -399,6 +414,81 @@ export default function SettingsTab({ onRefresh }) {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* SECTION: Direct AI Keys (Browser / Offline Mode) */}
+      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px', marginTop: '16px' }}>
+        Ключи API для автономного режима (GitHub Pages)
+      </div>
+      <div className="settings-group" style={{ padding: '14px 16px' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
+          Позволяют нейросети (Gemini 3.5 Flash или Groq) расшифровывать голос и разделять его на несколько задач прямо в браузере без запуска бэкенда. Ключи сохраняются локально в вашем браузере.
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Key size={12} /> Google Gemini API Key
+            </div>
+            <input
+              type="password"
+              placeholder="Вставьте ваш Google Gemini API Key"
+              value={geminiKeyInput}
+              onChange={(e) => setGeminiKeyInput(e.target.value)}
+              style={{
+                width: '100%',
+                fontSize: '12px',
+                padding: '8px 10px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                fontFamily: 'monospace',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Key size={12} /> Groq API Key
+            </div>
+            <input
+              type="password"
+              placeholder="Вставьте ваш Groq API Key (gsk_...)"
+              value={groqKeyInput}
+              onChange={(e) => setGroqKeyInput(e.target.value)}
+              style={{
+                width: '100%',
+                fontSize: '12px',
+                padding: '8px 10px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                fontFamily: 'monospace',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          <button
+            type="button"
+            className="filter-chip active"
+            onClick={handleSaveAiKeys}
+            style={{
+              padding: '8px 16px',
+              fontSize: '12px',
+              cursor: 'pointer',
+              alignSelf: 'flex-start',
+              marginTop: '4px',
+            }}
+          >
+            Сохранить ключи API
+          </button>
         </div>
       </div>
     </div>

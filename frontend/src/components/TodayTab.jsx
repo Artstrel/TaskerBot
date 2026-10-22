@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AlertTriangle,
   Flame,
@@ -22,6 +22,7 @@ import {
   toggleRoutine,
   createTask,
   hapticFeedback,
+  calculateDayEndAndUrgency,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -73,6 +74,24 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted }) 
     completed_count = 0,
     total_count = 0,
   } = dashboardData;
+
+  const [liveHoursLeft, setLiveHoursLeft] = useState(
+    dashboardData.hours_left_in_day !== undefined ? dashboardData.hours_left_in_day : 0
+  );
+  const [liveUrgency, setLiveUrgency] = useState(dashboardData.urgency_level || 'normal');
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const dayEndTime = dashboardData.day_end_time || '00:00';
+      const calc = calculateDayEndAndUrgency(dayEndTime);
+      setLiveHoursLeft(calc.hours_left_in_day);
+      setLiveUrgency(calc.urgency_level);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [dashboardData.day_end_time]);
 
   const progressPct = total_count > 0 ? Math.round((completed_count / total_count) * 100) : 0;
   const isDayAllDone = total_count > 0 && completed_count === total_count;
@@ -133,13 +152,21 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted }) 
     }
   };
 
-  // Time remaining chip configuration
+  // Time remaining chip configuration with live ticking clock
   const renderTimeChip = () => {
-    const hours = Math.floor(hours_left_in_day);
-    const mins = Math.round((hours_left_in_day % 1) * 60);
-    const label = `${hours}ч ${mins}м до сброса`;
+    const totalSeconds = Math.max(0, Math.floor(liveHoursLeft * 3600));
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
 
-    if (urgency_level === 'critical_1h') {
+    let label = '';
+    if (hours > 0) {
+      label = `${hours}ч ${mins}м до сброса`;
+    } else {
+      label = `${mins}м ${secs}с до сброса`;
+    }
+
+    if (liveUrgency === 'critical_1h') {
       return (
         <span className="time-left-chip chip-danger" title="Критическое время до сброса дня">
           <AlertTriangle size={12} />
@@ -147,7 +174,7 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted }) 
         </span>
       );
     }
-    if (urgency_level.startsWith('warning')) {
+    if (liveUrgency.startsWith('warning')) {
       return (
         <span className="time-left-chip chip-warning">
           <Clock size={12} />

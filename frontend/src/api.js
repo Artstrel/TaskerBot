@@ -186,6 +186,33 @@ export const syncUserTimezone = async () => {
   }
 };
 
+export const calculateDayEndAndUrgency = (dayEndTimeStr = '00:00') => {
+  const now = new Date();
+  let [endHour, endMinute] = (dayEndTimeStr || '00:00').split(':').map((s) => parseInt(s, 10));
+  if (isNaN(endHour)) endHour = 0;
+  if (isNaN(endMinute)) endMinute = 0;
+
+  let target = new Date(now);
+  if (endHour === 0 && endMinute === 0) {
+    target.setHours(23, 59, 59, 999);
+  } else {
+    target.setHours(endHour, endMinute, 0, 0);
+    if (now >= target) {
+      target.setDate(target.getDate() + 1);
+    }
+  }
+
+  const diffMs = Math.max(0, target.getTime() - now.getTime());
+  const hoursLeft = diffMs / (1000 * 60 * 60);
+
+  let urgency = 'normal';
+  if (hoursLeft <= 1) urgency = 'critical_1h';
+  else if (hoursLeft <= 3) urgency = 'warning_3h';
+  else if (hoursLeft <= 6) urgency = 'warning_6h';
+
+  return { hours_left_in_day: hoursLeft, urgency_level: urgency };
+};
+
 export const fetchDashboard = async () => {
   try {
     const res = await fetch(
@@ -211,14 +238,21 @@ export const fetchDashboard = async () => {
     today.filter((t) => t.is_completed).length + db.routines.filter((r) => r.is_completed_today).length;
   const totalToday = today.length + db.routines.length;
 
+  const dayEndTime = db.settings?.day_end_time || '00:00';
+  const { hours_left_in_day, urgency_level } = calculateDayEndAndUrgency(dayEndTime);
+  const hours = Math.floor(hours_left_in_day);
+  const mins = Math.round((hours_left_in_day % 1) * 60);
+
   return {
     today_formatted: new Intl.DateTimeFormat('ru-RU', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
     }).format(new Date()),
-    day_end_time: db.settings.day_end_time || '00:00',
-    time_remaining_str: 'осталось 3 ч',
+    day_end_time: dayEndTime,
+    hours_left_in_day,
+    urgency_level,
+    time_remaining_str: `${hours} ч ${mins} м до сброса`,
     overdue_tasks: overdue,
     routine_tasks: db.routines,
     today_tasks: today,
@@ -502,6 +536,42 @@ export const deleteGoal = async (goalId) => {
   return { success: true };
 };
 
+export const getGeminiKey = () => {
+  if (typeof window !== 'undefined') {
+    return (
+      localStorage.getItem('tasker_gemini_key') ||
+      import.meta.env.VITE_GEMINI_API_KEY ||
+      ''
+    );
+  }
+  return '';
+};
+
+export const setGeminiKey = (key) => {
+  if (typeof window !== 'undefined') {
+    if (key && key.trim()) localStorage.setItem('tasker_gemini_key', key.trim());
+    else localStorage.removeItem('tasker_gemini_key');
+  }
+};
+
+export const getGroqKey = () => {
+  if (typeof window !== 'undefined') {
+    return (
+      localStorage.getItem('tasker_groq_key') ||
+      import.meta.env.VITE_GROQ_API_KEY ||
+      ''
+    );
+  }
+  return '';
+};
+
+export const setGroqKey = (key) => {
+  if (typeof window !== 'undefined') {
+    if (key && key.trim()) localStorage.setItem('tasker_groq_key', key.trim());
+    else localStorage.removeItem('tasker_groq_key');
+  }
+};
+
 export const fetchAIProviders = async () => {
   try {
     const res = await fetch(`${API_BASE}/ai/providers?telegram_id=${currentUser.id}`);
@@ -509,14 +579,110 @@ export const fetchAIProviders = async () => {
   } catch (e) {}
 
   return {
+    active_provider: 'gemini',
     providers: [
-      { id: 'groq', name: 'Groq (Whisper + Llama 3)', is_default: true },
-      { id: 'gemini', name: 'Google Gemini Flash', is_default: false },
+      { id: 'gemini', name: 'Google Gemini 3.5 Flash', is_default: true },
+      { id: 'groq', name: 'Groq (Whisper + GPT-OSS)', is_default: false },
     ],
   };
 };
 
+export const parseTextWithDirectGemini = async (text) => {
+  const key = getGeminiKey();
+  if (!key) return null;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const prompt = `Ты — интеллектуальный ассистент по планированию задач TaskerBot.
+Твоя задача — внимательно проанализировать текст пользователя и извлечь ВСЕ упомянутые задачи.
+Если в тексте несколько действий/задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
+Категории:
+1. "routine": регулярные привычки ("каждый день", "ежедневно", "утром")
+2. "one_time": разовые задачи ("завтра", "сегодня", "купить", "позвонить")
+3. "goal": глобальные цели ("цель", "проект")
+
+Текущая дата: ${todayStr}.
+Формат ответа строго валидный JSON с ключом "tasks".
+Пример структуры:
+{
+  "tasks": [
+    {
+      "title": "Купить молоко",
+      "category": "one_time",
+      "scheduled_date": "2026-10-23",
+      "description": null
+    }
+  ]
+}
+
+Текст пользователя:
+${text}`;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+        },
+      }),
+    }
+  );
+  if (!res.ok) throw new Error(`Gemini direct status: ${res.status}`);
+  const data = await res.json();
+  const textContent = data.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text;
+  if (!textContent) throw new Error('Empty Gemini output');
+  let cleaned = textContent.trim();
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+  }
+  const parsed = JSON.parse(cleaned);
+  if (parsed.tasks && Array.isArray(parsed.tasks)) return parsed;
+  return null;
+};
+
+export const parseTextWithDirectGroq = async (text) => {
+  const key = getGroqKey();
+  if (!key) return null;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const prompt = `Ты — интеллектуальный ассистент по планированию задач TaskerBot.
+Твоя задача — внимательно проанализировать текст пользователя и извлечь ВСЕ упомянутые задачи.
+Если в сообщении несколько задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
+Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели).
+
+Текущая дата: ${todayStr}.
+Формат ответа: строгий JSON с ключом "tasks".
+Каждый элемент: {"category": "routine"|"one_time"|"goal", "title": "краткое название", "scheduled_date": "YYYY-MM-DD"|null}`;
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-oss-120b',
+      messages: [
+        { role: 'system', content: prompt },
+        { role: 'user', content: `Текст пользователя:\n${text}` },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.1,
+    }),
+  });
+  if (!res.ok) throw new Error(`Groq direct status: ${res.status}`);
+  const data = await res.json();
+  const raw = data.choices?.[0]?.message?.content;
+  if (!raw) throw new Error('Empty Groq response');
+  const parsed = JSON.parse(raw);
+  if (parsed.tasks && Array.isArray(parsed.tasks)) return parsed;
+  return null;
+};
+
 export const parseSmartText = async (text, provider = null) => {
+  // 1. Try Backend API first if reachable
   try {
     const formData = new FormData();
     formData.append('text', text);
@@ -530,29 +696,72 @@ export const parseSmartText = async (text, provider = null) => {
     if (res.ok) return await res.json();
   } catch (e) {}
 
-  // Fallback parser on GitHub Pages demo
-  const lines = text
-    .split(/[\n,;]+/)
+  // 2. Direct Neural AI call (Gemini 3.5 Flash or Groq)
+  const chosen = provider || 'gemini';
+  if (chosen === 'groq') {
+    try {
+      const gRes = await parseTextWithDirectGroq(text);
+      if (gRes && gRes.tasks && gRes.tasks.length > 0) return gRes;
+    } catch (e) {
+      console.warn('Direct Groq failed, trying direct Gemini fallback:', e);
+    }
+    try {
+      const gemRes = await parseTextWithDirectGemini(text);
+      if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
+    } catch (e) {}
+  } else {
+    try {
+      const gemRes = await parseTextWithDirectGemini(text);
+      if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
+    } catch (e) {
+      console.warn('Direct Gemini failed, trying direct Groq fallback:', e);
+    }
+    try {
+      const gRes = await parseTextWithDirectGroq(text);
+      if (gRes && gRes.tasks && gRes.tasks.length > 0) return gRes;
+    } catch (e) {}
+  }
+
+  // 3. Fallback NLP rule-based task splitter (splits on Russian conjunctions & task keywords)
+  const rawChunks = text
+    .split(/(?:[\n;]+|\s+(?:а также|а еще|и еще|а потом|потом|также|плюс|кстати|и)\s+)/i)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
-  const tasks = lines.map((line, idx) => {
-    const lower = line.toLowerCase();
-    const isRoutine = lower.includes('каждый день') || lower.includes('ежедневно') || lower.includes('привычка');
-    const isGoal = lower.includes('цель') || lower.includes('проект');
+
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const tasks = rawChunks.map((chunk, idx) => {
+    const lower = chunk.toLowerCase();
+    const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(lower);
+    const isGoal = /цель|проект|хочу/i.test(lower);
+    let schedDate = todayStr;
+    if (/завтра/i.test(lower)) schedDate = tomorrowStr;
+
+    const cleanTitle = chunk
+      .replace(/^(?:завтра|сегодня|послезавтра|надо|нужно|каждый день|ежедневно|цель:?|проект:?)\s*/i, '')
+      .replace(/\b(?:завтра|послезавтра)\b/gi, '')
+      .trim();
+
     return {
       id: Date.now() + idx,
-      title: line.replace(/^(каждый день|ежедневно|цель:?)\s*/i, ''),
+      title: cleanTitle || chunk,
       category: isRoutine ? 'routine' : isGoal ? 'goal' : 'one_time',
-      scheduled_date: new Date().toISOString().split('T')[0],
+      scheduled_date: isRoutine ? null : schedDate,
       selected: true,
     };
   });
+
   return {
     tasks: tasks.length > 0 ? tasks : [{ id: Date.now(), title: text, category: 'one_time', selected: true }],
   };
 };
 
 export const parseSmartAudio = async (audioBlob, provider = null) => {
+  // 1. Try Backend API first if reachable
   try {
     const formData = new FormData();
     const ext = audioBlob.type && audioBlob.type.includes('webm') ? 'voice.webm' : 'voice.ogg';
@@ -567,6 +776,37 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
     if (res.ok) return await res.json();
   } catch (e) {}
 
-  // Audio transcription requires Python backend AI API key
-  throw new Error('Голосовая AI транскрипция требует подключения живого бэкенда (Render / ngrok). Для демо используйте текстовый ввод.');
+  // 2. Direct Groq Whisper transcription from browser
+  const groqKey = getGroqKey();
+  if (groqKey) {
+    try {
+      const gFormData = new FormData();
+      const ext = audioBlob.type && audioBlob.type.includes('webm') ? 'voice.webm' : 'voice.ogg';
+      gFormData.append('file', audioBlob, ext);
+      gFormData.append('model', 'whisper-large-v3-turbo');
+      gFormData.append('response_format', 'json');
+
+      const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: gFormData,
+      });
+
+      if (whisperRes.ok) {
+        const whisperData = await whisperRes.json();
+        const transcribedText = whisperData.text && whisperData.text.trim();
+        if (transcribedText) {
+          // Pass transcribed speech to Neural AI to decompose into multiple tasks!
+          return await parseSmartText(transcribedText, provider);
+        }
+      }
+    } catch (we) {
+      console.warn('Direct Groq Whisper failed:', we);
+    }
+  }
+
+  // Fallback will trigger browser speech recognition in QuickAddModal
+  throw new Error('Голосовая AI транскрипция требует подключения бэкенда или доступа к микрофону.');
 };
