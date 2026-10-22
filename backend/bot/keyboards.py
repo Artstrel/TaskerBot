@@ -1,0 +1,172 @@
+from typing import Optional, List
+from aiogram.types import (
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    WebAppInfo,
+)
+from backend.config import settings
+
+
+def get_main_menu(webapp_url: Optional[str] = None) -> ReplyKeyboardMarkup:
+    url = webapp_url or settings.WEBAPP_URL
+    webapp_btn = (
+        KeyboardButton(text="📱 Открыть WebApp", web_app=WebAppInfo(url=url))
+        if url
+        else KeyboardButton(text="📱 Открыть WebApp")
+    )
+
+    kb = [
+        [
+            KeyboardButton(text="📋 Задачи на сегодня"),
+            KeyboardButton(text="🎯 Мои цели"),
+        ],
+        [
+            KeyboardButton(text="🔄 Рутины"),
+            webapp_btn,
+        ],
+        [
+            KeyboardButton(text="⚙️ Настройки"),
+            KeyboardButton(text="💡 Помощь"),
+        ],
+    ]
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_webapp_inline_keyboard(webapp_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    url = webapp_url or settings.WEBAPP_URL or "http://localhost:8000"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Запустить TaskerBot WebApp",
+                    web_app=WebAppInfo(url=url),
+                )
+            ]
+        ]
+    )
+
+
+def get_task_actions_kb(task_id: int, is_completed: bool, is_overdue: bool = False) -> InlineKeyboardMarkup:
+    status_text = "↩️ Вернуть" if is_completed else "✅ Сделано"
+    buttons = [
+        InlineKeyboardButton(text=status_text, callback_data=f"task_toggle:{task_id}"),
+        InlineKeyboardButton(text="➡️ Завтра", callback_data=f"task_postpone:{task_id}"),
+        InlineKeyboardButton(text="🗑", callback_data=f"task_delete:{task_id}"),
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[buttons])
+
+
+def get_routine_actions_kb(routine_id: int, is_completed: bool) -> InlineKeyboardMarkup:
+    status_text = "↩️ Отменить" if is_completed else "✅ Выполнено"
+    buttons = [
+        InlineKeyboardButton(text=status_text, callback_data=f"routine_toggle:{routine_id}"),
+        InlineKeyboardButton(text="🗑 Удалить", callback_data=f"routine_delete:{routine_id}"),
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=[buttons])
+
+
+def get_parsed_tasks_confirmation_kb(cache_id: str, tasks_count: int = 0) -> InlineKeyboardMarkup:
+    rows = []
+
+    # If there are multiple tasks, provide quick delete buttons for individual items
+    if tasks_count > 1:
+        del_buttons = [
+            InlineKeyboardButton(text=f"🗑 №{i+1}", callback_data=f"del_parsed:{cache_id}:{i}")
+            for i in range(tasks_count)
+        ]
+        for i in range(0, len(del_buttons), 4):
+            rows.append(del_buttons[i:i + 4])
+
+    save_text = f"💾 Сохранить ({tasks_count})" if tasks_count > 0 else "💾 Сохранить всё"
+    rows.append([
+        InlineKeyboardButton(text=save_text, callback_data=f"save_tasks:{cache_id}"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data=f"cancel_tasks:{cache_id}"),
+    ])
+
+    if settings.WEBAPP_URL:
+        rows.append([
+            InlineKeyboardButton(
+                text="📱 Открыть WebApp для детальной правки",
+                web_app=WebAppInfo(url=settings.WEBAPP_URL),
+            )
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_goal_actions_kb(goal_id: int, is_completed: bool = False) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="➕ Добавить шаг", callback_data=f"goal_add_step:{goal_id}"),
+                InlineKeyboardButton(
+                    text="✅ Завершить цель" if not is_completed else "↩️ Возобновить",
+                    callback_data=f"goal_toggle:{goal_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(text="🗑 Удалить цель", callback_data=f"goal_delete:{goal_id}")
+            ]
+        ]
+    )
+
+
+def get_subtask_kb(subtask_id: int, is_completed: bool) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="↩️ Вернуть" if is_completed else "✅ Выполнено",
+                    callback_data=f"task_toggle:{subtask_id}",
+                ),
+                InlineKeyboardButton(
+                    text="📅 На сегодня",
+                    callback_data=f"subtask_today:{subtask_id}",
+                ),
+            ]
+        ]
+    )
+
+
+def get_settings_kb(
+    reminder_6h: bool, reminder_3h: bool, reminder_1h: bool, morning_digest: bool
+) -> InlineKeyboardMarkup:
+    def mark(b: bool) -> str:
+        return "🔔 Вкл" if b else "🔕 Выкл"
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"За 6 часов: {mark(reminder_6h)}",
+                    callback_data="toggle_setting:reminder_6h",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"За 3 часа: {mark(reminder_3h)}",
+                    callback_data="toggle_setting:reminder_3h",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"За 1 час: {mark(reminder_1h)}",
+                    callback_data="toggle_setting:reminder_1h",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=f"Утренний дайджест: {mark(morning_digest)}",
+                    callback_data="toggle_setting:morning_digest",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🌐 Часовой пояс & время конца дня в WebApp",
+                    callback_data="show_tz_help",
+                )
+            ],
+        ]
+    )

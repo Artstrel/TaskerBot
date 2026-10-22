@@ -1,0 +1,604 @@
+import io
+import uuid
+from datetime import datetime, timedelta, date
+from typing import Dict, Any
+
+from aiogram import Router, F
+from aiogram.filters import CommandStart, Command
+from aiogram.types import Message, CallbackQuery, ContentType
+
+from backend.database import AsyncSessionLocal
+from backend.crud import (
+    get_or_create_user,
+    get_user_now,
+    get_user_effective_date_and_urgency,
+    get_day_summary,
+    get_user_goals,
+    get_user_routines_with_status,
+    toggle_one_time_task,
+    postpone_task,
+    delete_one_time_task,
+    toggle_routine_completion,
+    delete_routine,
+    create_routine,
+    create_one_time_task,
+    create_goal,
+    add_subtask_to_goal,
+    delete_goal,
+    update_user,
+)
+from backend.schemas import ExtractedTaskList, UserUpdate
+from backend.ai_service import ai_service
+from backend.bot.keyboards import (
+    get_main_menu,
+    get_webapp_inline_keyboard,
+    get_task_actions_kb,
+    get_routine_actions_kb,
+    get_parsed_tasks_confirmation_kb,
+    get_goal_actions_kb,
+    get_subtask_kb,
+    get_settings_kb,
+)
+from backend.bot.bot_instance import bot
+
+router = Router()
+
+# In-memory temporary cache for tasks pending confirmation
+PENDING_TASKS_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def render_progress_bar(percentage: int, length: int = 8) -> str:
+    filled = int(round(length * (percentage / 100.0)))
+    return "█" * filled + "░" * (length - filled)
+
+
+@router.message(CommandStart())
+async def handle_start(message: Message):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(
+            session,
+            telegram_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+
+    welcome_text = (
+        f"👋 <b>Привет, {message.from_user.first_name or 'друг'}!</b>\n\n"
+        "Я <b>TaskerBot</b> — твой персональный трекер задач, привычек и целей.\n\n"
+        "✨ <b>Что я умею:</b>\n"
+        "• <b>🔄 Рутинные задачи:</b> повторяются каждый день со стриками и напоминаниями за 6, 3 и 1 ч.\n"
+        "• <b>⚡️ Разовые задачи:</b> если не успел выполнить, автоматически переносятся со статусом просрочки.\n"
+        "• <b>🎯 Глобальные цели:</b> проекты с дедлайнами и подзадачами.\n"
+        "• <b>🎙 Голосовой ввод через Gemini API:</b> надиктуй мне голосовое, и я сам разберу и классифицирую задачи!\n\n"
+        "👇 <i>Используй кнопки меню или просто напиши / надиктуй свои задачи!</i>"
+    )
+
+    await message.answer(
+        welcome_text,
+        reply_markup=get_main_menu(),
+    )
+
+
+@router.message(Command("help"))
+@router.message(F.text == "💡 Помощь")
+async def handle_help(message: Message):
+    help_text = (
+        "📖 <b>Как пользоваться TaskerBot:</b>\n\n"
+        "<b>1. Ввод задач голосом или текстом:</b>\n"
+        "Просто отправь голосовое сообщение или текст в свободной форме. Например:\n"
+        "<i>«Каждый день пить витамины, завтра заехать в сервис и для цели Ремонт купить плитку»</i>.\n"
+        "Искусственный интеллект автоматически разобьет фразу на задачи и предложит сохранить их в 1 клик.\n\n"
+        "<b>2. Категории задач:</b>\n"
+        "• <b>Рутина:</b> ежедневные дела. Напоминания приходят за 6, 3 и 1 час до конца дня.\n"
+        "• <b>Разовые задачи:</b> задачи дня. Пропущенные переносятся на завтра и закрепляются сверху.\n"
+        "• <b>Цели (Goals):</b> масштабные проекты, шаги которых можно брать на сегодня.\n\n"
+        "<b>3. WebApp интерфейс:</b>\n"
+        "Нажмите кнопку <b>«📱 Открыть WebApp»</b> для красивого интерактивного управления со смартфона."
+    )
+    await message.answer(help_text, reply_markup=get_webapp_inline_keyboard())
+
+
+@router.message(Command("today"))
+@router.message(F.text == "📋 Задачи на сегодня")
+async def handle_today(message: Message):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user.id)
+        summary = await get_day_summary(session, user)
+
+    # Urgency badge
+    urgency_map = {
+        "critical_1h": "🚨 <b>КРИТИЧНО! Осталось менее 1 часа до конца дня!</b>",
+        "warning_3h": "🟠 <b>Внимание: осталось 3 часа до конца дня!</b>",
+        "warning_6h": "🟡 <b>Напоминание: осталось 6 часов до конца дня.</b>",
+        "normal": f"🟢 До конца дня: <b>~{summary.hours_left_in_day:.1f} ч.</b>",
+    }
+    urgency_line = urgency_map.get(summary.urgency_level, "")
+
+    text_parts = [
+        f"📅 <b>Задачи на {summary.date.strftime('%d.%m.%Y')}</b>",
+        urgency_line,
+        f"📊 Прогресс дня: <b>{summary.completed_count}/{summary.total_count}</b> задач выполнено.\n",
+    ]
+
+    # 1. Overdue section (pinned on top!)
+    if summary.overdue_tasks:
+        text_parts.append("⚠️ <b>ПРОСРОЧЕННЫЕ ЗАДАЧИ (Перенесены):</b>")
+        for t in summary.overdue_tasks:
+            status_icon = "✅" if t.is_completed else "🔴"
+            days_text = f"(+{t.overdue_days} дн.)" if t.overdue_days > 0 else "(со вчера)"
+            goal_badge = f" [🎯 {t.goal_title}]" if t.goal_title else ""
+            text_parts.append(f"{status_icon} <b>{t.title}</b> <i>{days_text}</i>{goal_badge}")
+        text_parts.append("")
+
+    # 2. Routine section
+    if summary.routine_tasks:
+        text_parts.append("🔄 <b>РУТИННЫЕ ПРИВЫЧКИ (Каждый день):</b>")
+        for r in summary.routine_tasks:
+            icon = "✅" if r.is_completed_today else "⏳"
+            streak_text = f"🔥 {r.current_streak} дн." if r.current_streak > 0 else ""
+            text_parts.append(f"{icon} <b>{r.title}</b> {streak_text}")
+        text_parts.append("")
+
+    # 3. Today's one-time tasks
+    if summary.today_tasks:
+        text_parts.append("📝 <b>РАЗОВЫЕ ЗАДАЧИ НА СЕГОДНЯ:</b>")
+        for t in summary.today_tasks:
+            icon = "✅" if t.is_completed else "▫️"
+            goal_badge = f" [🎯 {t.goal_title}]" if t.goal_title else ""
+            text_parts.append(f"{icon} <b>{t.title}</b>{goal_badge}")
+        text_parts.append("")
+
+    if not summary.overdue_tasks and not summary.routine_tasks and not summary.today_tasks:
+        text_parts.append("🎉 <i>На сегодня пока нет задач! Надиктуй голосом или напиши, чтобы добавить.</i>")
+
+    await message.answer("\n".join(text_parts))
+
+    # Send actionable inline items for uncompleted tasks (overdue & routines first)
+    if summary.overdue_tasks:
+        for t in summary.overdue_tasks[:3]:  # Top overdue
+            days_str = f"+{t.overdue_days} дн." if t.overdue_days > 0 else "со вчера"
+            await message.answer(
+                f"⚠️ <b>Просрочено ({days_str}):</b> {t.title}",
+                reply_markup=get_task_actions_kb(t.id, t.is_completed, is_overdue=True),
+            )
+
+    for r in summary.routine_tasks:
+        if not r.is_completed_today:
+            streak_str = f" (Стрик: 🔥 {r.current_streak})" if r.current_streak > 0 else ""
+            await message.answer(
+                f"🔄 <b>Рутина:</b> {r.title}{streak_str}",
+                reply_markup=get_routine_actions_kb(r.id, r.is_completed_today),
+            )
+
+
+@router.message(Command("goals"))
+@router.message(F.text == "🎯 Мои цели")
+async def handle_goals(message: Message):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user.id)
+        goals = await get_user_goals(session, user.telegram_id)
+
+    if not goals:
+        await message.answer(
+            "🎯 <b>У вас пока нет активных целей!</b>\n\n"
+            "Чтобы создать цель, напишите например:\n"
+            "<i>«Цель: Запустить онлайн-курс до 1 декабря»</i>\n"
+            "или откройте WebApp для добавления.",
+            reply_markup=get_webapp_inline_keyboard(),
+        )
+        return
+
+    await message.answer("🎯 <b>Ваши глобальные цели и проекты:</b>")
+
+    for g in goals:
+        bar = render_progress_bar(g.progress_percentage)
+        deadline_text = f" • Дедлайн: {g.target_date.strftime('%d.%m.%Y')}" if g.target_date else ""
+        text = (
+            f"🎯 <b>{g.title}</b>\n"
+            f"Прогресс: <code>[{bar}]</code> <b>{g.progress_percentage}%</b> "
+            f"({g.completed_subtasks}/{g.total_subtasks} шагов){deadline_text}\n"
+        )
+        if g.description:
+            text += f"<i>{g.description}</i>\n"
+
+        if g.subtasks:
+            text += "\n<b>Шаги цели:</b>\n"
+            for st in g.subtasks:
+                icon = "✅" if st.is_completed else "▫️"
+                text += f"{icon} {st.title}\n"
+
+        await message.answer(text, reply_markup=get_goal_actions_kb(g.id, g.is_completed))
+
+
+@router.message(Command("routines"))
+@router.message(F.text == "🔄 Рутины")
+async def handle_routines(message: Message):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user.id)
+        now = get_user_now(user.timezone)
+        effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+        routines = await get_user_routines_with_status(session, user.telegram_id, effective_date)
+
+    if not routines:
+        await message.answer(
+            "🔄 <b>У вас пока нет регулярных привычек!</b>\n\n"
+            "Чтобы добавить рутину, напишите например:\n"
+            "<i>«Каждый день пить 2 литра воды»</i> или <i>«Ежедневно читать 20 страниц»</i>."
+        )
+        return
+
+    await message.answer("🔄 <b>Ваши ежедневные привычки:</b>")
+    for r in routines:
+        status = "✅ Выполнено сегодня" if r.is_completed_today else "⏳ Ожидает выполнения"
+        text = (
+            f"• <b>{r.title}</b>\n"
+            f"Статус: {status}\n"
+            f"Текущий стрик: 🔥 <b>{r.current_streak} дн.</b> | Рекорд: 🏆 <b>{r.best_streak} дн.</b>"
+        )
+        await message.answer(text, reply_markup=get_routine_actions_kb(r.id, r.is_completed_today))
+
+
+@router.message(F.text == "📱 Открыть WebApp")
+async def handle_open_webapp(message: Message):
+    await message.answer(
+        "📱 <b>Интерфейс Telegram WebApp:</b>\n\n"
+        "Нажмите на кнопку ниже, чтобы открыть визуальный дашборд с целями, графиками и задачами:",
+        reply_markup=get_webapp_inline_keyboard(),
+    )
+
+
+@router.message(Command("settings"))
+@router.message(F.text == "⚙️ Настройки")
+async def handle_settings(message: Message):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user.id)
+
+    text = (
+        "⚙️ <b>Настройки уведомлений и расписания:</b>\n\n"
+        f"🌍 Часовой пояс: <b>{user.timezone}</b>\n"
+        f"🌙 Конец дня: <b>{user.day_end_time}</b>\n\n"
+        "Нажмите на кнопку, чтобы переключить напоминание:"
+    )
+    await message.answer(
+        text,
+        reply_markup=get_settings_kb(
+            reminder_6h=user.reminder_6h_enabled,
+            reminder_3h=user.reminder_3h_enabled,
+            reminder_1h=user.reminder_1h_enabled,
+            morning_digest=user.morning_digest_enabled,
+        ),
+    )
+
+
+# --- Voice Message Handler ---
+@router.message(F.voice | F.audio)
+async def handle_voice_message(message: Message):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user.id)
+        now = get_user_now(user.timezone)
+        effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+        user_provider = user.ai_provider
+
+    provider_label = "Groq" if user_provider == "groq" else "Gemini"
+    status_msg = await message.answer(f"🎙 <i>Распознаю аудио через {provider_label}...</i>")
+
+    try:
+        file_id = message.voice.file_id if message.voice else message.audio.file_id
+        file_info = await bot.get_file(file_id)
+
+        file_bytes_io = io.BytesIO()
+        await bot.download_file(file_info.file_path, file_bytes_io)
+        audio_bytes = file_bytes_io.getvalue()
+
+        extracted = await ai_service.parse_audio_voice(audio_bytes, effective_date, provider=user_provider)
+        await status_msg.delete()
+
+        if not extracted.tasks:
+            await message.answer("🤔 Не удалось распознать задачи из голосового сообщения. Попробуйте еще раз.")
+            return
+
+        await present_parsed_tasks(message, extracted, effective_date)
+
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Ошибка обработки голосового сообщения: {e}")
+
+
+# --- Natural Language Text Handler ---
+@router.message(F.text)
+async def handle_text_message(message: Message):
+    text = message.text.strip()
+    # Skip command or menu button if not handled above
+    if text.startswith("/") or text in [
+        "📋 Задачи на сегодня",
+        "🎯 Мои цели",
+        "🔄 Рутины",
+        "📱 Открыть WebApp",
+        "⚙️ Настройки",
+        "💡 Помощь",
+    ]:
+        return
+
+    status_msg = await message.answer("🤖 <i>Анализирую текст...</i>")
+
+    try:
+        async with AsyncSessionLocal() as session:
+            user = await get_or_create_user(session, message.from_user.id)
+            now = get_user_now(user.timezone)
+            effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+            user_provider = user.ai_provider
+
+        extracted = await ai_service.parse_text_tasks(text, effective_date, provider=user_provider)
+        await status_msg.delete()
+
+        if not extracted.tasks:
+            await message.answer("🤔 Не удалось распознать задачу в тексте.")
+            return
+
+        await present_parsed_tasks(message, extracted, effective_date)
+
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Ошибка распознавания: {e}")
+
+
+async def present_parsed_tasks(message: Message, extracted: ExtractedTaskList, effective_date: date):
+    cache_id = str(uuid.uuid4())[:8]
+    PENDING_TASKS_CACHE[cache_id] = {
+        "user_id": message.from_user.id,
+        "tasks": list(extracted.tasks),
+        "effective_date": effective_date,
+    }
+
+    category_labels = {
+        "routine": "🔄 Рутина (ежедневно)",
+        "one_time": "⚡️ Разовая задача",
+        "goal": "🎯 Глобальная цель",
+        "subtask": "▫️ Подзадача цели",
+    }
+
+    msg_lines = [
+        "✨ <b>Распознанные задачи:</b>\n",
+    ]
+
+    for idx, t in enumerate(extracted.tasks, 1):
+        cat_badge = category_labels.get(t.category, "📝 Задача")
+        date_str = f" (на {t.scheduled_date})" if t.scheduled_date else ""
+        goal_str = f" [к цели: {t.goal_title}]" if t.goal_title else ""
+        msg_lines.append(f"{idx}. <b>{t.title}</b>\n   ↳ <i>{cat_badge}{date_str}{goal_str}</i>")
+
+    msg_lines.append("\nСохранить эти задачи? Вы можете удалить лишние пункты кнопками ниже.")
+
+    await message.answer(
+        "\n".join(msg_lines),
+        reply_markup=get_parsed_tasks_confirmation_kb(cache_id, len(extracted.tasks)),
+    )
+
+
+# --- Callback Handlers ---
+@router.callback_query(F.data.startswith("del_parsed:"))
+async def cb_del_parsed_item(query: CallbackQuery):
+    parts = query.data.split(":")
+    cache_id = parts[1]
+    item_idx = int(parts[2])
+
+    cached = PENDING_TASKS_CACHE.get(cache_id)
+    if not cached:
+        await query.answer("Срок действия подтверждения истек.", show_alert=True)
+        return
+
+    tasks = cached["tasks"]
+    if 0 <= item_idx < len(tasks):
+        removed = tasks.pop(item_idx)
+        await query.answer(f"Исключено: {removed.title[:25]}")
+    else:
+        await query.answer()
+        return
+
+    if not tasks:
+        PENDING_TASKS_CACHE.pop(cache_id, None)
+        await query.message.edit_text("❌ Все задачи были исключены. Ничего не сохранено.")
+        return
+
+    category_labels = {
+        "routine": "🔄 Рутина (ежедневно)",
+        "one_time": "⚡️ Разовая задача",
+        "goal": "🎯 Глобальная цель",
+        "subtask": "▫️ Подзадача цели",
+    }
+    msg_lines = ["✨ <b>Оставшиеся задачи:</b>\n"]
+    for idx, t in enumerate(tasks, 1):
+        cat_badge = category_labels.get(t.category, "📝 Задача")
+        date_str = f" (на {t.scheduled_date})" if t.scheduled_date else ""
+        goal_str = f" [к цели: {t.goal_title}]" if t.goal_title else ""
+        msg_lines.append(f"{idx}. <b>{t.title}</b>\n   ↳ <i>{cat_badge}{date_str}{goal_str}</i>")
+
+    msg_lines.append("\nСохранить оставшиеся задачи?")
+
+    await query.message.edit_text(
+        "\n".join(msg_lines),
+        reply_markup=get_parsed_tasks_confirmation_kb(cache_id, len(tasks)),
+    )
+
+@router.callback_query(F.data.startswith("save_tasks:"))
+async def cb_save_tasks(query: CallbackQuery):
+    cache_id = query.data.split(":")[1]
+    cached = PENDING_TASKS_CACHE.pop(cache_id, None)
+
+    if not cached:
+        await query.answer("Срок действия подтверждения истек.", show_alert=True)
+        return
+
+    tasks = cached["tasks"]
+    user_id = cached["user_id"]
+    effective_date = cached["effective_date"]
+
+    async with AsyncSessionLocal() as session:
+        created_count = 0
+        for t in tasks:
+            if t.category == "routine":
+                await create_routine(session, user_id=user_id, title=t.title, description=t.description)
+                created_count += 1
+            elif t.category == "goal":
+                target = None
+                if t.target_date:
+                    try:
+                        target = datetime.strptime(t.target_date, "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                await create_goal(session, user_id=user_id, title=t.title, description=t.description, target_date=target)
+                created_count += 1
+            elif t.category == "subtask":
+                # Find goal if exists
+                goals = await get_user_goals(session, user_id)
+                matched_goal = None
+                if t.goal_title and goals:
+                    for g in goals:
+                        if t.goal_title.lower() in g.title.lower():
+                            matched_goal = g
+                            break
+                goal_id = matched_goal.id if matched_goal else (goals[0].id if goals else None)
+
+                sched_date = effective_date
+                if t.scheduled_date:
+                    try:
+                        sched_date = datetime.strptime(t.scheduled_date, "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+
+                await create_one_time_task(
+                    session, user_id=user_id, title=t.title, scheduled_date=sched_date, goal_id=goal_id
+                )
+                created_count += 1
+            else:  # one_time
+                sched_date = effective_date
+                if t.scheduled_date:
+                    try:
+                        sched_date = datetime.strptime(t.scheduled_date, "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                await create_one_time_task(
+                    session, user_id=user_id, title=t.title, scheduled_date=sched_date
+                )
+                created_count += 1
+
+    await query.message.edit_text(f"✅ <b>Успешно сохранено задач: {created_count}!</b>")
+    await query.answer("Сохранено!")
+
+
+@router.callback_query(F.data.startswith("cancel_tasks:"))
+async def cb_cancel_tasks(query: CallbackQuery):
+    cache_id = query.data.split(":")[1]
+    PENDING_TASKS_CACHE.pop(cache_id, None)
+    await query.message.edit_text("❌ Добавление задач отменено.")
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("task_toggle:"))
+async def cb_task_toggle(query: CallbackQuery):
+    task_id = int(query.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        task = await toggle_one_time_task(session, task_id=task_id, user_id=query.from_user.id)
+
+    if not task:
+        await query.answer("Задача не найдена.", show_alert=True)
+        return
+
+    status = "выполнена ✅" if task.is_completed else "возвращена в работу ⏳"
+    await query.answer(f"Задача {status}")
+    try:
+        await query.message.edit_reply_markup(
+            reply_markup=get_task_actions_kb(task.id, task.is_completed, task.is_overdue)
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("task_postpone:"))
+async def cb_task_postpone(query: CallbackQuery):
+    task_id = int(query.data.split(":")[1])
+    tomorrow = date.today() + timedelta(days=1)
+    async with AsyncSessionLocal() as session:
+        task = await postpone_task(session, task_id=task_id, user_id=query.from_user.id, new_date=tomorrow)
+
+    if not task:
+        await query.answer("Задача не найдена.", show_alert=True)
+        return
+
+    await query.answer("Перенесено на завтра!")
+    await query.message.edit_text(f"➡️ Задача <b>{task.title}</b> перенесена на завтра ({tomorrow.strftime('%d.%m')})")
+
+
+@router.callback_query(F.data.startswith("task_delete:"))
+async def cb_task_delete(query: CallbackQuery):
+    task_id = int(query.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        success = await delete_one_time_task(session, task_id=task_id, user_id=query.from_user.id)
+
+    if success:
+        await query.answer("Задача удалена.")
+        await query.message.delete()
+    else:
+        await query.answer("Не удалось удалить задачу.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("routine_toggle:"))
+async def cb_routine_toggle(query: CallbackQuery):
+    routine_id = int(query.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, query.from_user.id)
+        now = get_user_now(user.timezone)
+        effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+        res = await toggle_routine_completion(session, routine_id=routine_id, user_id=user.telegram_id, target_date=effective_date)
+
+    if not res:
+        await query.answer("Рутина не найдена.", show_alert=True)
+        return
+
+    status_msg = f"Рутина выполнена! Стрик: 🔥 {res.current_streak} дн." if res.is_completed_today else "Выполнение рутины отменено"
+    await query.answer(status_msg)
+    try:
+        await query.message.edit_reply_markup(
+            reply_markup=get_routine_actions_kb(res.id, res.is_completed_today)
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("routine_delete:"))
+async def cb_routine_delete(query: CallbackQuery):
+    routine_id = int(query.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        success = await delete_routine(session, routine_id=routine_id, user_id=query.from_user.id)
+
+    if success:
+        await query.answer("Рутина удалена.")
+        await query.message.delete()
+    else:
+        await query.answer("Не удалось удалить рутину.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("toggle_setting:"))
+async def cb_toggle_setting(query: CallbackQuery):
+    key = query.data.split(":")[1]
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, query.from_user.id)
+        current_val = getattr(user, f"{key}_enabled", True)
+        update_data = UserUpdate(**{f"{key}_enabled": not current_val})
+        updated_user = await update_user(session, query.from_user.id, update_data)
+
+    await query.answer("Настройка обновлена!")
+    await query.message.edit_reply_markup(
+        reply_markup=get_settings_kb(
+            reminder_6h=updated_user.reminder_6h_enabled,
+            reminder_3h=updated_user.reminder_3h_enabled,
+            reminder_1h=updated_user.reminder_1h_enabled,
+            morning_digest=updated_user.morning_digest_enabled,
+        )
+    )
+
+
+@router.callback_query(F.data == "show_tz_help")
+async def cb_show_tz_help(query: CallbackQuery):
+    await query.answer(
+        "Точный часовой пояс автоматически синхронизируется при открытии WebApp!",
+        show_alert=True,
+    )
