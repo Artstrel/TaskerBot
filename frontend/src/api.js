@@ -584,7 +584,7 @@ export const fetchAIProviders = async () => {
     active_provider: 'gemini',
     providers: [
       { id: 'gemini', name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)', is_default: true },
-      { id: 'groq', name: 'Groq (Whisper + Llama / GPT-OSS)', is_default: false },
+      { id: 'groq', name: 'Groq (Whisper + Gemini)', is_default: false },
     ],
   };
 };
@@ -1023,11 +1023,24 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
       }
     } catch (we) {}
   } else {
-    // Chosen Groq: Try Groq Whisper transcription + Groq text parsing
+    // Chosen Groq: Whisper transcription (~300ms) + Gemini structured task parsing!
     try {
       const whisperText = await transcribeWithDirectGroqWhisper(audioBlob);
       if (whisperText) {
-        return await parseSmartText(whisperText, 'groq');
+        // As requested: Use Whisper for voice + Gemini for parsing tasks
+        try {
+          const gemRes = await parseTextWithDirectGemini(whisperText);
+          if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
+        } catch (ge) {
+          console.warn('Gemini parse after Whisper failed, falling back to Groq text LLM:', ge);
+        }
+        // Fallback to Groq text LLM if Gemini direct is unavailable
+        try {
+          const groqRes = await parseTextWithDirectGroq(whisperText);
+          if (groqRes && groqRes.tasks && groqRes.tasks.length > 0) return groqRes;
+        } catch (gerr) {}
+        // Fallback to rule-based parser on transcribed text
+        return await parseSmartText(whisperText, 'gemini');
       }
     } catch (we) {
       console.warn('Direct Groq Whisper failed, trying Gemini audio fallback:', we);

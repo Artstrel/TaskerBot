@@ -119,8 +119,8 @@ class AIService:
         providers = [
             AIProviderInfo(
                 id="groq",
-                name="Groq (Whisper-turbo)",
-                description="Сверхбыстрое распознавание речи (~300 мс) и анализ Llama 3.3",
+                name="Groq (Whisper + Gemini)",
+                description="Сверхбыстрая транскрипция речи Groq Whisper (~300 мс) + интеллектуальный разбор задач через Gemini",
                 is_configured=groq_ready,
             ),
             AIProviderInfo(
@@ -340,7 +340,11 @@ class AIService:
             if transcription and str(transcription).strip():
                 text = str(transcription).strip()
                 logger.info(f"Audio transcribed successfully via Whisper: {text[:100]}")
-                # Parse with user-selected provider (groq or gemini)
+                # Parse with Gemini (preferred for structured parsing) or fallback to Groq
+                if self._get_gemini_client():
+                    res = await self._parse_text_gemini(text, current_date)
+                    if res and res.tasks:
+                        return res
                 res = await self.parse_text_tasks(text, current_date, provider=chosen)
                 if res and res.tasks:
                     return res
@@ -376,10 +380,11 @@ class AIService:
         from google.genai import types
 
         for model_name in [
-            "gemini-3.5-flash",
-            "gemini-flash-latest",
             "gemini-3.8-flash",
             "gemini-3.5-flash-lite",
+            "gemini-3.6-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-2.5-flash",
         ]:
             try:
                 audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)

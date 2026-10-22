@@ -355,9 +355,9 @@ export default function SettingsTab({ onRefresh }) {
             },
             {
               id: 'groq',
-              name: 'Groq (Whisper + Llama / GPT-OSS)',
+              name: 'Groq (Whisper + Gemini)',
               badge: 'Молниеносно ~0.3с',
-              desc: 'Моментальная транскрипция аудио Whisper и сверхбыстрый разбор текста через LPUs.',
+              desc: 'Молниеносная транскрипция аудио через Whisper + интеллектуальный разбор задач через Gemini.',
             },
           ].map((prov) => {
             const isSelected = (settings.ai_provider || 'gemini') === prov.id;
