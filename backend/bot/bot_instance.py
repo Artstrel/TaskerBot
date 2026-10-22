@@ -27,6 +27,15 @@ class LazyBot:
     def __getattr__(self, name):
         return getattr(self._get(), name)
 
+    def __call__(self, *args, **kwargs):
+        return self._get()(*args, **kwargs)
+
+    async def __aenter__(self):
+        return await self._get().__aenter__()
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        return await self._get().__aexit__(exc_type, exc_val, exc_tb)
+
 
 class LazyDispatcher:
     def __init__(self):
@@ -39,6 +48,9 @@ class LazyDispatcher:
 
     def __getattr__(self, name):
         return getattr(self._get(), name)
+
+    def __call__(self, *args, **kwargs):
+        return self._get()(*args, **kwargs)
 
 
 bot = LazyBot()
