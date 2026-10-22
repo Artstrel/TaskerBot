@@ -2,18 +2,23 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Globe,
   Check,
+  Server,
 } from 'lucide-react';
 import {
   fetchUserSettings,
   updateUserSettings,
   currentUser,
   hapticFeedback,
+  getCustomBackendUrl,
+  setCustomBackendUrl,
 } from '../api';
 import Mascot from './Mascot';
 
 export default function SettingsTab({ onRefresh }) {
   const [settings, setSettings] = useState(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [customBackend, setCustomBackend] = useState(getCustomBackendUrl());
+  const [backendInput, setBackendInput] = useState(getCustomBackendUrl());
 
   const loadSettings = useCallback(async () => {
     try {
@@ -31,6 +36,23 @@ export default function SettingsTab({ onRefresh }) {
   const triggerSaved = () => {
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2000);
+  };
+
+  const handleSaveBackend = () => {
+    hapticFeedback('medium');
+    setCustomBackendUrl(backendInput);
+    setCustomBackend(backendInput.trim());
+    triggerSaved();
+    if (onRefresh) onRefresh();
+  };
+
+  const handleResetBackend = () => {
+    hapticFeedback('light');
+    setCustomBackendUrl('');
+    setCustomBackend('');
+    setBackendInput('');
+    triggerSaved();
+    if (onRefresh) onRefresh();
   };
 
   const handleToggle = async (key) => {
@@ -141,6 +163,80 @@ export default function SettingsTab({ onRefresh }) {
           <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '1px' }}>
             Telegram ID: {currentUser.id}
           </div>
+        </div>
+      </div>
+
+      {/* SECTION: Backend Server / Demo Mode */}
+      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px' }}>
+        Сервер бэкенда (API)
+      </div>
+      <div className="settings-group" style={{ padding: '14px 16px', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Server size={14} style={{ color: customBackend ? 'var(--accent-primary)' : 'var(--text-tertiary)' }} />
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {customBackend ? 'Подключен внешний бэкенд' : 'Локальный режим (GitHub Pages Demo)'}
+            </span>
+          </div>
+          <span
+            style={{
+              fontSize: '10px',
+              padding: '2px 8px',
+              borderRadius: 'var(--radius-full)',
+              background: customBackend ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+              color: customBackend ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: 500,
+            }}
+          >
+            {customBackend ? 'Live API' : 'Демо (LocalStorage)'}
+          </span>
+        </div>
+
+        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
+          {customBackend ? (
+            <>Запросы отправляются на <code style={{ color: 'var(--text-secondary)' }}>{customBackend}</code>. Задачи синхронизируются с ботом.</>
+          ) : (
+            'GitHub Pages — статический хостинг без Python и базы данных. В демо-режиме все задачи и цели сохраняются прямо в браузере. Чтобы подключить Telegram-бота, укажите URL запущенного бэкенда (Render / Railway / ngrok).'
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            type="url"
+            placeholder="https://taskerbot-api.onrender.com"
+            value={backendInput}
+            onChange={(e) => setBackendInput(e.target.value)}
+            style={{
+              flex: 1,
+              fontSize: '12px',
+              padding: '8px 10px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              color: 'var(--text-primary)',
+              outline: 'none',
+              fontFamily: 'inherit',
+            }}
+          />
+          <button
+            type="button"
+            className="filter-chip active"
+            onClick={handleSaveBackend}
+            style={{ padding: '0 12px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
+          >
+            Сохранить
+          </button>
+          {customBackend && (
+            <button
+              type="button"
+              className="filter-chip"
+              onClick={handleResetBackend}
+              style={{ padding: '0 10px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
+              title="Сбросить на демо-режим"
+            >
+              Сброс
+            </button>
+          )}
         </div>
       </div>
 
