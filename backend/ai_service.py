@@ -177,21 +177,21 @@ class AIService:
 
         if chosen == "groq":
             res = await self._parse_text_groq(text, current_date)
-            if res and res.tasks:
+            if res is not None:
                 return res
-            # Try Gemini fallback
+            # Try Gemini fallback if Groq failed
             if self._get_gemini_client():
                 res = await self._parse_text_gemini(text, current_date)
-                if res and res.tasks:
+                if res is not None:
                     return res
         else:
             res = await self._parse_text_gemini(text, current_date)
-            if res and res.tasks:
+            if res is not None:
                 return res
-            # Try Groq fallback
+            # Try Groq fallback if Gemini failed
             if self._get_groq_client():
                 res = await self._parse_text_groq(text, current_date)
-                if res and res.tasks:
+                if res is not None:
                     return res
 
         return _fallback_parse(text, current_date)
@@ -206,12 +206,24 @@ class AIService:
             + f"\n\nТекст сообщения пользователя:\n{text}"
         )
 
-        for model_name in ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+        for model_name in [
+            "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
+            "qwen/qwen3.8-27b",
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+        ]:
             try:
                 response = await client.chat.completions.create(
                     model=model_name,
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT.format(current_date=current_date.isoformat())},
+                        {
+                            "role": "system",
+                            "content": (
+                                SYSTEM_PROMPT.format(current_date=current_date.isoformat())
+                                + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
+                            ),
+                        },
                         {"role": "user", "content": f"Текст сообщения пользователя:\n{text}"},
                     ],
                     response_format={"type": "json_object"},
@@ -241,7 +253,13 @@ class AIService:
 
         from google.genai import types
 
-        for model_name in ["gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+        for model_name in [
+            "gemini-3.5-flash",
+            "gemini-flash-latest",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-2.5-flash",
+        ]:
             try:
                 response = client.models.generate_content(
                     model=model_name,
@@ -253,7 +271,11 @@ class AIService:
                     ),
                 )
                 if response.text:
-                    return ExtractedTaskList.model_validate_json(response.text)
+                    cleaned = response.text.strip()
+                    if cleaned.startswith("```"):
+                        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+                        cleaned = re.sub(r"\s*```$", "", cleaned)
+                    return ExtractedTaskList.model_validate_json(cleaned)
             except Exception as e:
                 logger.warning(f"Gemini model {model_name} failed: {e}")
                 continue
@@ -272,61 +294,46 @@ class AIService:
         mime_type, detected_fn = detect_audio_mime_and_filename(audio_bytes)
         fn = filename or detected_fn
 
-        if chosen == "groq":
-            res = await self._parse_audio_groq(audio_bytes, current_date, fn)
-            if res and res.tasks:
-                return res
-            # Fallback to Gemini if Groq failed
-            if self._get_gemini_client():
-                res = await self._parse_audio_gemini(audio_bytes, current_date, mime_type)
+        # 1. Groq Whisper (lightning fast ~300ms transcription)
+        groq_client = self._get_groq_client()
+        if groq_client:
+            transcription = None
+            for whisper_model in ["whisper-large-v3-turbo", "whisper-large-v3"]:
+                try:
+                    transcription = await groq_client.audio.transcriptions.create(
+                        file=(fn, audio_bytes),
+                        model=whisper_model,
+                        response_format="text",
+                        temperature=0.0,
+                    )
+                    if transcription:
+                        break
+                except Exception as we:
+                    logger.warning(f"Groq Whisper {whisper_model} error: {we}")
+
+            if transcription and str(transcription).strip():
+                text = str(transcription).strip()
+                logger.info(f"Audio transcribed successfully via Whisper: {text[:100]}")
+                # Parse with user-selected provider (groq or gemini)
+                res = await self.parse_text_tasks(text, current_date, provider=chosen)
                 if res and res.tasks:
                     return res
-        else:
+                return _fallback_parse(text, current_date)
+
+        # 2. Fallback to Gemini multimodal audio if Groq client not available
+        if self._get_gemini_client():
             res = await self._parse_audio_gemini(audio_bytes, current_date, mime_type)
             if res and res.tasks:
                 return res
-            # Fallback to Groq
-            if self._get_groq_client():
-                res = await self._parse_audio_groq(audio_bytes, current_date, fn)
-                if res and res.tasks:
-                    return res
 
         return ExtractedTaskList(
             tasks=[
                 ExtractedTask(
                     category="one_time",
-                    title="Голосовая заметка (не удалось расшифровать, проверьте ключи API)",
+                    title="Голосовая заметка (не удалось расшифровать, проверьте микрофон или ключи)",
                 )
             ]
         )
-
-    async def _parse_audio_groq(
-        self, audio_bytes: bytes, current_date: date, filename: str
-    ) -> Optional[ExtractedTaskList]:
-        client = self._get_groq_client()
-        if not client:
-            return None
-
-        try:
-            # 1. Transcribe with Whisper-large-v3-turbo in milliseconds
-            logger.info(f"Groq Whisper transcription starting for {filename} ({len(audio_bytes)} bytes)")
-            transcription = await client.audio.transcriptions.create(
-                file=(filename, audio_bytes),
-                model="whisper-large-v3-turbo",
-                response_format="text",
-                temperature=0.0,
-            )
-            text = str(transcription).strip()
-            logger.info(f"Groq Whisper transcription success: {text[:100]}...")
-
-            if not text:
-                return None
-
-            # 2. Extract tasks with Llama 3.3
-            return await self.parse_text_tasks(text, current_date, provider="groq")
-        except Exception as e:
-            logger.error(f"Groq audio transcription error: {e}", exc_info=True)
-            return None
 
     async def _parse_audio_gemini(
         self, audio_bytes: bytes, current_date: date, mime_type: str
@@ -337,12 +344,17 @@ class AIService:
 
         prompt = (
             SYSTEM_PROMPT.format(current_date=current_date.isoformat())
-            + "\n\nРасшифруй это аудиосообщение и извлеки задачи в формате JSON."
+            + "\n\nРасшифруй это аудиосообщение и извлеки задачи строго в формате JSON."
         )
 
         from google.genai import types
 
-        for model_name in ["gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+        for model_name in [
+            "gemini-3.5-flash",
+            "gemini-flash-latest",
+            "gemini-3.8-flash",
+            "gemini-3.5-flash-lite",
+        ]:
             try:
                 audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
                 response = client.models.generate_content(
@@ -355,7 +367,11 @@ class AIService:
                     ),
                 )
                 if response.text:
-                    return ExtractedTaskList.model_validate_json(response.text)
+                    cleaned = response.text.strip()
+                    if cleaned.startswith("```"):
+                        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+                        cleaned = re.sub(r"\s*```$", "", cleaned)
+                    return ExtractedTaskList.model_validate_json(cleaned)
             except Exception as e:
                 logger.warning(f"Gemini audio model {model_name} failed: {e}")
                 continue

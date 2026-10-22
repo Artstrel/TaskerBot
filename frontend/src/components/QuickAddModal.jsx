@@ -49,6 +49,8 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
+  const speechTranscriptRef = useRef('');
   const inputRef = useRef(null);
 
   const loadProviders = useCallback(async () => {
@@ -126,7 +128,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
     setErrorMsg('');
     try {
       const res = await parseSmartAudio(audioBlob, selectedProvider);
-      if (res.tasks && res.tasks.length > 0) {
+      if (res && res.tasks && res.tasks.length > 0) {
         setExtractedTasks(
           res.tasks.map((t, i) => ({
             ...t,
@@ -134,15 +136,36 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
             selected: true,
           }))
         );
-      } else {
-        setErrorMsg('Не удалось распознать задачи в аудио. Попробуйте еще раз или напишите текстом.');
+        setIsProcessing(false);
+        return;
       }
     } catch (err) {
-      console.error('Failed to parse audio:', err);
-      setErrorMsg('Ошибка связи с сервером при обработке аудио.');
-    } finally {
-      setIsProcessing(false);
+      console.warn('Backend audio parse failed, trying browser speech recognition fallback:', err);
     }
+
+    // Fallback: If client speech recognition captured speech (e.g. on GitHub Pages)
+    const clientText = speechTranscriptRef.current && speechTranscriptRef.current.trim();
+    if (clientText) {
+      try {
+        const res = await parseSmartText(clientText, selectedProvider);
+        if (res && res.tasks && res.tasks.length > 0) {
+          setExtractedTasks(
+            res.tasks.map((t, i) => ({
+              ...t,
+              id: `task_${Date.now()}_${i}`,
+              selected: true,
+            }))
+          );
+          setIsProcessing(false);
+          return;
+        }
+      } catch (e) {
+        console.error('Fallback speech text parse error:', e);
+      }
+    }
+
+    setErrorMsg('Не удалось расшифровать аудио. Проверьте микрофон или введите задачу текстом.');
+    setIsProcessing(false);
   };
 
   // Start voice recording
@@ -153,6 +176,28 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       audioChunksRef.current = [];
+
+      speechTranscriptRef.current = '';
+      const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+      if (SpeechRecognition) {
+        try {
+          const rec = new SpeechRecognition();
+          rec.lang = 'ru-RU';
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.onresult = (event) => {
+            let transcript = '';
+            for (let i = 0; i < event.results.length; ++i) {
+              transcript += event.results[i][0].transcript + ' ';
+            }
+            speechTranscriptRef.current = transcript.trim();
+          };
+          rec.start();
+          speechRecognitionRef.current = rec;
+        } catch (e) {
+          console.warn('SpeechRecognition failed to start:', e);
+        }
+      }
 
       let mimeType = 'audio/webm';
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -189,6 +234,11 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
   // Stop voice recording and submit
   const stopRecording = () => {
     hapticFeedback('medium');
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch (_) {}
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -198,6 +248,11 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
   // Cancel voice recording without submitting
   const cancelRecording = () => {
     hapticFeedback('warning');
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch (_) {}
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.onstop = () => {
         if (streamRef.current) {
