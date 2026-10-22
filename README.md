@@ -1,140 +1,196 @@
 # 🤖 TaskerBot — Умный Telegram-бот и WebApp трекер задач
 
-**TaskerBot** — это интеллектуальный персональный ассистент для трекинга ежедневных рутин, разовых задач и долгосрочных целей в Telegram, с поддержкой голосового ввода через бесплатный **Google Gemini API** и современным **Telegram WebApp (Mini App)**.
+<p align="center">
+  <b>Минималистичный персональный ассистент для трекинга ежедневных рутин, разовых задач и долгосрочных целей в Telegram с поддержкой голосового ввода (Groq Whisper / Google Gemini) и премиальным Telegram WebApp (Mini App).</b>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/FastAPI-0.110+-009688?style=flat&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Aiogram-3.4+-2CA5E0?style=flat&logo=telegram&logoColor=white" alt="Aiogram" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/SQLite-aiosqlite-003B57?style=flat&logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker" />
+</p>
 
 ---
 
 ## ✨ Ключевые возможности
 
-### 1. Две категории задач на каждый день
-- **🔄 Рутинные задачи:** ежедневные привычки (спорт, чтение, витамины). 
-  - Обновляются каждый день.
-  - Подсчитывают серии выполнений (**стрики** 🔥 и рекорды 🏆).
-  - Индикация срочности: зеленая (норма), желтая (за 6 ч.), оранжевая (за 3 ч.) и пульсирующая красная (за 1 ч. до конца дня).
-  - Активные push-сообщения в Telegram-чат с инлайн-кнопками для закрытия в 1 клик.
-- **⚡️ Одноразовые задачи:** дела на текущий день.
-  - Если задача не выполнена до конца дня — она **автоматически переносится на следующий день** и закрепляется в самом верху списка с ярким бейджем `⚠️ Просрочено (+N дн.)` или `со вчера`.
-  - Утренний дайджест в чате со сводкой перенесенных задач.
+### 1. 🔄 Две категории ежедневных задач
+- **Ежедневные привычки и рутины:**
+  - Обновляются каждое утро в зависимости от настроек таймзоны пользователя.
+  - Подсчитывают серии выполнений (**стрики** и личные рекорды).
+  - Срочность и напоминания: автоматические push-уведомления за 6, 3 и 1 час до отбоя с инлайн-кнопками для закрытия в 1 клик.
+- **Одноразовые задачи:**
+  - Дела на сегодня. Если задача не завершена до конца дня — она **автоматически переносится на следующий день** и закрепляется вверху с бейджем просрочки.
+  - Утренний дайджест со сводкой дел на день.
 
-### 2. 🎯 Глобальные цели (Goals)
-- Масштабные проекты с дедлайнами и визуальными прогресс-барами (`40% • 4/10 шагов`).
-- Чеклист подзадач внутри цели.
-- Возможность брать подзадачи в работу на **«Сегодня»** — тогда они появляются в списке дня с бейджем цели.
+### 2. 🎯 Проекты и долгосрочные цели (Goals)
+- Масштабные цели с дедлайнами и визуальными прогресс-барами (`40% • 4/10 шагов`).
+- Чеклист подзадач внутри каждой цели.
+- Возможность планировать подзадачи на **«Сегодня»** в 1 клик.
 
-### 3. 🎙 Голосовой и текстовый ввод через Gemini AI (Free tier)
-- Поддержка надиктовки голосовых сообщений прямо в Telegram или через микрофон в WebApp.
-- Gemini 2.5 Flash автоматически транскрибирует аудио (.ogg) и разделяет фразу на категории (рутина / разовая / цель / подзадача / дедлайн).
-- Если в одном сообщении надиктовано несколько дел — бот автоматически разобьет их на отдельные задачи и предложит сохранить в 1 клик.
+### 3. 🎙 Голосовой ввод и распознавание задач через AI
+- **Два AI-провайдера на выбор**:
+  - **Groq (по умолчанию)**: ультрабыстрая транскрипция Whisper-large-v3 + парсинг Llama 3 (ответ за доли секунды).
+  - **Google Gemini**: распознавание через Gemini 2.5 Flash.
+- Надиктуйте список дел в голосовом сообщении в Telegram или прямо в WebApp:
+  - AI автоматически распознает фразы вида *«каждый день пить воду, купить продукты до вечера и цель выучить английский до конца года»*.
+  - Разделит поток речи на задачи, проставит категории и даты, и предложит сохранить их в один клик.
 
-### 4. 📱 Два формата взаимодействия
-- **Telegram WebApp:** ультрасовременный мобильный SPA-интерфейс (React + Vite + Glassmorphism + Dark Mode + тактильный виброотклик Haptic Feedback).
-- **Текстовый чат:** постоянное кнопочное меню, быстрые инлайн-кнопки выполнения и команды (`/start`, `/today`, `/goals`, `/routines`, `/settings`).
+### 4. 🖤 Премиальный Telegram Mini App (WebApp)
+- **Строгий монохромный дизайн**: тёмно-графитовая эстетика (`#0d0d0d`), высококонтрастные карточки, титаново-белые акценты.
+- **Сбалансированная навигация**: парящий док из 3 симметричных вкладок (**Сегодня**, **Цели**, **Настройки**).
+- **Плавающая кнопка быстрого добавления (FAB)**: эргономичная кнопка `(+)` под большой палец.
+- **Сдержанная анимация записи**: 4-полосный мягкий индикатор волны звука и таймер.
+- **Тактильный отклик (Haptic Feedback)**: виброотклик Telegram при каждом клике, чекбоксе и переключении вкладок.
 
 ---
 
-## 🚀 Быстрый старт
+## 🚀 Быстрый старт (Локально)
 
-### 1. Клонирование и установка зависимостей
+### 1. Клонирование репозитория
 ```bash
-cd /Users/artstrelani/Documents/TaskerBot
-
-# Активация виртуального окружения Python
-source .venv/bin/activate
-
-# Установка зависимостей бэкенда (если ещё не установлены)
-pip install -r requirements.txt
-
-# Сборка фронтенда WebApp
-npm --prefix frontend install
-npm --prefix frontend run build
+git clone https://github.com/Artstrel/TaskerBot.git
+cd TaskerBot
 ```
 
-### 2. Настройка переменных окружения
-Создайте файл `.env` на основе `.env.example`:
+### 2. Установка зависимостей бэкенда
+```bash
+# Создание и активация виртуального окружения
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Установка библиотек
+pip install -r requirements.txt
+```
+
+### 3. Сборка фронтенда WebApp
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+*Собранный SPA-бандл автоматически помещается в `frontend/dist` и раздается сервером FastAPI.*
+
+### 4. Настройка переменных окружения
+Скопируйте шаблон конфигурации:
 ```bash
 cp .env.example .env
 ```
 Заполните параметры в `.env`:
-- `BOT_TOKEN`: токен вашего бота от [@BotFather](https://t.me/BotFather).
-- `GEMINI_API_KEY`: бесплатный API-ключ от [Google AI Studio](https://aistudio.google.com/).
-- `WEBAPP_URL`: HTTPS-адрес вашего приложения (см. инструкцию ниже для ngrok/Cloudflare).
+```env
+BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz   # От @BotFather в Telegram
+GROQ_API_KEY=gsk_...                              # Бесплатно на console.groq.com
+GEMINI_API_KEY=...                                # Бесплатно на aistudio.google.com
+DATABASE_URL=sqlite+aiosqlite:///./data/taskerbot.db
+WEBAPP_URL=https://your-tunnel.ngrok-free.app     # Ссылка на Mini App (см. ниже)
+```
 
-### 3. Запуск сервера
-Единая команда запускает FastAPI сервер, раздачу WebApp, фоновый планировщик напоминаний и Telegram-бота:
+### 5. Запуск
 ```bash
 python main.py
 ```
-Сервер будет доступен по адресу `http://localhost:8000` (API документация Swagger: `http://localhost:8000/docs`).
+Сервер запустит FastAPI API, фоновый планировщик задач APScheduler, Telegram-бота и раздачу WebApp на порту `8000`.
 
 ---
 
-## 🌐 Как открыть WebApp внутри Telegram (HTTPS Туннель)
+## 🐳 Запуск через Docker & Docker Compose
 
-Telegram WebApp требует HTTPS-ссылку. Для локального тестирования используйте **ngrok** или бесплатный **Cloudflare Tunnel**:
+Проект готов к деплою в один клик через Docker:
 
-### Вариант через ngrok:
+```bash
+# 1. Создайте .env и укажите ключи
+cp .env.example .env
+nano .env
+
+# 2. Запустите контейнер
+docker compose up -d --build
+```
+
+База данных SQLite сохраняется на хосте в смонтированной директории `./data`, поэтому при перезапуске контейнера все задачи и пользователи сохраняются.
+
+Остановка контейнера:
+```bash
+docker compose down
+```
+
+---
+
+## 🌐 Подключение WebApp в Telegram
+
+Telegram требует, чтобы WebApp открывался по безопасному протоколу `https://`. Для локальной разработки или тестирования используйте **ngrok** или **Cloudflare Tunnel**:
+
+### Через ngrok:
 ```bash
 ngrok http 8000
 ```
-Скопируйте полученный HTTPS-адрес (например, `https://abc-123.ngrok-free.app`) и:
-1. Вставьте его в `.env`:
+1. Скопируйте полученный адрес (например, `https://abc-123.ngrok-free.app`).
+2. Укажите его в `.env`:
    ```env
    WEBAPP_URL=https://abc-123.ngrok-free.app
    ```
-2. В [@BotFather](https://t.me/BotFather):
-   - Отправьте команду `/mybots` -> выберите вашего бота -> `Bot Settings` -> `Menu Button` -> `Configure menu button`.
-   - Вставьте URL: `https://abc-123.ngrok-free.app`.
-   - Теперь у пользователей в левом нижнем углу чата появится кнопка открытия Mini App!
+3. Откройте диалог с [@BotFather](https://t.me/BotFather):
+   - Отправьте команду `/mybots` -> выберите вашего бота.
+   - Перейдите в **Bot Settings** -> **Menu Button** -> **Configure menu button**.
+   - Отправьте адрес: `https://abc-123.ngrok-free.app`.
+   - Теперь у всех пользователей слева от поля ввода появится кнопка открытия Mini App.
 
 ---
 
-## 📂 Структура проекта
+## 📂 Архитектура и структура файлов
 
 ```
 TaskerBot/
 ├── backend/
 │   ├── api/
-│   │   └── routes.py         # REST API для WebApp (дашборд, задачи, рутины, цели, настройки)
+│   │   └── routes.py         # REST API эндпоинты (дашборд, задачи, цели, настройки)
 │   ├── bot/
 │   │   ├── bot_instance.py   # Инициализация Aiogram бота и диспетчера
-│   │   ├── handlers.py       # Обработчики команд, текста, голосовых сообщений
-│   │   └── keyboards.py      # Постоянное меню и инлайн-клавиатуры
-│   ├── config.py             # Настройки Pydantic Settings
-│   ├── crud.py               # Запросы к БД, логика переноса просрочек и расчета стриков
-│   ├── database.py           # Async SQLAlchemy движок и сессии SQLite
-│   ├── gemini_service.py     # Интеграция с Gemini API (транскрипция и умный парсинг)
-│   ├── models.py             # Модели User, RoutineTask, RoutineLog, Goal, OneTimeTask
-│   ├── schemas.py            # Pydantic валидация и DTO схемы
-│   └── scheduler.py          # APScheduler: напоминания за 6/3/1ч, сброс дня, дайджест
-├── frontend/                 # Telegram WebApp (React 18 + Vite + Modern Glassmorphism)
+│   │   ├── handlers.py       # Обработчики команд, кнопок и голосовых сообщений
+│   │   └── keyboards.py      # Клавиатуры чата и инлайн-кнопки
+│   ├── ai_service.py         # Мульти-провайдерная интеграция (Groq Whisper + Gemini)
+│   ├── config.py             # Pydantic Settings и пути проекта
+│   ├── crud.py               # Запросы к SQLite, расчет стриков и переносы просрочек
+│   ├── database.py           # Асинхронная сессия SQLAlchemy (aiosqlite)
+│   ├── models.py             # Схема БД: User, RoutineTask, RoutineLog, Goal, OneTimeTask
+│   ├── schemas.py            # Pydantic DTO модели
+│   └── scheduler.py          # APScheduler: напоминания за 6/3/1ч, утренний дайджест
+├── frontend/                 # Telegram WebApp (React 18 + Vite)
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── TodayTab.jsx        # Вкладка «Сегодня» (просрочки, рутины, задачи)
-│   │   │   ├── GoalsTab.jsx        # Вкладка «Цели» (проекты, прогресс-бары, шаги)
-│   │   │   ├── SettingsTab.jsx     # Вкладка «Настройки» (таймзона, отбой, переключатели)
-│   │   │   └── QuickAddModal.jsx   # Модальное окно (запись голоса + умный текст)
-│   │   ├── api.js            # Клиент API и Telegram Haptic Feedback
-│   │   ├── App.jsx           # Корневой компонент и навигация
-│   │   └── index.css         # Дизайн-система (анимации, карточки, палитра)
-│   └── dist/                 # Собранный production-бандл (раздается сервером FastAPI)
-├── data/                     # Папка хранения SQLite базы данных
-├── main.py                   # Единый запуск: FastAPI + WebApp static + Bot + Scheduler
+│   │   │   ├── TodayTab.jsx        # Экран «Сегодня»: просрочки, привычки, задачи
+│   │   │   ├── GoalsTab.jsx        # Экран «Цели»: проекты, прогресс-бары, чеклисты
+│   │   │   ├── SettingsTab.jsx     # Экран «Настройки»: таймзона, время отбоя, напоминания
+│   │   │   ├── QuickAddModal.jsx   # Модальное окно: голосовая запись + умный AI ввод
+│   │   │   └── Mascot.jsx          # Цифровой маскот-напарник с реакциями
+│   │   ├── api.js            # Axios-клиент и обёртка Telegram Haptic Feedback
+│   │   ├── App.jsx           # Навигация, плавающий FAB и переключение вкладок
+│   │   └── index.css         # Монохромная дизайн-система (ч/б палитра, анимации)
+│   └── dist/                 # Скомпилированный продакшн-бандл фронтенда
+├── data/                     # Директория SQLite БД (taskerbot.db)
+├── Dockerfile                # Multi-stage сборка (Node build + Python runtime)
+├── docker-compose.yml        # Конфигурация запуска с persistent volume
+├── main.py                   # Единая точка входа: FastAPI + Bot + WebApp
 ├── requirements.txt          # Python зависимости
-├── .env.example              # Пример файла настроек
+├── .env.example              # Шаблон настроек окружения
+├── .gitignore                # Защита секретов и БД от попадания в коммиты
 └── README.md
 ```
 
 ---
 
-## 🛠 Полезные команды
+## 🔒 Безопасность и Git
 
-- **Пересобрать фронтенд:**
-  ```bash
-  npm --prefix frontend run build
-  ```
-- **Запустить сервер с авто-перезагрузкой при разработке:**
-  ```bash
-  DEBUG=True python main.py
-  ```
-- **Интерактивная документация REST API:**
-  Откройте в браузере `http://localhost:8000/docs`.
+> [!IMPORTANT]
+> - Файл `.env` и локальная база данных `data/*.db` исключены из Git в [.gitignore](file:///.gitignore).
+> - Никогда не публикуйте и не коммитьте боевые ключи (`BOT_TOKEN`, `GROQ_API_KEY`, `GEMINI_API_KEY`).
+> - Для конфигурации нового окружения всегда используйте копирование из `.env.example`.
+
+---
+
+## 📄 Лицензия
+
+MIT License. Свободно для личного и коммерческого использования.

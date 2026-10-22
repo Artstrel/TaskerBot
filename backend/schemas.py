@@ -1,6 +1,6 @@
 from datetime import date, datetime
-from typing import List, Optional, Literal
-from pydantic import BaseModel, Field
+from typing import List, Optional, Literal, Union, Any
+from pydantic import BaseModel, Field, field_validator
 
 
 # --- Gemini Parsing Schemas ---
@@ -109,12 +109,26 @@ class GoalCreate(BaseModel):
     description: Optional[str] = None
     target_date: Optional[date] = None
 
+    @field_validator("target_date", mode="before")
+    @classmethod
+    def parse_target_date(cls, v: Any):
+        if not v or v == "null" or v == "":
+            return None
+        return v
+
 
 class GoalUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     target_date: Optional[date] = None
     is_completed: Optional[bool] = None
+
+    @field_validator("target_date", mode="before")
+    @classmethod
+    def parse_target_date(cls, v: Any):
+        if not v or v == "null" or v == "":
+            return None
+        return v
 
 
 class OneTimeTaskRead(BaseModel):
@@ -158,6 +172,27 @@ class OneTimeTaskCreate(BaseModel):
     goal_id: Optional[int] = None
     priority: int = 0
 
+    @field_validator("scheduled_date", mode="before")
+    @classmethod
+    def parse_scheduled_date(cls, v: Any):
+        if not v or v == "null" or v == "":
+            return None
+        return v
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def parse_priority(cls, v: Any):
+        if v is None:
+            return 0
+        if isinstance(v, str):
+            if v.lower() in ("high", "1", "urgent", "высокий"):
+                return 1
+            return 0
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 0
+
 
 class OneTimeTaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -165,6 +200,27 @@ class OneTimeTaskUpdate(BaseModel):
     is_completed: Optional[bool] = None
     goal_id: Optional[int] = None
     priority: Optional[int] = None
+
+    @field_validator("scheduled_date", mode="before")
+    @classmethod
+    def parse_scheduled_date(cls, v: Any):
+        if not v or v == "null" or v == "":
+            return None
+        return v
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def parse_priority(cls, v: Any):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.lower() in ("high", "1", "urgent", "высокий"):
+                return 1
+            return 0
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return 0
 
 
 # --- Dashboard Day Summary ---

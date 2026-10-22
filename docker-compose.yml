@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  taskerbot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taskerbot_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persistent storage for SQLite database and data
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

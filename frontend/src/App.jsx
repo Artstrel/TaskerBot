@@ -156,6 +156,21 @@ export default function App() {
         )}
       </main>
 
+      {/* Floating Action Button (FAB) for Quick Add */}
+      {(activeTab === 'today' || activeTab === 'goals') && (
+        <button
+          className="app-fab"
+          onClick={() => {
+            hapticFeedback('medium');
+            setIsQuickAddOpen(true);
+          }}
+          title="Создать задачу"
+          aria-label="Создать задачу"
+        >
+          <Plus size={24} strokeWidth={2.4} />
+        </button>
+      )}
+
       {/* Bottom Floating Navigation Dock */}
       <nav className="bottom-dock">
         <div className="dock-card">
@@ -167,20 +182,6 @@ export default function App() {
             <span>Сегодня</span>
             {overdueCount > 0 && <span className="dock-badge-dot" />}
           </button>
-
-          {/* Center Quick-Add Plus Button */}
-          <div className="dock-center-action">
-            <button
-              className="dock-plus-btn"
-              onClick={() => {
-                hapticFeedback('medium');
-                setIsQuickAddOpen(true);
-              }}
-              title="Создать задачу"
-            >
-              <Plus size={22} strokeWidth={2.4} />
-            </button>
-          </div>
 
           <button
             className={`dock-nav-item ${activeTab === 'goals' ? 'active' : ''}`}

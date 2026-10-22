@@ -12,6 +12,7 @@ import {
   Clock,
   AlertCircle,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import {
   fetchAIProviders,
@@ -36,8 +37,10 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Extracted tasks preview
+  // Extracted tasks preview & editing
   const [extractedTasks, setExtractedTasks] = useState(null);
+  const [editingTaskId, setEditingTaskId] = useState(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   // AI Providers state
   const [providers, setProviders] = useState([]);
@@ -45,7 +48,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const timerIntervalRef = useRef(null);
+  const streamRef = useRef(null);
   const inputRef = useRef(null);
 
   const loadProviders = useCallback(async () => {
@@ -67,21 +70,45 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
     }
   }, [loadProviders]);
 
+  // Dedicated timer effect that starts/stops with isRecording
+  useEffect(() => {
+    let interval = null;
+    if (isRecording) {
+      interval = setInterval(() => {
+        setRecordSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setRecordSeconds(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRecording]);
+
+  // Keydown & cleanup effect
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (editingTaskId) {
+          setEditingTaskId(null);
+        } else {
+          onClose();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-      if (mediaRecorderRef.current && isRecording) {
-        mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch (_) {}
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [isRecording, onClose]);
+  }, [editingTaskId, onClose]);
 
   // Compute scheduled_date based on chip
   const getSelectedDate = () => {
@@ -124,6 +151,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
       setErrorMsg('');
       hapticFeedback('medium');
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       audioChunksRef.current = [];
 
       let mimeType = 'audio/webm';
@@ -152,26 +180,34 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
 
       mediaRecorder.start();
       setIsRecording(true);
-      setRecordSeconds(0);
-
-      timerIntervalRef.current = setInterval(() => {
-        setRecordSeconds((prev) => prev + 1);
-      }, 1000);
     } catch (err) {
       console.error('Audio recording failed:', err);
       setErrorMsg('Нет доступа к микрофону. Разрешите микрофон в браузере.');
     }
   };
 
-  // Stop voice recording
+  // Stop voice recording and submit
   const stopRecording = () => {
     hapticFeedback('medium');
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
+    }
+  };
+
+  // Cancel voice recording without submitting
+  const cancelRecording = () => {
+    hapticFeedback('warning');
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.onstop = () => {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+        }
+      };
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (_) {}
+      setIsRecording(false);
     }
   };
 
@@ -222,7 +258,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
         await createTask({
           title: inputText.trim(),
           scheduled_date: getSelectedDate(),
-          priority: priority,
+          priority: priority === 'high' ? 1 : 0,
         });
       }
       hapticFeedback('success');
@@ -234,6 +270,30 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Inline editing handlers for recognized tasks
+  const handleStartEdit = (task) => {
+    hapticFeedback('selection');
+    setEditingTaskId(task.id);
+    setEditingTitle(task.title);
+  };
+
+  const handleSaveTaskEdit = (taskId) => {
+    hapticFeedback('light');
+    if (editingTitle.trim()) {
+      setExtractedTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, title: editingTitle.trim() } : t))
+      );
+    }
+    setEditingTaskId(null);
+  };
+
+  const handleUpdateTaskCategory = (taskId, newCategory) => {
+    hapticFeedback('selection');
+    setExtractedTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, category: newCategory } : t))
+    );
   };
 
   // Review Screen: Save selected extracted tasks
@@ -248,19 +308,28 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
     setErrorMsg('');
     try {
       for (const t of selected) {
+        const cleanTitle = (t.title || '').trim();
+        if (!cleanTitle) continue;
+
         if (t.category === 'routine') {
-          await createRoutine({ title: t.title, description: t.description || null });
+          await createRoutine({
+            title: cleanTitle,
+            description: t.description || null,
+          });
         } else if (t.category === 'goal') {
           await createGoal({
-            title: t.title,
+            title: cleanTitle,
             description: t.description || null,
             target_date: t.target_date || null,
           });
         } else {
+          // Normalize priority to int 0 or 1
+          const prioInt =
+            t.priority === 'high' || t.priority === 1 || t.priority === '1' ? 1 : 0;
           await createTask({
-            title: t.title,
+            title: cleanTitle,
             scheduled_date: t.scheduled_date || null,
-            priority: t.priority || 'medium',
+            priority: prioInt,
           });
         }
       }
@@ -285,7 +354,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
     <div
       className="sheet-backdrop"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isProcessing) {
+        if (e.target === e.currentTarget && !isProcessing && !isRecording) {
           onClose();
         }
       }}
@@ -295,17 +364,25 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
 
         <div className="sheet-header-row">
           <div className="sheet-title">
-            {isProcessing || isRecording ? (
+            {isRecording ? (
+              <Mascot state="happy" size={26} interactive={false} />
+            ) : isProcessing ? (
               <Mascot state="thinking" size={26} interactive={false} />
             ) : (
               <Sparkles size={18} color="var(--accent-primary)" />
             )}
-            <span>{extractedTasks ? 'Подтверждение задач' : 'Создать задачу'}</span>
+            <span>
+              {isRecording
+                ? 'Запись голоса...'
+                : extractedTasks
+                ? 'Подтверждение задач'
+                : 'Создать задачу'}
+            </span>
           </div>
 
           <button
             className="sheet-close-btn"
-            onClick={onClose}
+            onClick={isRecording ? cancelRecording : onClose}
             title="Закрыть"
             disabled={isProcessing}
           >
@@ -317,9 +394,9 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
           {errorMsg && (
             <div
               style={{
-                background: 'var(--accent-danger-dim)',
-                border: '1px solid rgba(244, 63, 94, 0.25)',
-                color: '#fb7185',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                color: '#ffffff',
                 padding: '9px 12px',
                 borderRadius: 'var(--radius-sm)',
                 fontSize: '13px',
@@ -334,16 +411,16 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
             </div>
           )}
 
-          {/* VIEW A: Extracted tasks preview review list */}
+          {/* VIEW A: Extracted tasks preview review list with editing */}
           {extractedTasks ? (
             <div>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-                AI распознал следующие задачи. Отметьте нужные:
+                AI распознал следующие задачи. Нажмите на текст или карандаш, чтобы отредактировать:
               </p>
 
               <div className="linear-list" style={{ marginBottom: '16px' }}>
                 {extractedTasks.map((task) => (
-                  <div key={task.id} className="linear-list-item">
+                  <div key={task.id} className="linear-list-item" style={{ alignItems: 'flex-start' }}>
                     <button
                       className={`linear-checkbox ${task.selected ? 'checked' : ''}`}
                       onClick={() => {
@@ -351,42 +428,125 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
                           prev.map((t) => (t.id === task.id ? { ...t, selected: !t.selected } : t))
                         );
                       }}
+                      style={{ marginTop: '3px' }}
                     >
                       {task.selected && <Check size={12} strokeWidth={3} />}
                     </button>
 
-                    <div className="item-content-col">
-                      <div className="item-title">{task.title}</div>
-                      <div className="item-meta-row">
-                        <span className="item-tag">
-                          {task.category === 'routine' ? (
-                            <><Flame size={10} color="#fb923c" /> Привычка</>
-                          ) : task.category === 'goal' ? (
-                            <><Target size={10} color="#818cf8" /> Цель</>
-                          ) : (
-                            <><Calendar size={10} /> Задача</>
-                          )}
-                        </span>
-                        {task.scheduled_date && (
-                          <span className="item-tag">
-                            <Clock size={10} /> {task.scheduled_date}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                    {editingTaskId === task.id ? (
+                      /* Inline task editing box */
+                      <div className="task-inline-edit-box">
+                        <input
+                          type="text"
+                          className="task-inline-input"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveTaskEdit(task.id);
+                            if (e.key === 'Escape') setEditingTaskId(null);
+                          }}
+                          placeholder="Название задачи..."
+                          autoFocus
+                        />
+                        <div className="task-inline-toolbar">
+                          <div className="task-inline-chips">
+                            <button
+                              type="button"
+                              className={`mini-cat-chip ${task.category === 'one_time' ? 'active' : ''}`}
+                              onClick={() => handleUpdateTaskCategory(task.id, 'one_time')}
+                            >
+                              <Calendar size={10} /> Задача
+                            </button>
+                            <button
+                              type="button"
+                              className={`mini-cat-chip ${task.category === 'routine' ? 'active' : ''}`}
+                              onClick={() => handleUpdateTaskCategory(task.id, 'routine')}
+                            >
+                              <Flame size={10} /> Привычка
+                            </button>
+                            <button
+                              type="button"
+                              className={`mini-cat-chip ${task.category === 'goal' ? 'active' : ''}`}
+                              onClick={() => handleUpdateTaskCategory(task.id, 'goal')}
+                            >
+                              <Target size={10} /> Цель
+                            </button>
+                          </div>
 
-                    <button
-                      className="item-mini-btn btn-danger"
-                      onClick={() => {
-                        setExtractedTasks((prev) => {
-                          const next = prev.filter((t) => t.id !== task.id);
-                          return next.length > 0 ? next : null;
-                        });
-                      }}
-                      title="Удалить"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                              type="button"
+                              className="item-mini-btn"
+                              title="Отмена"
+                              onClick={() => setEditingTaskId(null)}
+                            >
+                              <X size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              className="item-mini-btn btn-success"
+                              title="Сохранить"
+                              onClick={() => handleSaveTaskEdit(task.id)}
+                            >
+                              <Check size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Normal task item view with clickable title */
+                      <>
+                        <div className="item-content-col">
+                          <div
+                            className="item-title editable-title"
+                            onClick={() => handleStartEdit(task)}
+                            title="Нажмите, чтобы отредактировать"
+                          >
+                            {task.title}
+                          </div>
+                          <div className="item-meta-row">
+                            <span className="item-tag">
+                              {task.category === 'routine' ? (
+                                <><Flame size={10} /> Привычка</>
+                              ) : task.category === 'goal' ? (
+                                <><Target size={10} /> Цель</>
+                              ) : (
+                                <><Calendar size={10} /> Задача</>
+                              )}
+                            </span>
+                            {task.scheduled_date && (
+                              <span className="item-tag">
+                                <Clock size={10} /> {task.scheduled_date}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="item-action-btns" style={{ opacity: 1 }}>
+                          <button
+                            type="button"
+                            className="item-mini-btn"
+                            onClick={() => handleStartEdit(task)}
+                            title="Редактировать"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="item-mini-btn btn-danger"
+                            onClick={() => {
+                              setExtractedTasks((prev) => {
+                                const next = prev.filter((t) => t.id !== task.id);
+                                return next.length > 0 ? next : null;
+                              });
+                            }}
+                            title="Удалить"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -411,21 +571,54 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
                 </button>
               </div>
             </div>
+          ) : isRecording ? (
+            /* VIEW B1: Dedicated compact live voice recording state */
+            <div className="voice-recording-card">
+              <div className="voice-recording-main">
+                <div className="voice-status-group">
+                  <span className="voice-record-dot" />
+                  <span className="voice-timer-display">{formatTimer(recordSeconds)}</span>
+                </div>
+
+                <div className="voice-wave-container" title="Идёт запись звука">
+                  <span className="wave-bar wb-1" />
+                  <span className="wave-bar wb-2" />
+                  <span className="wave-bar wb-3" />
+                  <span className="wave-bar wb-4" />
+                </div>
+
+                <span className="voice-hint-text">Слушаю...</span>
+              </div>
+
+              <div className="voice-card-actions">
+                <button
+                  type="button"
+                  className="filter-chip"
+                  onClick={cancelRecording}
+                >
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  className="submit-task-btn"
+                  onClick={stopRecording}
+                >
+                  <Square size={12} fill="#000000" />
+                  <span>Готово ({formatTimer(recordSeconds)})</span>
+                </button>
+              </div>
+            </div>
           ) : (
-            /* VIEW B: Unified input box & smart options */
+            /* VIEW B2: Unified input box & smart options */
             <div>
               <div className="unified-input-box">
                 <textarea
                   ref={inputRef}
                   className="unified-textarea"
-                  placeholder={
-                    isRecording
-                      ? 'Говорите... Мы преобразуем ваш голос в задачи'
-                      : 'Напишите задачу или нажмите на микрофон для записи...'
-                  }
+                  placeholder="Напишите задачу или нажмите на микрофон для записи..."
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
-                  disabled={isRecording || isProcessing}
+                  disabled={isProcessing}
                   rows={2}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -436,27 +629,15 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
                 />
 
                 <div className="input-actions-bar">
-                  {/* Voice recording toggle */}
-                  {isRecording ? (
-                    <button
-                      type="button"
-                      className="voice-recording-btn recording"
-                      onClick={stopRecording}
-                    >
-                      <Square size={13} fill="#fb7185" />
-                      <span>{formatTimer(recordSeconds)} (Стоп)</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="voice-recording-btn"
-                      onClick={startRecording}
-                      disabled={isProcessing}
-                    >
-                      <Mic size={14} />
-                      <span>Голос</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="voice-recording-btn"
+                    onClick={startRecording}
+                    disabled={isProcessing}
+                  >
+                    <Mic size={14} />
+                    <span>Голос</span>
+                  </button>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {/* Optional Smart AI parse button */}
@@ -478,7 +659,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
                       type="button"
                       className="submit-task-btn"
                       onClick={handleDirectCreate}
-                      disabled={!inputText.trim() || isProcessing || isRecording}
+                      disabled={!inputText.trim() || isProcessing}
                     >
                       <Send size={13} />
                       <span>{isProcessing ? 'Сохраняю...' : 'Создать'}</span>

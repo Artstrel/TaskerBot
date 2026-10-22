@@ -112,6 +112,17 @@ export const createTask = async (taskData) => {
   return res.json();
 };
 
+export const updateTask = async (taskId, updateData) => {
+  hapticFeedback('selection');
+  const res = await fetch(`${API_BASE}/tasks/${taskId}?telegram_id=${currentUser.id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updateData),
+  });
+  if (!res.ok) throw new Error('Failed to update task');
+  return res.json();
+};
+
 export const toggleRoutine = async (routineId, completed = null) => {
   hapticFeedback('light');
   const url = `${API_BASE}/routines/${routineId}/toggle?telegram_id=${currentUser.id}${

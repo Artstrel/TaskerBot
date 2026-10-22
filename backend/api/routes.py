@@ -32,6 +32,7 @@ from backend.crud import (
     create_one_time_task,
     toggle_one_time_task,
     postpone_task,
+    update_one_time_task,
     delete_one_time_task,
     create_goal,
     get_user_goals,
@@ -191,6 +192,28 @@ async def postpone_task_endpoint(
     session: AsyncSession = Depends(get_db),
 ):
     task = await postpone_task(session, task_id, user.telegram_id, new_date)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@router.patch("/tasks/{task_id}", response_model=OneTimeTaskRead)
+async def update_task_endpoint(
+    task_id: int,
+    task_in: OneTimeTaskUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    task = await update_one_time_task(
+        session,
+        task_id,
+        user.telegram_id,
+        title=task_in.title,
+        scheduled_date=task_in.scheduled_date,
+        is_completed=task_in.is_completed,
+        goal_id=task_in.goal_id,
+        priority=task_in.priority,
+    )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task

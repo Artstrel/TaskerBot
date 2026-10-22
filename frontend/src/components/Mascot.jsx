@@ -120,14 +120,14 @@ function DefaultCompanionSvg({ state, size }) {
             {/* Joyful curved eyes ^ ^ */}
             <path
               d="M17 21 Q21 16 25 21"
-              stroke="#6366f1"
+              stroke="#ffffff"
               strokeWidth="2.5"
               strokeLinecap="round"
               fill="none"
             />
             <path
               d="M31 21 Q35 16 39 21"
-              stroke="#6366f1"
+              stroke="#ffffff"
               strokeWidth="2.5"
               strokeLinecap="round"
               fill="none"
@@ -140,27 +140,27 @@ function DefaultCompanionSvg({ state, size }) {
             {/* Star/wink joyful eyes */}
             <path
               d="M18 20 L24 20 M21 17 L21 23"
-              stroke="#10b981"
+              stroke="#ffffff"
               strokeWidth="2.5"
               strokeLinecap="round"
             />
-            <circle cx="35" cy="20" r="3.2" fill="#10b981" />
+            <circle cx="35" cy="20" r="3.2" fill="#ffffff" />
           </>
         );
       case 'sleep':
         return (
           <>
             {/* Closed peaceful eyes - - */}
-            <line x1="17" y1="21" x2="25" y2="21" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" />
-            <line x1="31" y1="21" x2="39" y2="21" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="17" y1="21" x2="25" y2="21" stroke="#71717a" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="31" y1="21" x2="39" y2="21" stroke="#71717a" strokeWidth="2.5" strokeLinecap="round" />
           </>
         );
       case 'thinking':
         return (
           <>
             {/* Focused dots / processing */}
-            <circle cx="21" cy="20" r="3" fill="#ec4899" className="mascot-eye-blink" />
-            <circle cx="35" cy="18" r="3" fill="#ec4899" />
+            <circle cx="21" cy="20" r="3" fill="#d4d4d8" className="mascot-eye-blink" />
+            <circle cx="35" cy="18" r="3" fill="#d4d4d8" />
           </>
         );
       case 'idle':
@@ -168,8 +168,8 @@ function DefaultCompanionSvg({ state, size }) {
         return (
           <>
             {/* Calm, glowing digital pupils */}
-            <circle cx="21" cy="20" r="2.8" fill="#818cf8" className="mascot-eye-glow" />
-            <circle cx="35" cy="20" r="2.8" fill="#818cf8" className="mascot-eye-glow" />
+            <circle cx="21" cy="20" r="2.8" fill="#ffffff" className="mascot-eye-glow" />
+            <circle cx="35" cy="20" r="2.8" fill="#ffffff" className="mascot-eye-glow" />
           </>
         );
     }
@@ -186,22 +186,22 @@ function DefaultCompanionSvg({ state, size }) {
     >
       <defs>
         <linearGradient id="bodyGradient" x1="8" y1="8" x2="48" y2="48" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#1e202d" />
-          <stop offset="1" stopColor="#12131b" />
+          <stop stopColor="#242424" />
+          <stop offset="1" stopColor="#161616" />
         </linearGradient>
         <linearGradient id="visorGradient" x1="12" y1="12" x2="44" y2="30" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#0b0d13" />
-          <stop offset="1" stopColor="#050608" />
+          <stop stopColor="#0d0d0d" />
+          <stop offset="1" stopColor="#000000" />
         </linearGradient>
         <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#6366f1" floodOpacity="0.25" />
+          <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#ffffff" floodOpacity="0.12" />
         </filter>
       </defs>
 
       {/* Antenna / top notch */}
       <path
         d="M28 8 L28 14"
-        stroke="#4f5268"
+        stroke="#71717a"
         strokeWidth="2.2"
         strokeLinecap="round"
       />
@@ -209,7 +209,7 @@ function DefaultCompanionSvg({ state, size }) {
         cx="28"
         cy="7"
         r="2.5"
-        fill={state === 'done' ? '#10b981' : state === 'happy' ? '#ec4899' : '#6366f1'}
+        fill="#ffffff"
         className="mascot-antenna-pulse"
       />
 
@@ -227,8 +227,8 @@ function DefaultCompanionSvg({ state, size }) {
       />
 
       {/* Cute minimalist side ear nodes */}
-      <rect x="5.5" y="24" width="3.5" height="10" rx="1.75" fill="#2d3042" />
-      <rect x="47" y="24" width="3.5" height="10" rx="1.75" fill="#2d3042" />
+      <rect x="5.5" y="24" width="3.5" height="10" rx="1.75" fill="#262626" />
+      <rect x="47" y="24" width="3.5" height="10" rx="1.75" fill="#262626" />
 
       {/* Digital Visor screen */}
       <rect

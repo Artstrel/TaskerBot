@@ -430,6 +430,62 @@ async def postpone_task(
     )
 
 
+async def update_one_time_task(
+    session: AsyncSession,
+    task_id: int,
+    user_id: int,
+    title: Optional[str] = None,
+    scheduled_date: Optional[date] = None,
+    is_completed: Optional[bool] = None,
+    goal_id: Optional[int] = None,
+    priority: Optional[int] = None,
+) -> Optional[OneTimeTaskRead]:
+    stmt = (
+        select(OneTimeTask)
+        .options(selectinload(OneTimeTask.goal))
+        .where(and_(OneTimeTask.id == task_id, OneTimeTask.user_id == user_id))
+    )
+    res = await session.execute(stmt)
+    task = res.scalar_one_or_none()
+    if not task:
+        return None
+
+    if title is not None:
+        task.title = title.strip()
+    if scheduled_date is not None:
+        task.scheduled_date = scheduled_date
+        task.is_overdue = False
+        task.overdue_days = 0
+    if is_completed is not None:
+        task.is_completed = is_completed
+        if is_completed:
+            task.completed_at = datetime.utcnow()
+        else:
+            task.completed_at = None
+    if goal_id is not None:
+        task.goal_id = goal_id if goal_id > 0 else None
+    if priority is not None:
+        task.priority = priority
+
+    await session.commit()
+    await session.refresh(task)
+
+    return OneTimeTaskRead(
+        id=task.id,
+        user_id=task.user_id,
+        goal_id=task.goal_id,
+        goal_title=task.goal.title if task.goal else None,
+        title=task.title,
+        scheduled_date=task.scheduled_date,
+        is_completed=task.is_completed,
+        completed_at=task.completed_at,
+        is_overdue=task.is_overdue,
+        overdue_days=task.overdue_days,
+        priority=task.priority,
+        created_at=task.created_at,
+    )
+
+
 async def delete_one_time_task(
     session: AsyncSession, task_id: int, user_id: int
 ) -> bool:
