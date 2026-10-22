@@ -19,6 +19,49 @@ import GoalsTab from './components/GoalsTab';
 import SettingsTab from './components/SettingsTab';
 import QuickAddModal from './components/QuickAddModal';
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('App ErrorBoundary caught error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-primary)', fontFamily: 'sans-serif' }}>
+          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center' }}>
+            <Mascot state="sad" size={64} />
+          </div>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>Что-то пошло не так</h2>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '20px', maxWidth: '300px', margin: '0 auto 20px' }}>
+            {this.state.error?.message || 'Произошла ошибка при отображении интерфейса.'}
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '8px',
+              border: 'none',
+              background: '#ffffff',
+              color: '#000000',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Перезагрузить приложение
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('today');
   const [dashboardData, setDashboardData] = useState(null);
@@ -95,7 +138,8 @@ export default function App() {
   }).format(new Date());
 
   return (
-    <div className="app-container">
+    <ErrorBoundary>
+      <div className="app-container">
       {/* Minimalist Top Sticky Header */}
       <header className="app-header">
         <div className="header-companion-group">
@@ -208,6 +252,7 @@ export default function App() {
           onTaskCreated={loadData}
         />
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

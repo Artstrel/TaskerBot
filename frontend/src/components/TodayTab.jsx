@@ -37,6 +37,26 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted }) 
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editTaskTitle, setEditTaskTitle] = useState('');
 
+  // Live countdown timer state (MUST be called before any early return)
+  const [liveHoursLeft, setLiveHoursLeft] = useState(
+    dashboardData?.hours_left_in_day !== undefined ? dashboardData.hours_left_in_day : 0
+  );
+  const [liveUrgency, setLiveUrgency] = useState(dashboardData?.urgency_level || 'normal');
+
+  useEffect(() => {
+    if (!dashboardData) return;
+    const updateCountdown = () => {
+      const dayEndTime = dashboardData.day_end_time || '00:00';
+      const calc = calculateDayEndAndUrgency(dayEndTime);
+      setLiveHoursLeft(calc.hours_left_in_day);
+      setLiveUrgency(calc.urgency_level);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [dashboardData?.day_end_time, dashboardData?.hours_left_in_day]);
+
   const handleStartEdit = (task) => {
     hapticFeedback('selection');
     setEditingTaskId(task.id);
@@ -74,24 +94,6 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted }) 
     completed_count = 0,
     total_count = 0,
   } = dashboardData;
-
-  const [liveHoursLeft, setLiveHoursLeft] = useState(
-    dashboardData.hours_left_in_day !== undefined ? dashboardData.hours_left_in_day : 0
-  );
-  const [liveUrgency, setLiveUrgency] = useState(dashboardData.urgency_level || 'normal');
-
-  useEffect(() => {
-    const updateCountdown = () => {
-      const dayEndTime = dashboardData.day_end_time || '00:00';
-      const calc = calculateDayEndAndUrgency(dayEndTime);
-      setLiveHoursLeft(calc.hours_left_in_day);
-      setLiveUrgency(calc.urgency_level);
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [dashboardData.day_end_time]);
 
   const progressPct = total_count > 0 ? Math.round((completed_count / total_count) * 100) : 0;
   const isDayAllDone = total_count > 0 && completed_count === total_count;
