@@ -541,6 +541,7 @@ export const getGeminiKey = () => {
     return (
       localStorage.getItem('tasker_gemini_key') ||
       import.meta.env.VITE_GEMINI_API_KEY ||
+      import.meta.env.GEMINI_API_KEY ||
       ''
     );
   }
@@ -559,6 +560,7 @@ export const getGroqKey = () => {
     return (
       localStorage.getItem('tasker_groq_key') ||
       import.meta.env.VITE_GROQ_API_KEY ||
+      import.meta.env.GROQ_API_KEY ||
       ''
     );
   }
@@ -581,10 +583,94 @@ export const fetchAIProviders = async () => {
   return {
     active_provider: 'gemini',
     providers: [
-      { id: 'gemini', name: 'Google Gemini 3.5 Flash', is_default: true },
-      { id: 'groq', name: 'Groq (Whisper + GPT-OSS)', is_default: false },
+      { id: 'gemini', name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)', is_default: true },
+      { id: 'groq', name: 'Groq (Whisper + Llama / GPT-OSS)', is_default: false },
     ],
   };
+};
+
+export const GEMINI_MODELS = [
+  'gemini-3.8-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.6-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+];
+
+export const GROQ_CHAT_MODELS = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+];
+
+export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
+  if (!parsed) return null;
+  let rawList = null;
+  if (Array.isArray(parsed)) {
+    rawList = parsed;
+  } else if (Array.isArray(parsed.tasks)) {
+    rawList = parsed.tasks;
+  } else if (parsed.task) {
+    rawList = [parsed.task];
+  } else if (parsed.title) {
+    rawList = [parsed];
+  }
+
+  if (!rawList || !Array.isArray(rawList) || rawList.length === 0) {
+    return null;
+  }
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  const tasks = rawList
+    .map((item, idx) => {
+      if (!item) return null;
+      if (typeof item === 'string') {
+        const title = item.trim();
+        if (!title) return null;
+        const lower = title.toLowerCase();
+        const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(lower);
+        const isGoal = /цель|проект|хочу/i.test(lower);
+        let sched = todayStr;
+        if (/завтра/i.test(lower)) sched = tomorrowStr;
+        return {
+          id: `task_${Date.now()}_${idx}`,
+          title,
+          category: isRoutine ? 'routine' : isGoal ? 'goal' : defaultCategory,
+          scheduled_date: isRoutine ? null : sched,
+          selected: true,
+        };
+      }
+      if (typeof item === 'object') {
+        const title = String(item.title || item.name || item.text || '').trim();
+        if (!title) return null;
+        let cat = item.category || defaultCategory;
+        if (!['routine', 'one_time', 'goal'].includes(cat)) {
+          cat = defaultCategory;
+        }
+        let sched = item.scheduled_date || null;
+        if (cat === 'one_time' && !sched) {
+          sched = todayStr;
+        }
+        return {
+          id: item.id || `task_${Date.now()}_${idx}`,
+          title,
+          category: cat,
+          scheduled_date: sched,
+          description: item.description || null,
+          selected: item.selected !== false,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  if (tasks.length === 0) return null;
+  return { tasks };
 };
 
 export const parseTextWithDirectGemini = async (text) => {
@@ -601,14 +687,14 @@ export const parseTextWithDirectGemini = async (text) => {
 
 Текущая дата: ${todayStr}.
 Формат ответа строго валидный JSON с ключом "tasks".
+Каждый элемент: {"category": "routine"|"one_time"|"goal", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}
 Пример структуры:
 {
   "tasks": [
     {
       "title": "Купить молоко",
       "category": "one_time",
-      "scheduled_date": "2026-10-23",
-      "description": null
+      "scheduled_date": "${todayStr}"
     }
   ]
 }
@@ -616,30 +702,43 @@ export const parseTextWithDirectGemini = async (text) => {
 Текст пользователя:
 ${text}`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        },
-      }),
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
+          }),
+        }
+      );
+      if (!res.ok) {
+        console.warn(`Direct Gemini model ${model} HTTP status: ${res.status}`);
+        continue;
+      }
+      const data = await res.json();
+      const textContent = data.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text;
+      if (!textContent) continue;
+      let cleaned = textContent.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+      }
+      const parsed = JSON.parse(cleaned);
+      const normalized = normalizeTasks(parsed);
+      if (normalized && normalized.tasks.length > 0) {
+        return normalized;
+      }
+    } catch (e) {
+      console.warn(`Direct Gemini model ${model} error:`, e);
+      continue;
     }
-  );
-  if (!res.ok) throw new Error(`Gemini direct status: ${res.status}`);
-  const data = await res.json();
-  const textContent = data.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text;
-  if (!textContent) throw new Error('Empty Gemini output');
-  let cleaned = textContent.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
   }
-  const parsed = JSON.parse(cleaned);
-  if (parsed.tasks && Array.isArray(parsed.tasks)) return parsed;
   return null;
 };
 
@@ -654,30 +753,151 @@ export const parseTextWithDirectGroq = async (text) => {
 
 Текущая дата: ${todayStr}.
 Формат ответа: строгий JSON с ключом "tasks".
-Каждый элемент: {"category": "routine"|"one_time"|"goal", "title": "краткое название", "scheduled_date": "YYYY-MM-DD"|null}`;
+Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
 
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'openai/gpt-oss-120b',
-      messages: [
-        { role: 'system', content: prompt },
-        { role: 'user', content: `Текст пользователя:\n${text}` },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-    }),
+  for (const model of GROQ_CHAT_MODELS) {
+    try {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: prompt + ' Ответ должен быть строго в формате JSON с ключом "tasks".' },
+            { role: 'user', content: `Текст пользователя:\n${text}` },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+        }),
+      });
+      if (!res.ok) {
+        console.warn(`Direct Groq model ${model} status: ${res.status}`);
+        continue;
+      }
+      const data = await res.json();
+      const raw = data.choices?.[0]?.message?.content;
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const normalized = normalizeTasks(parsed);
+      if (normalized && normalized.tasks.length > 0) {
+        return normalized;
+      }
+    } catch (e) {
+      console.warn(`Direct Groq model ${model} error:`, e);
+      continue;
+    }
+  }
+  return null;
+};
+
+export const parseAudioWithDirectGemini = async (audioBlob) => {
+  const key = getGeminiKey();
+  if (!key) return null;
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const base64Audio = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      const base64 = typeof result === 'string' ? result.split(',')[1] : '';
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(audioBlob);
   });
-  if (!res.ok) throw new Error(`Groq direct status: ${res.status}`);
-  const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content;
-  if (!raw) throw new Error('Empty Groq response');
-  const parsed = JSON.parse(raw);
-  if (parsed.tasks && Array.isArray(parsed.tasks)) return parsed;
+
+  if (!base64Audio) return null;
+
+  const mimeType = (audioBlob.type || 'audio/webm').split(';')[0];
+  const prompt = `Ты — голосовой ассистент по планированию задач TaskerBot.
+Внимательно прослушай аудиозапись пользователя, транскрибируй её и извлеки ВСЕ задачи.
+Если сказано несколько действий, разбей их на отдельные задачи в массиве "tasks".
+Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели).
+Текущая дата: ${todayStr}.
+Формат ответа: строгий валидный JSON с ключом "tasks".
+Каждый элемент: {"category": "routine"|"one_time"|"goal", "title": "название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType,
+                      data: base64Audio,
+                    },
+                  },
+                  { text: prompt },
+                ],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              temperature: 0.1,
+            },
+          }),
+        }
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      const textContent = data.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text;
+      if (!textContent) continue;
+      let cleaned = textContent.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+      }
+      const parsed = JSON.parse(cleaned);
+      const normalized = normalizeTasks(parsed);
+      if (normalized && normalized.tasks.length > 0) {
+        return normalized;
+      }
+    } catch (e) {
+      console.warn(`Direct Gemini audio parse error on ${model}:`, e);
+      continue;
+    }
+  }
+  return null;
+};
+
+export const transcribeWithDirectGroqWhisper = async (audioBlob) => {
+  const groqKey = getGroqKey();
+  if (!groqKey) return null;
+
+  for (const whisperModel of ['whisper-large-v3-turbo', 'whisper-large-v3']) {
+    try {
+      const gFormData = new FormData();
+      const ext = audioBlob.type && audioBlob.type.includes('webm') ? 'voice.webm' : 'voice.ogg';
+      gFormData.append('file', audioBlob, ext);
+      gFormData.append('model', whisperModel);
+      gFormData.append('response_format', 'json');
+
+      const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+        },
+        body: gFormData,
+      });
+
+      if (whisperRes.ok) {
+        const whisperData = await whisperRes.json();
+        const text = whisperData.text && whisperData.text.trim();
+        if (text) return text;
+      }
+    } catch (we) {
+      console.warn(`Direct Groq Whisper ${whisperModel} failed:`, we);
+    }
+  }
   return null;
 };
 
@@ -693,10 +913,14 @@ export const parseSmartText = async (text, provider = null) => {
       method: 'POST',
       body: formData,
     });
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      const normalized = normalizeTasks(data);
+      if (normalized && normalized.tasks.length > 0) return normalized;
+    }
   } catch (e) {}
 
-  // 2. Direct Neural AI call (Gemini 3.5 Flash or Groq)
+  // 2. Direct Neural AI call (Gemini 3.8 / 3.5 Flash or Groq)
   const chosen = provider || 'gemini';
   if (chosen === 'groq') {
     try {
@@ -747,7 +971,7 @@ export const parseSmartText = async (text, provider = null) => {
       .trim();
 
     return {
-      id: Date.now() + idx,
+      id: `task_${Date.now()}_${idx}`,
       title: cleanTitle || chunk,
       category: isRoutine ? 'routine' : isGoal ? 'goal' : 'one_time',
       scheduled_date: isRoutine ? null : schedDate,
@@ -756,7 +980,7 @@ export const parseSmartText = async (text, provider = null) => {
   });
 
   return {
-    tasks: tasks.length > 0 ? tasks : [{ id: Date.now(), title: text, category: 'one_time', selected: true }],
+    tasks: tasks.length > 0 ? tasks : [{ id: `task_${Date.now()}_0`, title: text, category: 'one_time', selected: true }],
   };
 };
 
@@ -773,38 +997,46 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
       method: 'POST',
       body: formData,
     });
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      const normalized = normalizeTasks(data);
+      if (normalized && normalized.tasks.length > 0) return normalized;
+    }
   } catch (e) {}
 
-  // 2. Direct Groq Whisper transcription from browser
-  const groqKey = getGroqKey();
-  if (groqKey) {
+  const chosen = provider || 'gemini';
+
+  // 2. Direct browser AI calls
+  if (chosen === 'gemini') {
+    // Try Gemini Multimodal Audio
     try {
-      const gFormData = new FormData();
-      const ext = audioBlob.type && audioBlob.type.includes('webm') ? 'voice.webm' : 'voice.ogg';
-      gFormData.append('file', audioBlob, ext);
-      gFormData.append('model', 'whisper-large-v3-turbo');
-      gFormData.append('response_format', 'json');
-
-      const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${groqKey}`,
-        },
-        body: gFormData,
-      });
-
-      if (whisperRes.ok) {
-        const whisperData = await whisperRes.json();
-        const transcribedText = whisperData.text && whisperData.text.trim();
-        if (transcribedText) {
-          // Pass transcribed speech to Neural AI to decompose into multiple tasks!
-          return await parseSmartText(transcribedText, provider);
-        }
+      const gemRes = await parseAudioWithDirectGemini(audioBlob);
+      if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
+    } catch (ge) {
+      console.warn('Direct Gemini audio failed, trying Groq Whisper fallback:', ge);
+    }
+    // Fallback to Groq Whisper transcription + Gemini text parsing
+    try {
+      const whisperText = await transcribeWithDirectGroqWhisper(audioBlob);
+      if (whisperText) {
+        return await parseSmartText(whisperText, 'gemini');
+      }
+    } catch (we) {}
+  } else {
+    // Chosen Groq: Try Groq Whisper transcription + Groq text parsing
+    try {
+      const whisperText = await transcribeWithDirectGroqWhisper(audioBlob);
+      if (whisperText) {
+        return await parseSmartText(whisperText, 'groq');
       }
     } catch (we) {
-      console.warn('Direct Groq Whisper failed:', we);
+      console.warn('Direct Groq Whisper failed, trying Gemini audio fallback:', we);
     }
+    // Fallback to Gemini Multimodal Audio
+    try {
+      const gemRes = await parseAudioWithDirectGemini(audioBlob);
+      if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
+    } catch (ge) {}
   }
 
   // Fallback will trigger browser speech recognition in QuickAddModal

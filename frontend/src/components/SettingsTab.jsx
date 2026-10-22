@@ -349,15 +349,15 @@ export default function SettingsTab({ onRefresh }) {
           {[
             {
               id: 'gemini',
-              name: 'Google Gemini 3.5 Flash',
+              name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)',
               badge: 'Рекомендуется',
-              desc: 'Мощная мультимодальная модель Google: точный разбор дат, целей и привычек.',
+              desc: 'Флагманские мультимодальные модели Google: точный разбор голоса и текста, декомпозиция дат и привычек.',
             },
             {
               id: 'groq',
-              name: 'Groq (Whisper + GPT-OSS)',
+              name: 'Groq (Whisper + Llama / GPT-OSS)',
               badge: 'Молниеносно ~0.3с',
-              desc: 'Моментальная транскрипция аудио Whisper и быстрый разбор текста.',
+              desc: 'Моментальная транскрипция аудио Whisper и сверхбыстрый разбор текста через LPUs.',
             },
           ].map((prov) => {
             const isSelected = (settings.ai_provider || 'gemini') === prov.id;
@@ -423,7 +423,7 @@ export default function SettingsTab({ onRefresh }) {
       </div>
       <div className="settings-group" style={{ padding: '14px 16px' }}>
         <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
-          Позволяют нейросети (Gemini 3.5 Flash или Groq) расшифровывать голос и разделять его на несколько задач прямо в браузере без запуска бэкенда. Ключи сохраняются локально в вашем браузере.
+          Позволяют нейросети (Google Gemini или Groq) расшифровывать голос и разделять его на несколько задач прямо в браузере без запуска бэкенда. Ключи сохраняются локально в вашем браузере.
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

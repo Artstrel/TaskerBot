@@ -125,8 +125,8 @@ class AIService:
             ),
             AIProviderInfo(
                 id="gemini",
-                name="Google Gemini (Flash)",
-                description="Мультимодальные модели Google Gemini 3.5 Flash-Lite / 3.8 Flash",
+                name="Google Gemini (3.8 Flash / 3.5 Flash-Lite)",
+                description="Мультимодальные модели Google Gemini 3.8 Flash и 3.5 Flash-Lite",
                 is_configured=gemini_ready,
             ),
         ]
@@ -209,7 +209,6 @@ class AIService:
         for model_name in [
             "openai/gpt-oss-120b",
             "openai/gpt-oss-20b",
-            "qwen/qwen3.8-27b",
             "llama-3.3-70b-versatile",
             "llama-3.1-8b-instant",
         ]:
@@ -232,10 +231,37 @@ class AIService:
                 raw = response.choices[0].message.content
                 if raw:
                     parsed_dict = json.loads(raw)
-                    if "tasks" in parsed_dict:
-                        return ExtractedTaskList.model_validate(parsed_dict)
+                    raw_tasks = []
+                    if isinstance(parsed_dict, dict) and "tasks" in parsed_dict:
+                        raw_tasks = parsed_dict["tasks"]
                     elif isinstance(parsed_dict, list):
-                        return ExtractedTaskList.model_validate({"tasks": parsed_dict})
+                        raw_tasks = parsed_dict
+                    elif isinstance(parsed_dict, dict) and "title" in parsed_dict:
+                        raw_tasks = [parsed_dict]
+
+                    normalized_tasks = []
+                    for t in raw_tasks:
+                        if isinstance(t, str):
+                            title = t.strip()
+                            if title:
+                                normalized_tasks.append(ExtractedTask(category="one_time", title=title))
+                        elif isinstance(t, dict):
+                            cat = t.get("category", "one_time")
+                            if cat not in ["routine", "one_time", "goal", "subtask"]:
+                                cat = "one_time"
+                            title = t.get("title") or t.get("name") or "Новая задача"
+                            normalized_tasks.append(
+                                ExtractedTask(
+                                    category=cat,
+                                    title=title,
+                                    scheduled_date=t.get("scheduled_date"),
+                                    description=t.get("description"),
+                                    goal_title=t.get("goal_title"),
+                                    target_date=t.get("target_date"),
+                                )
+                            )
+                    if normalized_tasks:
+                        return ExtractedTaskList(tasks=normalized_tasks)
             except Exception as e:
                 logger.warning(f"Groq text model {model_name} failed: {e}")
                 continue
@@ -254,10 +280,10 @@ class AIService:
         from google.genai import types
 
         for model_name in [
-            "gemini-3.5-flash",
-            "gemini-flash-latest",
             "gemini-3.8-flash",
             "gemini-3.5-flash-lite",
+            "gemini-3.6-flash",
+            "gemini-3.1-flash-lite",
             "gemini-2.5-flash",
         ]:
             try:
