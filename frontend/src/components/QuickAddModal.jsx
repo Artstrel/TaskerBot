@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Trash2,
   Pencil,
+  ShoppingCart,
 } from 'lucide-react';
 import {
   fetchAIProviders,
@@ -21,9 +22,11 @@ import {
   createRoutine,
   createTask,
   createGoal,
+  createGroceryItem,
   hapticFeedback,
   setCachedDashboard,
   setCachedGoals,
+  setCachedGroceries,
   addPendingMutation,
   removePendingMutation,
 } from '../api';
@@ -34,7 +37,9 @@ export default function QuickAddModal({
   onTaskCreated,
   setDashboardData,
   setGoalsData,
+  setGroceriesData,
   goalsData = [],
+  groceriesData = null,
   initialCategory,
   initialGoalId,
   initialGoalTitle,
@@ -604,6 +609,61 @@ export default function QuickAddModal({
           console.error('Failed to create subtask on server:', err);
           removePendingMutation(mutationId);
         });
+    } else if (category === 'grocery') {
+      if (setGroceriesData) {
+        setGroceriesData((prev) => {
+          const prevActive = prev?.active_items || [];
+          const optItem = {
+            id: tempId,
+            user_id: 0,
+            title,
+            target_value: parsedTarget,
+            current_value: 0.0,
+            step: parsedStep,
+            unit: cleanUnit,
+            is_completed: false,
+            created_at: new Date().toISOString(),
+            is_optimistic: true,
+          };
+          const updated = {
+            active_items: [optItem, ...prevActive],
+            completed_items: prev?.completed_items || [],
+            total_count: (prev?.total_count || 0) + 1,
+            completed_count: prev?.completed_count || 0,
+          };
+          setCachedGroceries(updated);
+          return updated;
+        });
+      }
+
+      addPendingMutation({ id: mutationId, type: 'create_grocery', tempId, title, timestamp: Date.now() });
+
+      createGroceryItem({
+        title,
+        target_value: parsedTarget,
+        step: parsedStep,
+        unit: cleanUnit,
+      })
+        .then((realItem) => {
+          removePendingMutation(mutationId);
+          if (setGroceriesData && realItem) {
+            setGroceriesData((prev) => {
+              if (!prev) return prev;
+              const updated = {
+                ...prev,
+                active_items: (prev.active_items || []).map((i) =>
+                  i.id === tempId ? { ...realItem, is_optimistic: false } : i
+                ),
+              };
+              setCachedGroceries(updated);
+              return updated;
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to create grocery item on server:', err);
+          removePendingMutation(mutationId);
+        });
     } else {
       if (setDashboardData) {
         setDashboardData((prev) => {
@@ -971,6 +1031,56 @@ export default function QuickAddModal({
             }
           })
           .catch(() => removePendingMutation(mutationId));
+      } else if (t.category === 'grocery') {
+        if (setGroceriesData) {
+          setGroceriesData((prev) => {
+            const prevActive = prev?.active_items || [];
+            const optItem = {
+              id: tempId,
+              user_id: 0,
+              title: cleanTitle,
+              target_value: t.target_value || null,
+              current_value: 0.0,
+              step: t.step || 1.0,
+              unit: t.unit || null,
+              is_completed: false,
+              created_at: new Date().toISOString(),
+              is_optimistic: true,
+            };
+            const updated = {
+              active_items: [optItem, ...prevActive],
+              completed_items: prev?.completed_items || [],
+              total_count: (prev?.total_count || 0) + 1,
+              completed_count: prev?.completed_count || 0,
+            };
+            setCachedGroceries(updated);
+            return updated;
+          });
+        }
+        addPendingMutation({ id: mutationId, type: 'create_grocery', tempId, title: cleanTitle, timestamp: Date.now() });
+        createGroceryItem({
+          title: cleanTitle,
+          target_value: t.target_value || null,
+          step: t.step || 1.0,
+          unit: t.unit || null,
+        })
+          .then((real) => {
+            removePendingMutation(mutationId);
+            if (setGroceriesData && real) {
+              setGroceriesData((prev) => {
+                if (!prev) return prev;
+                const updated = {
+                  ...prev,
+                  active_items: (prev.active_items || []).map((i) =>
+                    i.id === tempId ? { ...real, is_optimistic: false } : i
+                  ),
+                };
+                setCachedGroceries(updated);
+                return updated;
+              });
+            }
+          })
+          .catch(() => removePendingMutation(mutationId));
       } else {
         const prioInt = t.priority === 'high' || t.priority === 1 || t.priority === '1' ? 1 : 0;
         const sched = t.scheduled_date || todayStr;
@@ -1237,6 +1347,8 @@ export default function QuickAddModal({
                                 <><Flame size={10} /> Привычка</>
                               ) : task.category === 'goal' ? (
                                 <><Target size={10} /> Цель</>
+                              ) : task.category === 'grocery' ? (
+                                <><ShoppingCart size={10} /> Продукт</>
                               ) : task.category === 'subtask' || task.goal_id || task.goal_title ? (
                                 <><Target size={10} /> Подзадача</>
                               ) : (
@@ -1462,6 +1574,16 @@ export default function QuickAddModal({
                     }}
                   >
                     <Calendar size={12} /> Задача
+                  </button>
+                  <button
+                    type="button"
+                    className={`filter-chip ${category === 'grocery' ? 'active' : ''}`}
+                    onClick={() => {
+                      hapticFeedback('selection');
+                      setCategory('grocery');
+                    }}
+                  >
+                    <ShoppingCart size={12} /> Продукт
                   </button>
                   <button
                     type="button"

@@ -20,6 +20,10 @@ from backend.schemas import (
     GoalCreate,
     ExtractedTaskList,
     AIProvidersResponse,
+    GroceryItemCreate,
+    GroceryItemUpdate,
+    GroceryItemRead,
+    GroceryListResponse,
 )
 from backend.crud import (
     get_or_create_user,
@@ -43,6 +47,11 @@ from backend.crud import (
     get_user_goals,
     add_subtask_to_goal,
     delete_goal,
+    get_user_groceries,
+    create_grocery_item,
+    update_grocery_item,
+    delete_grocery_item,
+    clear_completed_groceries,
 )
 from backend.ai_service import ai_service
 
@@ -433,3 +442,73 @@ async def ai_parse_audio(
         filename=audio.filename or "audio.ogg",
         existing_goals=goal_titles,
     )
+
+
+# --- Groceries Endpoints ---
+@router.get("/groceries", response_model=GroceryListResponse)
+async def get_groceries(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    return await get_user_groceries(session, user.telegram_id)
+
+
+@router.post("/groceries", response_model=GroceryItemRead)
+async def create_grocery(
+    payload: GroceryItemCreate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    return await create_grocery_item(
+        session,
+        user.telegram_id,
+        title=payload.title,
+        target_value=payload.target_value,
+        step=payload.step,
+        unit=payload.unit,
+    )
+
+
+@router.patch("/groceries/{item_id}", response_model=GroceryItemRead)
+async def update_grocery(
+    item_id: int,
+    payload: GroceryItemUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    item = await update_grocery_item(
+        session,
+        item_id=item_id,
+        user_id=user.telegram_id,
+        title=payload.title,
+        is_completed=payload.is_completed,
+        target_value=payload.target_value,
+        current_value=payload.current_value,
+        step=payload.step,
+        unit=payload.unit,
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="Grocery item not found")
+    return item
+
+
+@router.delete("/groceries/{item_id}")
+async def remove_grocery(
+    item_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    success = await delete_grocery_item(session, item_id, user.telegram_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Grocery item not found")
+    return {"status": "deleted"}
+
+
+@router.post("/groceries/clear-completed")
+async def clear_completed(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    deleted_count = await clear_completed_groceries(session, user.telegram_id)
+    return {"status": "cleared", "deleted_count": deleted_count}
+

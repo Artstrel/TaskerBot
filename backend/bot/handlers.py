@@ -28,6 +28,10 @@ from backend.crud import (
     add_subtask_to_goal,
     delete_goal,
     update_user,
+    get_user_groceries,
+    create_grocery_item,
+    update_grocery_item,
+    clear_completed_groceries,
 )
 from backend.schemas import ExtractedTaskList, UserUpdate
 from backend.ai_service import ai_service
@@ -40,6 +44,7 @@ from backend.bot.keyboards import (
     get_goal_actions_kb,
     get_subtask_kb,
     get_settings_kb,
+    get_groceries_keyboard,
 )
 from backend.bot.bot_instance import bot
 
@@ -189,6 +194,113 @@ async def handle_today(message: Message):
                     unit=r.unit,
                 ),
             )
+
+
+# --- Groceries Handlers ---
+@router.message(Command("groceries"))
+@router.message(F.text == "🛒 Список продуктов")
+async def handle_groceries(message: Message):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user.id)
+        groceries = await get_user_groceries(session, user.telegram_id)
+
+    if not groceries.active_items and not groceries.completed_items:
+        await message.answer(
+            "🛒 <b>Ваш список продуктов пуст.</b>\n\nВы можете надиктовать голосом или написать, что нужно купить (например: <i>«Купить 2 литра молока, хлеб и яйца»</i>), либо добавить через WebApp.",
+            reply_markup=get_main_menu(),
+        )
+        return
+
+    lines = ["🛒 <b>Список продуктов:</b>\n"]
+    if groceries.active_items:
+        lines.append("<b>Нужно купить:</b>")
+        for item in groceries.active_items:
+            qty_str = (
+                f" — {item.target_value:g} {item.unit}"
+                if item.target_value and item.unit
+                else (f" — {item.target_value:g}" if item.target_value else "")
+            )
+            lines.append(f"▫️ {item.title}{qty_str}")
+
+    if groceries.completed_items:
+        lines.append("\n<b>Куплено:</b>")
+        for item in groceries.completed_items:
+            lines.append(f"<s>▪️ {item.title}</s>")
+
+    lines.append(f"\n<i>Куплено: {groceries.completed_count} из {groceries.total_count}</i>")
+
+    await message.answer(
+        "\n".join(lines),
+        reply_markup=get_groceries_keyboard(groceries.active_items),
+    )
+
+
+@router.callback_query(F.data.startswith("check_grocery:"))
+async def cb_check_grocery(query: CallbackQuery):
+    item_id = int(query.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, query.from_user.id)
+        await update_grocery_item(session, item_id=item_id, user_id=user.telegram_id, is_completed=True)
+        groceries = await get_user_groceries(session, user.telegram_id)
+
+    await query.answer("Отмечено как купленное! ✅")
+    lines = ["🛒 <b>Список продуктов:</b>\n"]
+    if groceries.active_items:
+        lines.append("<b>Нужно купить:</b>")
+        for item in groceries.active_items:
+            qty_str = (
+                f" — {item.target_value:g} {item.unit}"
+                if item.target_value and item.unit
+                else (f" — {item.target_value:g}" if item.target_value else "")
+            )
+            lines.append(f"▫️ {item.title}{qty_str}")
+
+    if groceries.completed_items:
+        lines.append("\n<b>Куплено:</b>")
+        for item in groceries.completed_items:
+            lines.append(f"<s>▪️ {item.title}</s>")
+
+    lines.append(f"\n<i>Куплено: {groceries.completed_count} из {groceries.total_count}</i>")
+
+    try:
+        await query.message.edit_text(
+            "\n".join(lines),
+            reply_markup=get_groceries_keyboard(groceries.active_items),
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data == "clear_groceries")
+async def cb_clear_groceries(query: CallbackQuery):
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, query.from_user.id)
+        count = await clear_completed_groceries(session, user.telegram_id)
+        groceries = await get_user_groceries(session, user.telegram_id)
+
+    await query.answer(f"Очищено купленных: {count}")
+    lines = ["🛒 <b>Список продуктов:</b>\n"]
+    if groceries.active_items:
+        lines.append("<b>Нужно купить:</b>")
+        for item in groceries.active_items:
+            qty_str = (
+                f" — {item.target_value:g} {item.unit}"
+                if item.target_value and item.unit
+                else (f" — {item.target_value:g}" if item.target_value else "")
+            )
+            lines.append(f"▫️ {item.title}{qty_str}")
+    else:
+        lines.append("<i>Все продукты куплены! Список чист.</i>")
+
+    lines.append(f"\n<i>Куплено: {groceries.completed_count} из {groceries.total_count}</i>")
+
+    try:
+        await query.message.edit_text(
+            "\n".join(lines),
+            reply_markup=get_groceries_keyboard(groceries.active_items),
+        )
+    except Exception:
+        pass
 
 
 @router.message(Command("goals"))
@@ -349,6 +461,7 @@ async def handle_text_message(message: Message):
     # Skip command or menu button if not handled above
     if text.startswith("/") or text in [
         "📋 Задачи на сегодня",
+        "🛒 Список продуктов",
         "🎯 Мои цели",
         "🔄 Рутины",
         "📱 Открыть WebApp",
@@ -396,6 +509,7 @@ async def present_parsed_tasks(message: Message, extracted: ExtractedTaskList, e
         "one_time": "⚡️ Разовая задача",
         "goal": "🎯 Глобальная цель",
         "subtask": "▫️ Подзадача цели",
+        "grocery": "🛒 Продукт/Покупка",
     }
 
     msg_lines = [
@@ -446,6 +560,7 @@ async def cb_del_parsed_item(query: CallbackQuery):
         "one_time": "⚡️ Разовая задача",
         "goal": "🎯 Глобальная цель",
         "subtask": "▫️ Подзадача цели",
+        "grocery": "🛒 Продукт/Покупка",
     }
     msg_lines = ["✨ <b>Оставшиеся задачи:</b>\n"]
     for idx, t in enumerate(tasks, 1):
@@ -537,6 +652,16 @@ async def cb_save_tasks(query: CallbackQuery):
                     title=t.title,
                     scheduled_date=sched_date,
                     goal_id=goal_id,
+                    target_value=t.target_value,
+                    step=t.step,
+                    unit=t.unit,
+                )
+                created_count += 1
+            elif t.category == "grocery":
+                await create_grocery_item(
+                    session,
+                    user_id=user_id,
+                    title=t.title,
                     target_value=t.target_value,
                     step=t.step,
                     unit=t.unit,

@@ -42,6 +42,9 @@ class User(Base):
     one_time_tasks: Mapped[List["OneTimeTask"]] = relationship(
         "OneTimeTask", back_populates="user", cascade="all, delete-orphan"
     )
+    grocery_items: Mapped[List["GroceryItem"]] = relationship(
+        "GroceryItem", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class RoutineTask(Base):
@@ -131,3 +134,24 @@ class OneTimeTask(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="one_time_tasks")
     goal: Mapped[Optional["Goal"]] = relationship("Goal", back_populates="subtasks")
+
+
+class GroceryItem(Base):
+    __tablename__ = "grocery_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(500))
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    completed_at: Mapped[Optional[dt_datetime]] = mapped_column(DateTime, nullable=True)
+    target_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    current_value: Mapped[float] = mapped_column(Float, default=0.0)
+    step: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1.0)
+    unit: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="grocery_items")
+

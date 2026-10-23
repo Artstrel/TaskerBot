@@ -5,19 +5,23 @@ import {
   Settings,
   Plus,
   RotateCw,
+  ShoppingCart,
 } from 'lucide-react';
 import {
   currentUser,
   syncUserTimezone,
   fetchDashboard,
   fetchGoals,
+  fetchGroceries,
   getCachedDashboard,
   getCachedGoals,
+  getCachedGroceries,
   hapticFeedback,
 } from './api';
 import Mascot from './components/Mascot';
 import TodayTab from './components/TodayTab';
 import GoalsTab from './components/GoalsTab';
+import GroceriesTab from './components/GroceriesTab';
 import SettingsTab from './components/SettingsTab';
 import QuickAddModal from './components/QuickAddModal';
 
@@ -69,6 +73,7 @@ export default function App() {
   // Initialize synchronously with cached data for instant 0ms load
   const [dashboardData, setDashboardData] = useState(() => getCachedDashboard());
   const [goalsData, setGoalsData] = useState(() => getCachedGoals());
+  const [groceriesData, setGroceriesData] = useState(() => getCachedGroceries());
   const [isLoading, setIsLoading] = useState(!getCachedDashboard());
   const [isSyncing, setIsSyncing] = useState(false);
   const [warmupTimerElapsed, setWarmupTimerElapsed] = useState(false);
@@ -107,12 +112,19 @@ export default function App() {
     }, 2500);
 
     try {
-      const [dash, goals] = await Promise.all([fetchDashboard(), fetchGoals()]);
+      const [dash, goals, groceries] = await Promise.all([
+        fetchDashboard(),
+        fetchGoals(),
+        fetchGroceries(),
+      ]);
       if (dash) {
         setDashboardData(dash);
       }
       if (goals) {
         setGoalsData(goals);
+      }
+      if (groceries) {
+        setGroceriesData(groceries);
       }
 
       // Check if day is completed to celebrate
@@ -150,6 +162,7 @@ export default function App() {
   };
 
   const overdueCount = dashboardData?.overdue_tasks?.length || 0;
+  const unboughtGroceriesCount = groceriesData?.active_items?.length || 0;
 
   // Format header date
   const todayFormatted = new Intl.DateTimeFormat('ru-RU', {
@@ -180,7 +193,13 @@ export default function App() {
             </div>
             <div className="header-subtitle">
               {todayFormatted}
-              {activeTab === 'goals' ? ' • Проекты & Цели' : activeTab === 'settings' ? ' • Параметры' : ''}
+              {activeTab === 'groceries'
+                ? ' • Список продуктов'
+                : activeTab === 'goals'
+                ? ' • Проекты & Цели'
+                : activeTab === 'settings'
+                ? ' • Параметры'
+                : ''}
             </div>
           </div>
         </div>
@@ -216,6 +235,17 @@ export default function App() {
             warmupTimerElapsed={warmupTimerElapsed}
           />
         )}
+        {activeTab === 'groceries' && (
+          <GroceriesTab
+            groceriesData={groceriesData}
+            setGroceriesData={setGroceriesData}
+            onRefresh={loadData}
+            onOpenQuickAdd={(opts) => {
+              setQuickAddOptions(opts);
+              setIsQuickAddOpen(true);
+            }}
+          />
+        )}
         {activeTab === 'goals' && (
           <GoalsTab
             goalsData={goalsData}
@@ -237,18 +267,18 @@ export default function App() {
       </main>
 
       {/* Floating Action Button (FAB) for Quick Add */}
-      {(activeTab === 'today' || activeTab === 'goals') && (
+      {(activeTab === 'today' || activeTab === 'groceries' || activeTab === 'goals') && (
         <button
           className="app-fab"
           onClick={() => {
             hapticFeedback('medium');
             setQuickAddOptions({
-              initialCategory: activeTab === 'goals' ? 'goal' : 'one_time',
+              initialCategory: activeTab === 'groceries' ? 'grocery' : activeTab === 'goals' ? 'goal' : 'one_time',
             });
             setIsQuickAddOpen(true);
           }}
-          title={activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
-          aria-label={activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
+          title={activeTab === 'groceries' ? "Добавить продукт" : activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
+          aria-label={activeTab === 'groceries' ? "Добавить продукт" : activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
         >
           <Plus size={24} strokeWidth={2.4} />
         </button>
@@ -264,6 +294,19 @@ export default function App() {
             <Calendar size={18} />
             <span>Сегодня</span>
             {overdueCount > 0 && <span className="dock-badge-dot" />}
+          </button>
+
+          <button
+            className={`dock-nav-item ${activeTab === 'groceries' ? 'active' : ''}`}
+            onClick={() => handleTabSwitch('groceries')}
+          >
+            <ShoppingCart size={18} />
+            <span>Продукты</span>
+            {unboughtGroceriesCount > 0 && (
+              <span className="dock-badge-num">
+                {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -294,7 +337,9 @@ export default function App() {
           onTaskCreated={loadData}
           setDashboardData={setDashboardData}
           setGoalsData={setGoalsData}
+          setGroceriesData={setGroceriesData}
           goalsData={goalsData}
+          groceriesData={groceriesData}
           initialCategory={quickAddOptions?.initialCategory}
           initialGoalId={quickAddOptions?.initialGoalId}
           initialGoalTitle={quickAddOptions?.initialGoalTitle}

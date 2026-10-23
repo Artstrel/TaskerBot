@@ -108,6 +108,22 @@ export const setCachedGoals = (data) => {
   } catch (e) {}
 };
 
+export const getCachedGroceries = () => {
+  if (typeof window === 'undefined') return { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
+  try {
+    const raw = localStorage.getItem(`tasker_cache_groceries_${currentUser.id}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
+};
+
+export const setCachedGroceries = (data) => {
+  if (typeof window === 'undefined' || !data) return;
+  try {
+    localStorage.setItem(`tasker_cache_groceries_${currentUser.id}`, JSON.stringify(data));
+  } catch (e) {}
+};
+
 // ==============================================================================
 // Pending Sync Queue (Optimistic Offline/Online Buffer)
 // ==============================================================================
@@ -359,6 +375,133 @@ export const fetchGoals = async () => {
   setCachedGoals(goals);
   return goals;
 };
+
+export const fetchGroceries = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/groceries?telegram_id=${currentUser.id}`);
+    if (res.ok) {
+      const data = await res.json();
+      setCachedGroceries(data);
+      return data;
+    }
+  } catch (e) {}
+
+  const db = getLocalDb();
+  const groceries = db.groceries || { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
+  setCachedGroceries(groceries);
+  return groceries;
+};
+
+export const createGroceryItem = async (groceryData) => {
+  hapticFeedback('light');
+  try {
+    const res = await fetch(`${API_BASE}/groceries?telegram_id=${currentUser.id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(groceryData),
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  if (!db.groceries) db.groceries = { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
+  const newItem = {
+    id: Date.now(),
+    user_id: currentUser.id,
+    title: groceryData.title,
+    target_value: groceryData.target_value || null,
+    current_value: 0,
+    step: groceryData.step || 1.0,
+    unit: groceryData.unit || null,
+    is_completed: false,
+    created_at: new Date().toISOString(),
+  };
+  db.groceries.active_items.unshift(newItem);
+  db.groceries.total_count += 1;
+  saveLocalDb(db);
+  setCachedGroceries(db.groceries);
+  return newItem;
+};
+
+export const updateGroceryItem = async (itemId, updateData) => {
+  hapticFeedback('light');
+  try {
+    const res = await fetch(`${API_BASE}/groceries/${itemId}?telegram_id=${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData),
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  if (!db.groceries) db.groceries = { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
+  let found = db.groceries.active_items.find((i) => i.id === itemId);
+  if (!found) found = db.groceries.completed_items.find((i) => i.id === itemId);
+  if (found) {
+    Object.assign(found, updateData);
+    if (updateData.is_completed !== undefined) {
+      if (updateData.is_completed) {
+        db.groceries.active_items = db.groceries.active_items.filter((i) => i.id !== itemId);
+        if (!db.groceries.completed_items.some((i) => i.id === itemId)) {
+          db.groceries.completed_items.unshift(found);
+        }
+      } else {
+        db.groceries.completed_items = db.groceries.completed_items.filter((i) => i.id !== itemId);
+        if (!db.groceries.active_items.some((i) => i.id === itemId)) {
+          db.groceries.active_items.unshift(found);
+        }
+      }
+      db.groceries.completed_count = db.groceries.completed_items.length;
+    }
+    saveLocalDb(db);
+    setCachedGroceries(db.groceries);
+    return found;
+  }
+  return { id: itemId, ...updateData };
+};
+
+export const deleteGroceryItem = async (itemId) => {
+  hapticFeedback('medium');
+  try {
+    const res = await fetch(`${API_BASE}/groceries/${itemId}?telegram_id=${currentUser.id}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  if (db.groceries) {
+    db.groceries.active_items = (db.groceries.active_items || []).filter((i) => i.id !== itemId);
+    db.groceries.completed_items = (db.groceries.completed_items || []).filter((i) => i.id !== itemId);
+    db.groceries.total_count = db.groceries.active_items.length + db.groceries.completed_items.length;
+    db.groceries.completed_count = db.groceries.completed_items.length;
+    saveLocalDb(db);
+    setCachedGroceries(db.groceries);
+  }
+  return { status: 'deleted' };
+};
+
+export const clearCompletedGroceries = async () => {
+  hapticFeedback('medium');
+  try {
+    const res = await fetch(`${API_BASE}/groceries/clear-completed?telegram_id=${currentUser.id}`, {
+      method: 'POST',
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  if (db.groceries) {
+    db.groceries.completed_items = [];
+    db.groceries.completed_count = 0;
+    db.groceries.total_count = db.groceries.active_items.length;
+    saveLocalDb(db);
+    setCachedGroceries(db.groceries);
+  }
+  return { status: 'cleared' };
+};
+
 
 export const fetchUserSettings = async () => {
   try {
@@ -842,13 +985,14 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
         const lower = title.toLowerCase();
         const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(lower);
         const isGoal = /цель|проект|хочу/i.test(lower);
+        const isGrocery = /молоко|хлеб|сыр|яйц|помидор|огурц|мясо|куриц|масло|яблок|банан|чай|кофе|сахар|мука|порошок|мыло|продукты|покупк/i.test(lower);
         let sched = todayStr;
         if (/завтра/i.test(lower)) sched = tomorrowStr;
         return {
           id: `task_${Date.now()}_${idx}`,
           title,
-          category: isRoutine ? 'routine' : isGoal ? 'goal' : defaultCategory,
-          scheduled_date: isRoutine ? null : sched,
+          category: isRoutine ? 'routine' : isGoal ? 'goal' : isGrocery ? 'grocery' : defaultCategory,
+          scheduled_date: isRoutine || isGrocery ? null : sched,
           selected: true,
         };
       }
@@ -856,7 +1000,7 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
         const title = String(item.title || item.name || item.text || '').trim();
         if (!title) return null;
         let cat = item.category || defaultCategory;
-        if (!['routine', 'one_time', 'goal'].includes(cat)) {
+        if (!['routine', 'one_time', 'goal', 'subtask', 'grocery'].includes(cat)) {
           cat = defaultCategory;
         }
         let sched = item.scheduled_date || null;
@@ -892,12 +1036,13 @@ export const parseTextWithDirectGemini = async (text) => {
 Если в тексте несколько действий/задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
 Категории:
 1. "routine": регулярные привычки ("каждый день", "ежедневно", "утром")
-2. "one_time": разовые задачи ("завтра", "сегодня", "купить", "позвонить")
+2. "one_time": разовые задачи ("завтра", "сегодня", "позвонить", "сделать")
 3. "goal": глобальные цели ("цель", "проект")
+4. "grocery": продукты питания, напитки, еда, бытовая химия ("молоко", "хлеб", "сыр", "яйца", "в список продуктов", "купить в магазине")
 
 Текущая дата: ${todayStr}.
 Формат ответа строго валидный JSON с ключом "tasks".
-Каждый элемент: {"category": "routine"|"one_time"|"goal", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}
+Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}
 Пример структуры:
 {
   "tasks": [
@@ -959,11 +1104,11 @@ export const parseTextWithDirectGroq = async (text) => {
   const prompt = `Ты — интеллектуальный ассистент по планированию задач TaskerBot.
 Твоя задача — внимательно проанализировать текст пользователя и извлечь ВСЕ упомянутые задачи.
 Если в сообщении несколько задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
-Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели).
+Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели), "grocery" (продукты, напитки, еда, бытовая химия).
 
 Текущая дата: ${todayStr}.
 Формат ответа: строгий JSON с ключом "tasks".
-Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
+Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
 
   for (const model of GROQ_CHAT_MODELS) {
     try {
@@ -1025,10 +1170,10 @@ export const parseAudioWithDirectGemini = async (audioBlob) => {
   const prompt = `Ты — голосовой ассистент по планированию задач TaskerBot.
 Внимательно прослушай аудиозапись пользователя, транскрибируй её и извлеки ВСЕ задачи.
 Если сказано несколько действий, разбей их на отдельные задачи в массиве "tasks".
-Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели).
+Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели), "grocery" (продукты, напитки, еда, бытовая химия).
 Текущая дата: ${todayStr}.
 Формат ответа: строгий валидный JSON с ключом "tasks".
-Каждый элемент: {"category": "routine"|"one_time"|"goal", "title": "название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
+Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
 
   for (const model of GEMINI_MODELS) {
     try {

@@ -294,6 +294,24 @@ h1, h2, h3, h4, .brand-font {
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
 }
 
+.dock-badge-num {
+  position: absolute;
+  top: 4px;
+  right: calc(50% - 18px);
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #000000;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+}
+
 /* Minimalist Cards and Sections */
 .linear-section {
   margin: 14px 16px;

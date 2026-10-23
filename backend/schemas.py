@@ -5,9 +5,9 @@ from pydantic import BaseModel, Field, field_validator
 
 # --- Gemini Parsing Schemas ---
 class ExtractedTask(BaseModel):
-    category: Literal["routine", "one_time", "goal", "subtask"] = Field(
+    category: Literal["routine", "one_time", "goal", "subtask", "grocery"] = Field(
         ...,
-        description="Category: routine (daily habit), one_time (ad-hoc task for a specific date), goal (big long-term target), subtask (step towards a goal)",
+        description="Category: routine (daily habit), one_time (ad-hoc task for a specific date), goal (big long-term target), subtask (step towards a goal), grocery (shopping or food product item)",
     )
     title: str = Field(..., description="Short, clear title of the task or goal")
     description: Optional[str] = Field(None, description="Additional details, notes or steps")
@@ -269,3 +269,44 @@ class DaySummary(BaseModel):
     today_tasks: List[OneTimeTaskRead]
     completed_count: int
     total_count: int
+
+
+# --- Grocery Schemas ---
+class GroceryItemBase(BaseModel):
+    title: str
+    target_value: Optional[float] = None
+    step: Optional[float] = 1.0
+    unit: Optional[str] = None
+
+
+class GroceryItemCreate(GroceryItemBase):
+    pass
+
+
+class GroceryItemUpdate(BaseModel):
+    title: Optional[str] = None
+    is_completed: Optional[bool] = None
+    target_value: Optional[float] = None
+    current_value: Optional[float] = None
+    step: Optional[float] = None
+    unit: Optional[str] = None
+
+
+class GroceryItemRead(GroceryItemBase):
+    id: int
+    user_id: int
+    is_completed: bool
+    completed_at: Optional[datetime] = None
+    current_value: float = 0.0
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class GroceryListResponse(BaseModel):
+    active_items: List[GroceryItemRead]
+    completed_items: List[GroceryItemRead]
+    total_count: int
+    completed_count: int
+

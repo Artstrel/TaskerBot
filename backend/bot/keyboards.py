@@ -20,18 +20,41 @@ def get_main_menu(webapp_url: Optional[str] = None) -> ReplyKeyboardMarkup:
     kb = [
         [
             KeyboardButton(text="📋 Задачи на сегодня"),
+            KeyboardButton(text="🛒 Список продуктов"),
+        ],
+        [
             KeyboardButton(text="🎯 Мои цели"),
-        ],
-        [
             KeyboardButton(text="🔄 Рутины"),
-            webapp_btn,
         ],
         [
+            webapp_btn,
             KeyboardButton(text="⚙️ Настройки"),
-            KeyboardButton(text="💡 Помощь"),
         ],
     ]
     return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+
+
+def get_groceries_keyboard(active_items: list, webapp_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    url = webapp_url or settings.WEBAPP_URL
+    rows = []
+    # Up to 8 active items for quick checkoff in chat
+    for item in active_items[:8]:
+        rows.append([
+            InlineKeyboardButton(
+                text=f"Куплено: {item.title[:22]}",
+                callback_data=f"check_grocery:{item.id}",
+            )
+        ])
+
+    bottom_row = []
+    if url:
+        bottom_row.append(InlineKeyboardButton(text="📱 Открыть в WebApp", web_app=WebAppInfo(url=url)))
+    bottom_row.append(InlineKeyboardButton(text="🧹 Очистить купленные", callback_data="clear_groceries"))
+
+    if bottom_row:
+        rows.append(bottom_row)
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_webapp_inline_keyboard(webapp_url: Optional[str] = None) -> InlineKeyboardMarkup:

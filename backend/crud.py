@@ -5,7 +5,7 @@ from sqlalchemy import select, update, delete, and_, func, desc, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.models import User, RoutineTask, RoutineLog, Goal, OneTimeTask
+from backend.models import User, RoutineTask, RoutineLog, Goal, OneTimeTask, GroceryItem
 from backend.schemas import (
     UserUpdate,
     RoutineWithStatus,
@@ -13,6 +13,8 @@ from backend.schemas import (
     GoalWithProgress,
     OneTimeTaskRead,
     DaySummary,
+    GroceryItemRead,
+    GroceryListResponse,
 )
 from backend.database import engine
 
@@ -803,3 +805,113 @@ async def get_day_summary(
         completed_count=completed,
         total_count=total,
     )
+
+
+# --- Groceries CRUD ---
+def _grocery_to_read(g: GroceryItem) -> GroceryItemRead:
+    return GroceryItemRead(
+        id=g.id,
+        user_id=g.user_id,
+        title=g.title,
+        is_completed=g.is_completed,
+        completed_at=g.completed_at,
+        target_value=g.target_value,
+        current_value=g.current_value or 0.0,
+        step=g.step or 1.0,
+        unit=g.unit,
+        created_at=g.created_at,
+    )
+
+
+async def get_user_groceries(session: AsyncSession, user_id: int) -> GroceryListResponse:
+    stmt = (
+        select(GroceryItem)
+        .where(GroceryItem.user_id == user_id)
+        .order_by(desc(GroceryItem.created_at))
+    )
+    res = await session.execute(stmt)
+    items = res.scalars().all()
+
+    active = [_grocery_to_read(item) for item in items if not item.is_completed]
+    completed = [_grocery_to_read(item) for item in items if item.is_completed]
+
+    return GroceryListResponse(
+        active_items=active,
+        completed_items=completed,
+        total_count=len(items),
+        completed_count=len(completed),
+    )
+
+
+async def create_grocery_item(
+    session: AsyncSession,
+    user_id: int,
+    title: str,
+    target_value: Optional[float] = None,
+    step: Optional[float] = 1.0,
+    unit: Optional[str] = None,
+) -> GroceryItemRead:
+    item = GroceryItem(
+        user_id=user_id,
+        title=title.strip(),
+        target_value=target_value,
+        current_value=0.0,
+        step=step or 1.0,
+        unit=unit.strip() if unit else None,
+        is_completed=False,
+    )
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return _grocery_to_read(item)
+
+
+async def update_grocery_item(
+    session: AsyncSession,
+    item_id: int,
+    user_id: int,
+    title: Optional[str] = None,
+    is_completed: Optional[bool] = None,
+    target_value: Optional[float] = None,
+    current_value: Optional[float] = None,
+    step: Optional[float] = None,
+    unit: Optional[str] = None,
+) -> Optional[GroceryItemRead]:
+    stmt = select(GroceryItem).where(and_(GroceryItem.id == item_id, GroceryItem.user_id == user_id))
+    res = await session.execute(stmt)
+    item = res.scalar_one_or_none()
+    if not item:
+        return None
+
+    if title is not None:
+        item.title = title.strip()
+    if is_completed is not None:
+        item.is_completed = is_completed
+        item.completed_at = datetime.utcnow() if is_completed else None
+    if target_value is not None:
+        item.target_value = target_value
+    if current_value is not None:
+        item.current_value = max(0.0, float(current_value))
+    if step is not None:
+        item.step = step
+    if unit is not None:
+        item.unit = unit.strip() if unit else None
+
+    await session.commit()
+    await session.refresh(item)
+    return _grocery_to_read(item)
+
+
+async def delete_grocery_item(session: AsyncSession, item_id: int, user_id: int) -> bool:
+    stmt = delete(GroceryItem).where(and_(GroceryItem.id == item_id, GroceryItem.user_id == user_id))
+    res = await session.execute(stmt)
+    await session.commit()
+    return res.rowcount > 0
+
+
+async def clear_completed_groceries(session: AsyncSession, user_id: int) -> int:
+    stmt = delete(GroceryItem).where(and_(GroceryItem.user_id == user_id, GroceryItem.is_completed == True))
+    res = await session.execute(stmt)
+    await session.commit()
+    return res.rowcount
+
