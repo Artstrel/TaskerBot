@@ -1,0 +1,24 @@
+name: Render Service Keep-Alive
+
+on:
+  schedule:
+    # Run every 12 minutes (Render free instances sleep after 15 minutes of inactivity)
+    - cron: '*/12 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-service:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping TaskerBot Health Endpoint
+        env:
+          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL || vars.RENDER_SERVICE_URL || 'https://taskerbot.onrender.com' }}
+        run: |
+          echo "Pinging $SERVICE_URL/health to keep container warm..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "$SERVICE_URL/health" || true)
+          echo "Response HTTP Status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" = "200" ]; then
+            echo "✅ TaskerBot server is active and healthy!"
+          else
+            echo "⚠️ Server ping responded with code $HTTP_STATUS (may still be waking up)"
+          fi

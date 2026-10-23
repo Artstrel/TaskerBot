@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -17,6 +18,19 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def assemble_db_url(cls, v: str) -> str:
+        if not v or not v.strip():
+            return f"sqlite+aiosqlite:///{DATA_DIR}/taskerbot.db"
+        v = v.strip()
+        # Normalize PostgreSQL URI to asyncpg driver required by SQLAlchemy async
+        if v.startswith("postgres://"):
+            return "postgresql+asyncpg://" + v[len("postgres://") :]
+        if v.startswith("postgresql://") and not v.startswith("postgresql+"):
+            return "postgresql+asyncpg://" + v[len("postgresql://") :]
+        return v
 
     class Config:
         env_file = ".env"

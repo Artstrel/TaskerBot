@@ -94,6 +94,17 @@ app.add_middleware(
 # Include REST API
 app.include_router(api_router)
 
+
+@app.get("/health")
+@app.get("/api/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "service": "TaskerBot",
+        "db": "postgresql" if "postgresql" in settings.DATABASE_URL else "sqlite",
+    }
+
+
 # Mount Frontend static files if built
 frontend_dist = BASE_DIR / "frontend" / "dist"
 if frontend_dist.exists() and (frontend_dist / "index.html").exists():

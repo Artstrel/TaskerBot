@@ -74,6 +74,41 @@ export const hapticFeedback = (style = 'medium') => {
 };
 
 // ==============================================================================
+// SWR (Stale-While-Revalidate) Cache for Instant Loading (0ms UI startup)
+// ==============================================================================
+export const getCachedDashboard = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`tasker_cache_dashboard_${currentUser.id}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+};
+
+export const setCachedDashboard = (data) => {
+  if (typeof window === 'undefined' || !data) return;
+  try {
+    localStorage.setItem(`tasker_cache_dashboard_${currentUser.id}`, JSON.stringify(data));
+  } catch (e) {}
+};
+
+export const getCachedGoals = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(`tasker_cache_goals_${currentUser.id}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+};
+
+export const setCachedGoals = (data) => {
+  if (typeof window === 'undefined' || !data) return;
+  try {
+    localStorage.setItem(`tasker_cache_goals_${currentUser.id}`, JSON.stringify(data));
+  } catch (e) {}
+};
+
+// ==============================================================================
 // Local Fallback Storage (Enables 100% functional Demo Mode on GitHub Pages)
 // ==============================================================================
 const LOCAL_STORAGE_KEY = 'tasker_local_db_v2';
@@ -222,7 +257,9 @@ export const fetchDashboard = async () => {
     );
     if (res.ok) {
       if (typeof window !== 'undefined') window.__tasker_is_demo = false;
-      return await res.json();
+      const data = await res.json();
+      setCachedDashboard(data);
+      return data;
     }
   } catch (e) {
     // Fall back to local DB
@@ -243,7 +280,7 @@ export const fetchDashboard = async () => {
   const hours = Math.floor(hours_left_in_day);
   const mins = Math.round((hours_left_in_day % 1) * 60);
 
-  return {
+  const fallbackData = {
     today_formatted: new Intl.DateTimeFormat('ru-RU', {
       weekday: 'short',
       day: 'numeric',
@@ -261,16 +298,24 @@ export const fetchDashboard = async () => {
     current_streak: 5,
     is_demo: true,
   };
+  setCachedDashboard(fallbackData);
+  return fallbackData;
 };
 
 export const fetchGoals = async () => {
   try {
     const res = await fetch(`${API_BASE}/goals?telegram_id=${currentUser.id}`);
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      setCachedGoals(data);
+      return data;
+    }
   } catch (e) {}
 
   const db = getLocalDb();
-  return db.goals || [];
+  const goals = db.goals || [];
+  setCachedGoals(goals);
+  return goals;
 };
 
 export const fetchUserSettings = async () => {

@@ -11,6 +11,8 @@ import {
   syncUserTimezone,
   fetchDashboard,
   fetchGoals,
+  getCachedDashboard,
+  getCachedGoals,
   hapticFeedback,
 } from './api';
 import Mascot from './components/Mascot';
@@ -64,9 +66,12 @@ class ErrorBoundary extends React.Component {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('today');
-  const [dashboardData, setDashboardData] = useState(null);
-  const [goalsData, setGoalsData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Initialize synchronously with cached data for instant 0ms load
+  const [dashboardData, setDashboardData] = useState(() => getCachedDashboard());
+  const [goalsData, setGoalsData] = useState(() => getCachedGoals());
+  const [isLoading, setIsLoading] = useState(!getCachedDashboard());
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [warmupTimerElapsed, setWarmupTimerElapsed] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [mascotMood, setMascotMood] = useState('idle');
 
@@ -86,16 +91,28 @@ export default function App() {
     // Auto-sync timezone
     syncUserTimezone();
 
-    // Initial data load
+    // Initial background data load
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
+  const loadData = async (forceFullLoading = false) => {
+    if (forceFullLoading || !dashboardData) {
+      setIsLoading(true);
+    }
+    setIsSyncing(true);
+
+    const timer = setTimeout(() => {
+      setWarmupTimerElapsed(true);
+    }, 2500);
+
     try {
       const [dash, goals] = await Promise.all([fetchDashboard(), fetchGoals()]);
-      setDashboardData(dash);
-      setGoalsData(goals);
+      if (dash) {
+        setDashboardData(dash);
+      }
+      if (goals) {
+        setGoalsData(goals);
+      }
 
       // Check if day is completed to celebrate
       if (dash && dash.total_count > 0 && dash.completed_count === dash.total_count) {
@@ -106,7 +123,10 @@ export default function App() {
     } catch (e) {
       console.error('Error loading data:', e);
     } finally {
+      clearTimeout(timer);
+      setWarmupTimerElapsed(false);
       setIsLoading(false);
+      setIsSyncing(false);
     }
   };
 
@@ -165,15 +185,21 @@ export default function App() {
         </div>
 
         <div className="header-actions">
+          {isSyncing && (
+            <span className="sync-badge" title="Синхронизация с сервером...">
+              <span className="sync-dot" />
+              Синхронизация
+            </span>
+          )}
           <button
             className="header-icon-btn"
             onClick={() => {
               hapticFeedback('light');
-              loadData();
+              loadData(true);
             }}
             title="Обновить данные"
           >
-            <RotateCw size={15} className={isLoading ? 'spin-icon' : ''} />
+            <RotateCw size={15} className={isSyncing ? 'spin-icon' : ''} />
           </button>
         </div>
       </header>
@@ -183,8 +209,9 @@ export default function App() {
         {activeTab === 'today' && (
           <TodayTab
             dashboardData={dashboardData}
-            onRefresh={loadData}
+            onRefresh={() => loadData(false)}
             onTaskCompleted={handleTaskCelebration}
+            warmupTimerElapsed={warmupTimerElapsed}
           />
         )}
         {activeTab === 'goals' && (

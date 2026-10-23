@@ -13,6 +13,7 @@ from backend.schemas import (
     OneTimeTaskRead,
     DaySummary,
 )
+from backend.database import engine
 
 
 def get_user_now(timezone_str: str) -> datetime:
@@ -157,15 +158,20 @@ async def get_user_routines_with_status(
     res = await session.execute(stmt)
     routines = res.scalars().all()
 
-    result = []
-    for r in routines:
-        # Check if there is a log for target_date
+    # Batch load all logs for target_date in a single query (avoid N+1 latency to remote DB)
+    routine_ids = [r.id for r in routines]
+    logs_by_routine_id = {}
+    if routine_ids:
         log_stmt = select(RoutineLog).where(
-            and_(RoutineLog.routine_id == r.id, RoutineLog.date == target_date)
+            and_(RoutineLog.routine_id.in_(routine_ids), RoutineLog.date == target_date)
         )
         log_res = await session.execute(log_stmt)
-        log = log_res.scalar_one_or_none()
+        for log in log_res.scalars().all():
+            logs_by_routine_id[log.routine_id] = log
 
+    result = []
+    for r in routines:
+        log = logs_by_routine_id.get(r.id)
         is_completed = log.is_completed if log else False
         completed_at = log.completed_at if log else None
 
@@ -291,6 +297,14 @@ async def get_day_tasks(
     Today tasks: scheduled_date == current_date and not is_overdue
     """
     # First, handle tasks from past dates that weren't marked overdue yet
+    is_sqlite = engine.dialect.name == "sqlite"
+    if is_sqlite:
+        days_diff_expr = func.cast(
+            func.julianday(current_date) - func.julianday(OneTimeTask.scheduled_date), Integer
+        )
+    else:
+        days_diff_expr = func.cast(current_date - OneTimeTask.scheduled_date, Integer)
+
     mark_overdue_stmt = (
         update(OneTimeTask)
         .where(
@@ -302,9 +316,7 @@ async def get_day_tasks(
         )
         .values(
             is_overdue=True,
-            overdue_days=func.max(
-                1, func.cast(func.julianday(current_date) - func.julianday(OneTimeTask.scheduled_date), Integer)
-            ) if "sqlite" in str(session.bind.url) else 1,
+            overdue_days=func.max(1, days_diff_expr),
         )
     )
     try:

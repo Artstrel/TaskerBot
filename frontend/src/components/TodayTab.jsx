@@ -26,7 +26,7 @@ import {
 } from '../api';
 import Mascot from './Mascot';
 
-export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted }) {
+export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted, warmupTimerElapsed }) {
   const [quickTitle, setQuickTitle] = useState('');
   const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
   const [isOverdueOpen, setIsOverdueOpen] = useState(true);
@@ -79,8 +79,21 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted }) 
 
   if (!dashboardData) {
     return (
-      <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-        Загрузка задач...
+      <div className="tab-loading-state">
+        <Mascot state="thinking" size={54} />
+        <div className="loading-spinner-ring" />
+        <h3 style={{ fontSize: '15px', fontWeight: 600, marginTop: '16px', color: 'var(--text-primary)' }}>
+          Загрузка задач...
+        </h3>
+        {warmupTimerElapsed ? (
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '300px', margin: '8px auto 0', lineHeight: 1.45 }}>
+            ⚡️ Сервер просыпается после перерыва. Ваши задачи в полной безопасности в базе данных и загрузятся через несколько секунд!
+          </p>
+        ) : (
+          <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '6px' }}>
+            Подключение к базе данных...
+          </p>
+        )}
       </div>
     );
   }

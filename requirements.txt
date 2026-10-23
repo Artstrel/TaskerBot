@@ -13,3 +13,4 @@ aiofiles>=24.1.0
 python-multipart>=0.0.20
 greenlet>=3.0.0
 groq>=0.18.0
+asyncpg>=0.29.0

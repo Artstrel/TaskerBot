@@ -4,10 +4,22 @@ from sqlalchemy.orm import DeclarativeBase
 
 from backend.config import settings
 
+from sqlalchemy import text
+
+engine_kwargs = {
+    "echo": settings.DEBUG,
+    "future": True,
+}
+
+if "postgresql" in settings.DATABASE_URL:
+    engine_kwargs["connect_args"] = {
+        "statement_cache_size": 0,  # Required for Supabase PgBouncer transaction pooler (port 6543)
+    }
+    engine_kwargs["pool_pre_ping"] = True
+
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    future=True,
+    **engine_kwargs,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -31,18 +43,20 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-from sqlalchemy import text
-
-
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-        # Check and migrate columns if missing in SQLite
-        result = await conn.execute(text("PRAGMA table_info(users)"))
-        columns = [row[1] for row in result.fetchall()]
-        if columns and "ai_provider" not in columns:
+        # Check and migrate columns across supported database dialects
+        if conn.dialect.name == "sqlite":
+            result = await conn.execute(text("PRAGMA table_info(users)"))
+            columns = [row[1] for row in result.fetchall()]
+            if columns and "ai_provider" not in columns:
+                await conn.execute(
+                    text("ALTER TABLE users ADD COLUMN ai_provider VARCHAR(32) DEFAULT 'groq'")
+                )
+        elif conn.dialect.name == "postgresql":
             await conn.execute(
-                text("ALTER TABLE users ADD COLUMN ai_provider VARCHAR(32) DEFAULT 'groq'")
+                text("ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(32) DEFAULT 'groq'")
             )
 
