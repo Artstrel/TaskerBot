@@ -48,15 +48,28 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
         # Check and migrate columns across supported database dialects
+        migrations = [
+            ("users", "ai_provider", "VARCHAR(32) DEFAULT 'groq'"),
+            ("routine_tasks", "target_value", "FLOAT"),
+            ("routine_tasks", "step", "FLOAT DEFAULT 1.0"),
+            ("routine_tasks", "unit", "VARCHAR(32)"),
+            ("routine_logs", "current_value", "FLOAT DEFAULT 0.0"),
+            ("one_time_tasks", "target_value", "FLOAT"),
+            ("one_time_tasks", "current_value", "FLOAT DEFAULT 0.0"),
+            ("one_time_tasks", "step", "FLOAT DEFAULT 1.0"),
+            ("one_time_tasks", "unit", "VARCHAR(32)"),
+        ]
+
         if conn.dialect.name == "sqlite":
-            result = await conn.execute(text("PRAGMA table_info(users)"))
-            columns = [row[1] for row in result.fetchall()]
-            if columns and "ai_provider" not in columns:
-                await conn.execute(
-                    text("ALTER TABLE users ADD COLUMN ai_provider VARCHAR(32) DEFAULT 'groq'")
-                )
+            # Cache tables info
+            for table, col, col_def in migrations:
+                res = await conn.execute(text(f"PRAGMA table_info({table})"))
+                existing_cols = [row[1] for row in res.fetchall()]
+                if existing_cols and col not in existing_cols:
+                    await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {col_def}"))
         elif conn.dialect.name == "postgresql":
-            await conn.execute(
-                text("ALTER TABLE users ADD COLUMN IF NOT EXISTS ai_provider VARCHAR(32) DEFAULT 'groq'")
-            )
+            for table, col, col_def in migrations:
+                await conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_def}")
+                )
 

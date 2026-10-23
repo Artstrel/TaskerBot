@@ -9,11 +9,54 @@ from backend.models import User, RoutineTask, RoutineLog, Goal, OneTimeTask
 from backend.schemas import (
     UserUpdate,
     RoutineWithStatus,
+    RoutineTaskUpdate,
     GoalWithProgress,
     OneTimeTaskRead,
     DaySummary,
 )
 from backend.database import engine
+
+
+def _task_to_read(t: OneTimeTask, goal_title: Optional[str] = None) -> OneTimeTaskRead:
+    gt = goal_title or (t.goal.title if getattr(t, "goal", None) else None)
+    return OneTimeTaskRead(
+        id=t.id,
+        user_id=t.user_id,
+        goal_id=t.goal_id,
+        goal_title=gt,
+        title=t.title,
+        scheduled_date=t.scheduled_date,
+        is_completed=t.is_completed,
+        completed_at=t.completed_at,
+        is_overdue=t.is_overdue,
+        overdue_days=t.overdue_days,
+        priority=t.priority,
+        target_value=t.target_value,
+        current_value=t.current_value or 0.0,
+        step=t.step or 1.0,
+        unit=t.unit,
+        created_at=t.created_at,
+    )
+
+
+def _routine_to_status(r: RoutineTask, log: Optional[RoutineLog] = None) -> RoutineWithStatus:
+    is_completed = log.is_completed if log else False
+    completed_at = log.completed_at if log else None
+    current_value = log.current_value if (log and log.current_value is not None) else 0.0
+    return RoutineWithStatus(
+        id=r.id,
+        title=r.title,
+        description=r.description,
+        is_active=r.is_active,
+        current_streak=r.current_streak,
+        best_streak=r.best_streak,
+        is_completed_today=is_completed,
+        completed_at=completed_at,
+        target_value=r.target_value,
+        current_value=current_value,
+        step=r.step or 1.0,
+        unit=r.unit,
+    )
 
 
 def get_user_now(timezone_str: str) -> datetime:
@@ -133,17 +176,68 @@ async def update_user(
 
 # --- Routine Tasks CRUD ---
 async def create_routine(
-    session: AsyncSession, user_id: int, title: str, description: Optional[str] = None
+    session: AsyncSession,
+    user_id: int,
+    title: str,
+    description: Optional[str] = None,
+    target_value: Optional[float] = None,
+    step: Optional[float] = 1.0,
+    unit: Optional[str] = None,
 ) -> RoutineTask:
     routine = RoutineTask(
         user_id=user_id,
         title=title.strip(),
         description=description.strip() if description else None,
+        target_value=target_value,
+        step=step or 1.0,
+        unit=unit.strip() if unit else None,
     )
     session.add(routine)
     await session.commit()
     await session.refresh(routine)
     return routine
+
+
+async def update_routine(
+    session: AsyncSession,
+    routine_id: int,
+    user_id: int,
+    data: RoutineTaskUpdate,
+    target_date: Optional[date] = None,
+) -> Optional[RoutineWithStatus]:
+    stmt = select(RoutineTask).where(
+        and_(RoutineTask.id == routine_id, RoutineTask.user_id == user_id)
+    )
+    res = await session.execute(stmt)
+    routine = res.scalar_one_or_none()
+    if not routine:
+        return None
+
+    if data.title is not None:
+        routine.title = data.title.strip()
+    if data.description is not None:
+        routine.description = data.description.strip() if data.description else None
+    if data.is_active is not None:
+        routine.is_active = data.is_active
+    if data.target_value is not None:
+        routine.target_value = data.target_value
+    if data.step is not None:
+        routine.step = data.step
+    if data.unit is not None:
+        routine.unit = data.unit.strip() if data.unit else None
+
+    await session.commit()
+    await session.refresh(routine)
+
+    log = None
+    if target_date:
+        log_stmt = select(RoutineLog).where(
+            and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date)
+        )
+        log_res = await session.execute(log_stmt)
+        log = log_res.scalar_one_or_none()
+
+    return _routine_to_status(routine, log)
 
 
 async def get_user_routines_with_status(
@@ -172,21 +266,7 @@ async def get_user_routines_with_status(
     result = []
     for r in routines:
         log = logs_by_routine_id.get(r.id)
-        is_completed = log.is_completed if log else False
-        completed_at = log.completed_at if log else None
-
-        result.append(
-            RoutineWithStatus(
-                id=r.id,
-                title=r.title,
-                description=r.description,
-                is_active=r.is_active,
-                current_streak=r.current_streak,
-                best_streak=r.best_streak,
-                is_completed_today=is_completed,
-                completed_at=completed_at,
-            )
-        )
+        result.append(_routine_to_status(r, log))
     return result
 
 
@@ -224,12 +304,20 @@ async def toggle_routine_completion(
             routine_id=routine_id,
             date=target_date,
             is_completed=new_state,
+            current_value=0.0,
             completed_at=now_utc if new_state else None,
         )
         session.add(log)
     else:
         log.is_completed = new_state
         log.completed_at = now_utc if new_state else None
+
+    # Sync current_value if numeric target exists
+    if routine.target_value is not None and routine.target_value > 0:
+        if new_state and (log.current_value or 0.0) < routine.target_value:
+            log.current_value = routine.target_value
+        elif not new_state and (log.current_value or 0.0) >= routine.target_value:
+            log.current_value = 0.0
 
     # Update streaks
     if new_state:
@@ -242,17 +330,73 @@ async def toggle_routine_completion(
 
     await session.commit()
     await session.refresh(routine)
+    await session.refresh(log)
 
-    return RoutineWithStatus(
-        id=routine.id,
-        title=routine.title,
-        description=routine.description,
-        is_active=routine.is_active,
-        current_streak=routine.current_streak,
-        best_streak=routine.best_streak,
-        is_completed_today=new_state,
-        completed_at=log.completed_at,
+    return _routine_to_status(routine, log)
+
+
+async def update_routine_progress(
+    session: AsyncSession,
+    routine_id: int,
+    user_id: int,
+    target_date: date,
+    current_value: Optional[float] = None,
+    delta: Optional[float] = None,
+) -> Optional[RoutineWithStatus]:
+    stmt = select(RoutineTask).where(
+        and_(RoutineTask.id == routine_id, RoutineTask.user_id == user_id)
     )
+    res = await session.execute(stmt)
+    routine = res.scalar_one_or_none()
+    if not routine:
+        return None
+
+    log_stmt = select(RoutineLog).where(
+        and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date)
+    )
+    log_res = await session.execute(log_stmt)
+    log = log_res.scalar_one_or_none()
+
+    now_utc = datetime.utcnow()
+    if not log:
+        log = RoutineLog(
+            routine_id=routine_id,
+            date=target_date,
+            is_completed=False,
+            current_value=0.0,
+        )
+        session.add(log)
+
+    old_val = log.current_value or 0.0
+    if current_value is not None:
+        new_val = current_value
+    elif delta is not None:
+        new_val = old_val + delta
+    else:
+        new_val = old_val
+
+    new_val = max(0.0, round(float(new_val), 2))
+    log.current_value = new_val
+
+    # Auto complete / uncomplete check
+    if routine.target_value is not None and routine.target_value > 0:
+        if new_val >= routine.target_value and not log.is_completed:
+            log.is_completed = True
+            log.completed_at = now_utc
+            routine.current_streak += 1
+            if routine.current_streak > routine.best_streak:
+                routine.best_streak = routine.current_streak
+        elif new_val < routine.target_value and log.is_completed:
+            log.is_completed = False
+            log.completed_at = None
+            if routine.current_streak > 0:
+                routine.current_streak -= 1
+
+    await session.commit()
+    await session.refresh(routine)
+    await session.refresh(log)
+
+    return _routine_to_status(routine, log)
 
 
 async def delete_routine(
@@ -274,6 +418,10 @@ async def create_one_time_task(
     scheduled_date: date,
     goal_id: Optional[int] = None,
     priority: int = 0,
+    target_value: Optional[float] = None,
+    current_value: Optional[float] = 0.0,
+    step: Optional[float] = 1.0,
+    unit: Optional[str] = None,
 ) -> OneTimeTask:
     task = OneTimeTask(
         user_id=user_id,
@@ -281,6 +429,10 @@ async def create_one_time_task(
         scheduled_date=scheduled_date,
         goal_id=goal_id,
         priority=priority,
+        target_value=target_value,
+        current_value=current_value or 0.0,
+        step=step or 1.0,
+        unit=unit.strip() if unit else None,
     )
     session.add(task)
     await session.commit()
@@ -339,21 +491,7 @@ async def get_day_tasks(
     today: List[OneTimeTaskRead] = []
 
     for t in all_tasks:
-        goal_name = t.goal.title if t.goal else None
-        task_dto = OneTimeTaskRead(
-            id=t.id,
-            user_id=t.user_id,
-            goal_id=t.goal_id,
-            goal_title=goal_name,
-            title=t.title,
-            scheduled_date=t.scheduled_date,
-            is_completed=t.is_completed,
-            completed_at=t.completed_at,
-            is_overdue=t.is_overdue,
-            overdue_days=t.overdue_days,
-            priority=t.priority,
-            created_at=t.created_at,
-        )
+        task_dto = _task_to_read(t)
 
         if not t.is_completed and (t.is_overdue or t.scheduled_date < current_date):
             overdue.append(task_dto)
@@ -387,23 +525,60 @@ async def toggle_one_time_task(
 
     task.completed_at = datetime.utcnow() if task.is_completed else None
 
+    # Sync current_value if numeric target exists
+    if task.target_value is not None and task.target_value > 0:
+        if task.is_completed and (task.current_value or 0.0) < task.target_value:
+            task.current_value = task.target_value
+        elif not task.is_completed and (task.current_value or 0.0) >= task.target_value:
+            task.current_value = 0.0
+
     await session.commit()
     await session.refresh(task)
 
-    return OneTimeTaskRead(
-        id=task.id,
-        user_id=task.user_id,
-        goal_id=task.goal_id,
-        goal_title=task.goal.title if task.goal else None,
-        title=task.title,
-        scheduled_date=task.scheduled_date,
-        is_completed=task.is_completed,
-        completed_at=task.completed_at,
-        is_overdue=task.is_overdue,
-        overdue_days=task.overdue_days,
-        priority=task.priority,
-        created_at=task.created_at,
+    return _task_to_read(task)
+
+
+async def update_task_progress(
+    session: AsyncSession,
+    task_id: int,
+    user_id: int,
+    current_value: Optional[float] = None,
+    delta: Optional[float] = None,
+) -> Optional[OneTimeTaskRead]:
+    stmt = (
+        select(OneTimeTask)
+        .options(selectinload(OneTimeTask.goal))
+        .where(and_(OneTimeTask.id == task_id, OneTimeTask.user_id == user_id))
     )
+    res = await session.execute(stmt)
+    task = res.scalar_one_or_none()
+    if not task:
+        return None
+
+    old_val = task.current_value or 0.0
+    if current_value is not None:
+        new_val = current_value
+    elif delta is not None:
+        new_val = old_val + delta
+    else:
+        new_val = old_val
+
+    new_val = max(0.0, round(float(new_val), 2))
+    task.current_value = new_val
+
+    # Auto complete / uncomplete check
+    if task.target_value is not None and task.target_value > 0:
+        if new_val >= task.target_value and not task.is_completed:
+            task.is_completed = True
+            task.completed_at = datetime.utcnow()
+        elif new_val < task.target_value and task.is_completed:
+            task.is_completed = False
+            task.completed_at = None
+
+    await session.commit()
+    await session.refresh(task)
+
+    return _task_to_read(task)
 
 
 async def postpone_task(
@@ -426,20 +601,7 @@ async def postpone_task(
     await session.commit()
     await session.refresh(task)
 
-    return OneTimeTaskRead(
-        id=task.id,
-        user_id=task.user_id,
-        goal_id=task.goal_id,
-        goal_title=task.goal.title if task.goal else None,
-        title=task.title,
-        scheduled_date=task.scheduled_date,
-        is_completed=task.is_completed,
-        completed_at=task.completed_at,
-        is_overdue=task.is_overdue,
-        overdue_days=task.overdue_days,
-        priority=task.priority,
-        created_at=task.created_at,
-    )
+    return _task_to_read(task)
 
 
 async def update_one_time_task(
@@ -451,6 +613,10 @@ async def update_one_time_task(
     is_completed: Optional[bool] = None,
     goal_id: Optional[int] = None,
     priority: Optional[int] = None,
+    target_value: Optional[float] = None,
+    current_value: Optional[float] = None,
+    step: Optional[float] = None,
+    unit: Optional[str] = None,
 ) -> Optional[OneTimeTaskRead]:
     stmt = (
         select(OneTimeTask)
@@ -470,32 +636,32 @@ async def update_one_time_task(
         task.overdue_days = 0
     if is_completed is not None:
         task.is_completed = is_completed
-        if is_completed:
-            task.completed_at = datetime.utcnow()
-        else:
-            task.completed_at = None
+        task.completed_at = datetime.utcnow() if is_completed else None
     if goal_id is not None:
         task.goal_id = goal_id if goal_id > 0 else None
     if priority is not None:
         task.priority = priority
+    if target_value is not None:
+        task.target_value = target_value
+    if current_value is not None:
+        task.current_value = max(0.0, round(float(current_value), 2))
+    if step is not None:
+        task.step = step
+    if unit is not None:
+        task.unit = unit.strip() if unit else None
+
+    # Check auto-complete if current_value / target_value changed
+    if task.target_value is not None and task.target_value > 0 and (current_value is not None or target_value is not None):
+        if (task.current_value or 0.0) >= task.target_value and not task.is_completed:
+            task.is_completed = True
+            task.completed_at = datetime.utcnow()
+        elif (task.current_value or 0.0) < task.target_value and task.is_completed:
+            task.is_completed = False
+            task.completed_at = None
 
     await session.commit()
     await session.refresh(task)
-
-    return OneTimeTaskRead(
-        id=task.id,
-        user_id=task.user_id,
-        goal_id=task.goal_id,
-        goal_title=task.goal.title if task.goal else None,
-        title=task.title,
-        scheduled_date=task.scheduled_date,
-        is_completed=task.is_completed,
-        completed_at=task.completed_at,
-        is_overdue=task.is_overdue,
-        overdue_days=task.overdue_days,
-        priority=task.priority,
-        created_at=task.created_at,
-    )
+    return _task_to_read(task)
 
 
 async def delete_one_time_task(
@@ -550,22 +716,7 @@ async def get_user_goals(
         for st in g.subtasks:
             if st.is_completed:
                 completed_count += 1
-            subtasks_dto.append(
-                OneTimeTaskRead(
-                    id=st.id,
-                    user_id=st.user_id,
-                    goal_id=st.goal_id,
-                    goal_title=g.title,
-                    title=st.title,
-                    scheduled_date=st.scheduled_date,
-                    is_completed=st.is_completed,
-                    completed_at=st.completed_at,
-                    is_overdue=st.is_overdue,
-                    overdue_days=st.overdue_days,
-                    priority=st.priority,
-                    created_at=st.created_at,
-                )
-            )
+            subtasks_dto.append(_task_to_read(st, g.title))
 
         pct = int((completed_count / total_count * 100)) if total_count > 0 else 0
         result.append(
@@ -613,20 +764,7 @@ async def add_subtask_to_goal(
     await session.commit()
     await session.refresh(task)
 
-    return OneTimeTaskRead(
-        id=task.id,
-        user_id=task.user_id,
-        goal_id=goal.id,
-        goal_title=goal.title,
-        title=task.title,
-        scheduled_date=task.scheduled_date,
-        is_completed=task.is_completed,
-        completed_at=task.completed_at,
-        is_overdue=task.is_overdue,
-        overdue_days=task.overdue_days,
-        priority=task.priority,
-        created_at=task.created_at,
-    )
+    return _task_to_read(task, goal.title)
 
 
 async def delete_goal(session: AsyncSession, goal_id: int, user_id: int) -> bool:

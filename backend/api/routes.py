@@ -11,6 +11,8 @@ from backend.schemas import (
     DaySummary,
     RoutineWithStatus,
     RoutineTaskCreate,
+    RoutineTaskUpdate,
+    ProgressUpdate,
     OneTimeTaskRead,
     OneTimeTaskCreate,
     OneTimeTaskUpdate,
@@ -26,10 +28,13 @@ from backend.crud import (
     get_user_effective_date_and_urgency,
     get_day_summary,
     create_routine,
+    update_routine,
+    update_routine_progress,
     get_user_routines_with_status,
     toggle_routine_completion,
     delete_routine,
     create_one_time_task,
+    update_task_progress,
     toggle_one_time_task,
     postpone_task,
     update_one_time_task,
@@ -107,16 +112,55 @@ async def list_routines(
     return await get_user_routines_with_status(session, user.telegram_id, effective_date)
 
 
-@router.post("/routines", response_model=RoutineTaskCreate)
+@router.post("/routines", response_model=RoutineWithStatus)
 async def add_routine(
     routine_in: RoutineTaskCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
     routine = await create_routine(
-        session, user.telegram_id, routine_in.title, routine_in.description
+        session,
+        user.telegram_id,
+        routine_in.title,
+        routine_in.description,
+        target_value=routine_in.target_value,
+        step=routine_in.step,
+        unit=routine_in.unit,
     )
-    return RoutineTaskCreate(title=routine.title, description=routine.description)
+    now = get_user_now(user.timezone)
+    effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+    res = await get_user_routines_with_status(session, user.telegram_id, effective_date)
+    matching = next((r for r in res if r.id == routine.id), None)
+    if matching:
+        return matching
+    return RoutineWithStatus(
+        id=routine.id,
+        title=routine.title,
+        description=routine.description,
+        is_active=routine.is_active,
+        current_streak=routine.current_streak,
+        best_streak=routine.best_streak,
+        is_completed_today=False,
+        target_value=routine.target_value,
+        current_value=0.0,
+        step=routine.step or 1.0,
+        unit=routine.unit,
+    )
+
+
+@router.patch("/routines/{routine_id}", response_model=RoutineWithStatus)
+async def update_routine_endpoint(
+    routine_id: int,
+    routine_in: RoutineTaskUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    now = get_user_now(user.timezone)
+    effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+    res = await update_routine(session, routine_id, user.telegram_id, routine_in, effective_date)
+    if not res:
+        raise HTTPException(status_code=404, detail="Routine not found")
+    return res
 
 
 @router.patch("/routines/{routine_id}/toggle", response_model=RoutineWithStatus)
@@ -130,6 +174,28 @@ async def toggle_routine(
     effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
     res = await toggle_routine_completion(
         session, routine_id, user.telegram_id, effective_date, completed
+    )
+    if not res:
+        raise HTTPException(status_code=404, detail="Routine not found")
+    return res
+
+
+@router.patch("/routines/{routine_id}/progress", response_model=RoutineWithStatus)
+async def update_routine_progress_endpoint(
+    routine_id: int,
+    progress: ProgressUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    now = get_user_now(user.timezone)
+    effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+    res = await update_routine_progress(
+        session,
+        routine_id,
+        user.telegram_id,
+        effective_date,
+        current_value=progress.current_value,
+        delta=progress.delta,
     )
     if not res:
         raise HTTPException(status_code=404, detail="Routine not found")
@@ -167,6 +233,10 @@ async def add_task(
         target_date,
         task_in.goal_id,
         task_in.priority,
+        target_value=task_in.target_value,
+        current_value=task_in.current_value,
+        step=task_in.step,
+        unit=task_in.unit,
     )
     return OneTimeTaskRead.model_validate(task)
 
@@ -179,6 +249,25 @@ async def toggle_task(
     session: AsyncSession = Depends(get_db),
 ):
     task = await toggle_one_time_task(session, task_id, user.telegram_id, completed)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@router.patch("/tasks/{task_id}/progress", response_model=OneTimeTaskRead)
+async def update_task_progress_endpoint(
+    task_id: int,
+    progress: ProgressUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    task = await update_task_progress(
+        session,
+        task_id,
+        user.telegram_id,
+        current_value=progress.current_value,
+        delta=progress.delta,
+    )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -213,6 +302,10 @@ async def update_task_endpoint(
         is_completed=task_in.is_completed,
         goal_id=task_in.goal_id,
         priority=task_in.priority,
+        target_value=task_in.target_value,
+        current_value=task_in.current_value,
+        step=task_in.step,
+        unit=task_in.unit,
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -55,6 +56,9 @@ class RoutineTask(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     current_streak: Mapped[int] = mapped_column(Integer, default=0)
     best_streak: Mapped[int] = mapped_column(Integer, default=0)
+    target_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    step: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1.0)
+    unit: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     created_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
 
     # Relationships
@@ -73,6 +77,7 @@ class RoutineLog(Base):
     )
     date: Mapped[dt_date] = mapped_column(Date, index=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    current_value: Mapped[float] = mapped_column(Float, default=0.0)
     completed_at: Mapped[Optional[dt_datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -117,6 +122,10 @@ class OneTimeTask(Base):
     is_overdue: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     overdue_days: Mapped[int] = mapped_column(Integer, default=0)
     priority: Mapped[int] = mapped_column(Integer, default=0)
+    target_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    current_value: Mapped[float] = mapped_column(Float, default=0.0)
+    step: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1.0)
+    unit: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     created_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
 
     # Relationships

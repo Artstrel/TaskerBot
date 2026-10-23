@@ -16,14 +16,21 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 Твоя задача — внимательно проанализировать текст или аудиосообщение пользователя и извлечь ВСЕ упомянутые задачи.
 
 Правила классификации категорий:
-1. "routine": регулярные ежедневные привычки и действия (маркеры: "каждый день", "ежедневно", "по утрам", "каждый вечер", "пить витамины", "делать зарядку").
+1. "routine": регулярные ежедневные привычки и действия (маркеры: "каждый день", "ежедневно", "по утрам", "каждый вечер", "пить воду", "делать зарядку", "отжиматься каждый день").
 2. "one_time": разовые задачи на конкретный день (маркеры: "сегодня", "завтра", "купить хлеб", "позвонить врачу", "заехать в автосервис").
 3. "goal": глобальные крупные цели, проекты или майлстоуны (маркеры: "цель", "хочу запустить проект", "сделать ремонт", "выучить английский", "похудеть").
 4. "subtask": конкретный шаг для достижения цели (если пользователь говорит "к цели X сделать Y", "для ремонта заказать краску").
 
+Правила для числовых (количественных) задач и привычек со счётчиком:
+- Если задача или привычка содержит измеримую количественную цель (например: "выпить 2 литра воды", "отжаться 20 раз", "купить 5 помидоров", "пробежать 5 км", "прочитать 30 страниц", "сделать 10 подтягиваний"):
+  - "target_value": числовое значение цели (float, например: 2.0, 20.0, 5.0, 30.0).
+  - "unit": единица измерения кратко (строка, например: "л", "мл", "раз", "шт", "кг", "км", "стр").
+  - "step": шаг инкремента/декремента. Если в тексте указан шаг (например, "по 250 мл", "по 5 отжиманий"), используй его. Если не указан: для жидкостей и веса ("л", "кг") используй 0.25; для штук, повторений, страниц, километров ("раз", "шт", "стр", "км") используй 1.0.
+- Если задача обычная и не содержит числовой счётчик, поля target_value, step, unit должны быть null.
+
 Текущая дата пользователя: {current_date}.
 Если указано "завтра", рассчитай точную дату YYYY-MM-DD. Если дата не указана для разовой задачи, установи null (что означает "сегодня").
-Если в сообщении несколько задач (например: "Каждый день бегать и завтра купить билеты"), ОБЯЗАТЕЛЬНО разбей их на отдельные элементы списка.
+Если в сообщении несколько задач (например: "Каждый день пить 2 литра воды и завтра купить 5 помидоров"), ОБЯЗАТЕЛЬНО разбей их на отдельные элементы списка.
 
 Формат ответа: строго JSON с полем "tasks".
 Каждый элемент в "tasks" должен содержать:
@@ -33,6 +40,9 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 - "scheduled_date": "YYYY-MM-DD" или null
 - "goal_title": название цели (если это subtask) или null
 - "target_date": дедлайн цели "YYYY-MM-DD" (если это goal) или null
+- "target_value": число (float) или null
+- "step": шаг (float) или null
+- "unit": строка единицы измерения ("л", "шт", "раз" и т.п.) или null
 """
 
 
@@ -48,6 +58,22 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
             if cat not in ["routine", "one_time", "goal", "subtask"]:
                 cat = "one_time"
             title = t.get("title") or t.get("name") or "Новая задача"
+
+            target_val = t.get("target_value")
+            try:
+                target_val = float(target_val) if target_val is not None else None
+            except (ValueError, TypeError):
+                target_val = None
+
+            step_val = t.get("step")
+            try:
+                step_val = float(step_val) if step_val is not None else (1.0 if target_val else None)
+            except (ValueError, TypeError):
+                step_val = 1.0 if target_val else None
+
+            unit_val = t.get("unit")
+            unit_val = str(unit_val).strip() if unit_val else None
+
             normalized_tasks.append(
                 ExtractedTask(
                     category=cat,
@@ -56,6 +82,9 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                     description=t.get("description"),
                     goal_title=t.get("goal_title"),
                     target_date=t.get("target_date"),
+                    target_value=target_val,
+                    step=step_val,
+                    unit=unit_val,
                 )
             )
     return normalized_tasks
@@ -99,12 +128,52 @@ def _parse_json_tasks(raw: str) -> Optional[ExtractedTaskList]:
 
 
 def _fallback_parse(text: str, current_date: date) -> ExtractedTaskList:
-    """Fallback keyword-based parser when AI keys are missing or offline."""
+    """Fallback keyword and regex parser when AI keys are missing or offline."""
     lines = [l.strip() for l in re.split(r"[\n;,]+|\s+и\s+", text) if l.strip()]
     tasks: List[ExtractedTask] = []
 
     for line in lines:
         lower = line.lower()
+
+        # Check numeric quantity patterns
+        target_val = None
+        unit_val = None
+        step_val = None
+
+        # Look for e.g. "2 литра", "2.5 л", "20 отжиманий", "5 помидоров", "10 раз"
+        num_match = re.search(r"(\d+(?:[.,]\d+)?)\s*(литра?|литров|л|мл|кг|килограмм\w*|раз\w*|отжиман\w*|шт|штук\w*|помидор\w*|стр|страниц\w*|км|километр\w*)", lower)
+        if num_match:
+            try:
+                val_str = num_match.group(1).replace(",", ".")
+                target_val = float(val_str)
+                u = num_match.group(2)
+                if "литр" in u or u == "л":
+                    unit_val = "л"
+                    step_val = 0.25
+                elif "мл" in u:
+                    unit_val = "мл"
+                    step_val = 250.0
+                elif "кг" in u or "килограмм" in u:
+                    unit_val = "кг"
+                    step_val = 0.5
+                elif "отжиман" in u or "раз" in u:
+                    unit_val = "раз"
+                    step_val = 1.0
+                elif "помидор" in u or "шт" in u:
+                    unit_val = "шт"
+                    step_val = 1.0
+                elif "стр" in u:
+                    unit_val = "стр"
+                    step_val = 1.0
+                elif "км" in u:
+                    unit_val = "км"
+                    step_val = 1.0
+                else:
+                    unit_val = "шт"
+                    step_val = 1.0
+            except Exception:
+                target_val = None
+
         # Routine check
         if any(w in lower for w in ["каждый день", "ежедневно", "утром", "вечером", "привычк"]):
             title = re.sub(
@@ -117,6 +186,9 @@ def _fallback_parse(text: str, current_date: date) -> ExtractedTaskList:
                 ExtractedTask(
                     category="routine",
                     title=title or line,
+                    target_value=target_val,
+                    step=step_val,
+                    unit=unit_val,
                 )
             )
         # Goal check
@@ -148,6 +220,9 @@ def _fallback_parse(text: str, current_date: date) -> ExtractedTaskList:
                     category="one_time",
                     title=clean_title or line,
                     scheduled_date=sched_date,
+                    target_value=target_val,
+                    step=step_val,
+                    unit=unit_val,
                 )
             )
 

@@ -50,6 +50,15 @@ export default function QuickAddModal({
   const [extractedTasks, setExtractedTasks] = useState(null);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [editingTargetVal, setEditingTargetVal] = useState('');
+  const [editingUnit, setEditingUnit] = useState('');
+  const [editingStep, setEditingStep] = useState('');
+
+  // Quantitative / numeric state
+  const [isNumeric, setIsNumeric] = useState(false);
+  const [targetValue, setTargetValue] = useState('');
+  const [unit, setUnit] = useState('');
+  const [step, setStep] = useState('');
 
   // AI Providers state
   const [providers, setProviders] = useState([]);
@@ -312,6 +321,10 @@ export default function QuickAddModal({
     const prioInt = priority === 'high' ? 1 : 0;
     const mutationId = `create_${category}_${tempId}`;
 
+    const parsedTarget = isNumeric && targetValue ? parseFloat(targetValue.replace(',', '.')) : null;
+    const parsedStep = isNumeric && step ? parseFloat(step.replace(',', '.')) : 1.0;
+    const cleanUnit = isNumeric && unit.trim() ? unit.trim() : null;
+
     hapticFeedback('success');
     onClose();
 
@@ -322,6 +335,10 @@ export default function QuickAddModal({
           const optRoutine = {
             id: tempId,
             title,
+            target_value: parsedTarget,
+            current_value: 0.0,
+            step: parsedStep,
+            unit: cleanUnit,
             is_completed_today: false,
             current_streak: 0,
             best_streak: 0,
@@ -339,7 +356,12 @@ export default function QuickAddModal({
 
       addPendingMutation({ id: mutationId, type: 'create_routine', tempId, title, timestamp: Date.now() });
 
-      createRoutine({ title })
+      createRoutine({
+        title,
+        target_value: parsedTarget,
+        step: parsedStep,
+        unit: cleanUnit,
+      })
         .then((realRoutine) => {
           removePendingMutation(mutationId);
           if (setDashboardData && realRoutine) {
@@ -406,6 +428,10 @@ export default function QuickAddModal({
             category: 'one_time',
             priority: prioInt,
             is_completed: false,
+            target_value: parsedTarget,
+            current_value: 0.0,
+            step: parsedStep,
+            unit: cleanUnit,
             scheduled_date: selectedDate,
             created_at: new Date().toISOString(),
             is_optimistic: true,
@@ -422,7 +448,14 @@ export default function QuickAddModal({
 
       addPendingMutation({ id: mutationId, type: 'create_task', tempId, title, timestamp: Date.now() });
 
-      createTask({ title, scheduled_date: selectedDate, priority: prioInt })
+      createTask({
+        title,
+        scheduled_date: selectedDate,
+        priority: prioInt,
+        target_value: parsedTarget,
+        step: parsedStep,
+        unit: cleanUnit,
+      })
         .then((realTask) => {
           removePendingMutation(mutationId);
           if (setDashboardData && realTask) {
@@ -451,13 +484,30 @@ export default function QuickAddModal({
     hapticFeedback('selection');
     setEditingTaskId(task.id);
     setEditingTitle(task.title);
+    setEditingTargetVal(task.target_value ? String(task.target_value) : '');
+    setEditingUnit(task.unit || '');
+    setEditingStep(task.step ? String(task.step) : '');
   };
 
   const handleSaveTaskEdit = (taskId) => {
     hapticFeedback('light');
     if (editingTitle.trim()) {
+      const parsedTarget = editingTargetVal ? parseFloat(editingTargetVal.replace(',', '.')) : null;
+      const parsedStep = editingStep ? parseFloat(editingStep.replace(',', '.')) : 1.0;
+      const cleanUnit = editingUnit.trim() || null;
+
       setExtractedTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, title: editingTitle.trim() } : t))
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...t,
+                title: editingTitle.trim(),
+                target_value: parsedTarget && parsedTarget > 0 ? parsedTarget : null,
+                unit: cleanUnit,
+                step: parsedStep && parsedStep > 0 ? parsedStep : 1.0,
+              }
+            : t
+        )
       );
     }
     setEditingTaskId(null);
@@ -499,6 +549,10 @@ export default function QuickAddModal({
             const optRoutine = {
               id: tempId,
               title: cleanTitle,
+              target_value: t.target_value || null,
+              current_value: 0.0,
+              step: t.step || 1.0,
+              unit: t.unit || null,
               is_completed_today: false,
               current_streak: 0,
               best_streak: 0,
@@ -514,7 +568,13 @@ export default function QuickAddModal({
           });
         }
         addPendingMutation({ id: mutationId, type: 'create_routine', tempId, title: cleanTitle, timestamp: Date.now() });
-        createRoutine({ title: cleanTitle, description: t.description || null })
+        createRoutine({
+          title: cleanTitle,
+          description: t.description || null,
+          target_value: t.target_value || null,
+          step: t.step || 1.0,
+          unit: t.unit || null,
+        })
           .then((real) => {
             removePendingMutation(mutationId);
             if (setDashboardData && real) {
@@ -576,6 +636,10 @@ export default function QuickAddModal({
               category: 'one_time',
               priority: prioInt,
               is_completed: false,
+              target_value: t.target_value || null,
+              current_value: 0.0,
+              step: t.step || 1.0,
+              unit: t.unit || null,
               scheduled_date: sched,
               created_at: new Date().toISOString(),
               is_optimistic: true,
@@ -590,7 +654,14 @@ export default function QuickAddModal({
           });
         }
         addPendingMutation({ id: mutationId, type: 'create_task', tempId, title: cleanTitle, timestamp: Date.now() });
-        createTask({ title: cleanTitle, scheduled_date: sched, priority: prioInt })
+        createTask({
+          title: cleanTitle,
+          scheduled_date: sched,
+          priority: prioInt,
+          target_value: t.target_value || null,
+          step: t.step || 1.0,
+          unit: t.unit || null,
+        })
           .then((real) => {
             removePendingMutation(mutationId);
             if (setDashboardData && real) {
@@ -760,6 +831,36 @@ export default function QuickAddModal({
                             </button>
                           </div>
                         </div>
+
+                        {task.category !== 'goal' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Цель:</span>
+                            <input
+                              type="number"
+                              step="any"
+                              className="quickadd-num-input"
+                              placeholder="Кол-во"
+                              value={editingTargetVal}
+                              onChange={(e) => setEditingTargetVal(e.target.value)}
+                            />
+                            <input
+                              type="text"
+                              className="quickadd-num-input"
+                              style={{ width: '60px' }}
+                              placeholder="Ед."
+                              value={editingUnit}
+                              onChange={(e) => setEditingUnit(e.target.value)}
+                            />
+                            <input
+                              type="number"
+                              step="any"
+                              className="quickadd-num-input"
+                              placeholder="Шаг"
+                              value={editingStep}
+                              onChange={(e) => setEditingStep(e.target.value)}
+                            />
+                          </div>
+                        )}
                       </div>
                     ) : (
                       /* Normal task item view with clickable title */
@@ -782,6 +883,11 @@ export default function QuickAddModal({
                                 <><Calendar size={10} /> Задача</>
                               )}
                             </span>
+                            {task.target_value && (
+                              <span className="item-tag tag-due">
+                                🎯 {task.target_value} {task.unit || ''} (шаг {task.step || 1})
+                              </span>
+                            )}
                             {task.scheduled_date && (
                               <span className="item-tag">
                                 <Clock size={10} /> {task.scheduled_date}
@@ -1024,6 +1130,65 @@ export default function QuickAddModal({
                       {priority === 'high' ? '🔥 Высокий' : 'Обычный'}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Quantitative target options for one_time and routine */}
+              {category !== 'goal' && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
+                    КОЛИЧЕСТВЕННАЯ ЦЕЛЬ
+                  </div>
+                  <div className="chips-row">
+                    <button
+                      type="button"
+                      className={`filter-chip ${isNumeric ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setIsNumeric((prev) => !prev);
+                      }}
+                    >
+                      🎯 {isNumeric ? 'Количественная цель: Вкл' : '+ Задать количество'}
+                    </button>
+                  </div>
+
+                  {isNumeric && (
+                    <div className="quickadd-numeric-options">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Цель</span>
+                        <input
+                          type="number"
+                          step="any"
+                          className="quickadd-num-input"
+                          placeholder="2"
+                          value={targetValue}
+                          onChange={(e) => setTargetValue(e.target.value)}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Единица</span>
+                        <input
+                          type="text"
+                          className="quickadd-num-input"
+                          style={{ width: '60px' }}
+                          placeholder="л / шт"
+                          value={unit}
+                          onChange={(e) => setUnit(e.target.value)}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '10px', color: 'var(--text-tertiary)' }}>Шаг +/-</span>
+                        <input
+                          type="number"
+                          step="any"
+                          className="quickadd-num-input"
+                          placeholder="0.25"
+                          value={step}
+                          onChange={(e) => setStep(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -22,6 +22,8 @@ from backend.crud import (
     delete_routine,
     create_routine,
     create_one_time_task,
+    update_task_progress,
+    update_routine_progress,
     create_goal,
     add_subtask_to_goal,
     delete_goal,
@@ -126,8 +128,9 @@ async def handle_today(message: Message):
         for t in summary.overdue_tasks:
             status_icon = "✅" if t.is_completed else "🔴"
             days_text = f"(+{t.overdue_days} дн.)" if t.overdue_days > 0 else "(со вчера)"
+            prog_text = f" [{t.current_value:g}/{t.target_value:g} {t.unit}]" if t.target_value else ""
             goal_badge = f" [🎯 {t.goal_title}]" if t.goal_title else ""
-            text_parts.append(f"{status_icon} <b>{t.title}</b> <i>{days_text}</i>{goal_badge}")
+            text_parts.append(f"{status_icon} <b>{t.title}</b>{prog_text} <i>{days_text}</i>{goal_badge}")
         text_parts.append("")
 
     # 2. Routine section
@@ -136,7 +139,8 @@ async def handle_today(message: Message):
         for r in summary.routine_tasks:
             icon = "✅" if r.is_completed_today else "⏳"
             streak_text = f"🔥 {r.current_streak} дн." if r.current_streak > 0 else ""
-            text_parts.append(f"{icon} <b>{r.title}</b> {streak_text}")
+            prog_text = f" [{r.current_value:g}/{r.target_value:g} {r.unit}]" if r.target_value else ""
+            text_parts.append(f"{icon} <b>{r.title}</b>{prog_text} {streak_text}")
         text_parts.append("")
 
     # 3. Today's one-time tasks
@@ -144,8 +148,9 @@ async def handle_today(message: Message):
         text_parts.append("📝 <b>РАЗОВЫЕ ЗАДАЧИ НА СЕГОДНЯ:</b>")
         for t in summary.today_tasks:
             icon = "✅" if t.is_completed else "▫️"
+            prog_text = f" [{t.current_value:g}/{t.target_value:g} {t.unit}]" if t.target_value else ""
             goal_badge = f" [🎯 {t.goal_title}]" if t.goal_title else ""
-            text_parts.append(f"{icon} <b>{t.title}</b>{goal_badge}")
+            text_parts.append(f"{icon} <b>{t.title}</b>{prog_text}{goal_badge}")
         text_parts.append("")
 
     if not summary.overdue_tasks and not summary.routine_tasks and not summary.today_tasks:
@@ -157,17 +162,32 @@ async def handle_today(message: Message):
     if summary.overdue_tasks:
         for t in summary.overdue_tasks[:3]:  # Top overdue
             days_str = f"+{t.overdue_days} дн." if t.overdue_days > 0 else "со вчера"
+            prog_str = f"\n📊 Прогресс: <b>{t.current_value:g}/{t.target_value:g} {t.unit}</b>" if t.target_value else ""
             await message.answer(
-                f"⚠️ <b>Просрочено ({days_str}):</b> {t.title}",
-                reply_markup=get_task_actions_kb(t.id, t.is_completed, is_overdue=True),
+                f"⚠️ <b>Просрочено ({days_str}):</b> {t.title}{prog_str}",
+                reply_markup=get_task_actions_kb(
+                    t.id,
+                    t.is_completed,
+                    is_overdue=True,
+                    target_value=t.target_value,
+                    step=t.step,
+                    unit=t.unit,
+                ),
             )
 
     for r in summary.routine_tasks:
         if not r.is_completed_today:
             streak_str = f" (Стрик: 🔥 {r.current_streak})" if r.current_streak > 0 else ""
+            prog_str = f"\n📊 Прогресс: <b>{r.current_value:g}/{r.target_value:g} {r.unit}</b>" if r.target_value else ""
             await message.answer(
-                f"🔄 <b>Рутина:</b> {r.title}{streak_str}",
-                reply_markup=get_routine_actions_kb(r.id, r.is_completed_today),
+                f"🔄 <b>Рутина:</b> {r.title}{streak_str}{prog_str}",
+                reply_markup=get_routine_actions_kb(
+                    r.id,
+                    r.is_completed_today,
+                    target_value=r.target_value,
+                    step=r.step,
+                    unit=r.unit,
+                ),
             )
 
 
@@ -230,12 +250,22 @@ async def handle_routines(message: Message):
     await message.answer("🔄 <b>Ваши ежедневные привычки:</b>")
     for r in routines:
         status = "✅ Выполнено сегодня" if r.is_completed_today else "⏳ Ожидает выполнения"
+        prog_text = f"\nПрогресс: 📊 <b>{r.current_value:g}/{r.target_value:g} {r.unit}</b>" if r.target_value else ""
         text = (
-            f"• <b>{r.title}</b>\n"
+            f"• <b>{r.title}</b>{prog_text}\n"
             f"Статус: {status}\n"
             f"Текущий стрик: 🔥 <b>{r.current_streak} дн.</b> | Рекорд: 🏆 <b>{r.best_streak} дн.</b>"
         )
-        await message.answer(text, reply_markup=get_routine_actions_kb(r.id, r.is_completed_today))
+        await message.answer(
+            text,
+            reply_markup=get_routine_actions_kb(
+                r.id,
+                r.is_completed_today,
+                target_value=r.target_value,
+                step=r.step,
+                unit=r.unit,
+            ),
+        )
 
 
 @router.message(F.text == "📱 Открыть WebApp")
@@ -439,7 +469,15 @@ async def cb_save_tasks(query: CallbackQuery):
         created_count = 0
         for t in tasks:
             if t.category == "routine":
-                await create_routine(session, user_id=user_id, title=t.title, description=t.description)
+                await create_routine(
+                    session,
+                    user_id=user_id,
+                    title=t.title,
+                    description=t.description,
+                    target_value=t.target_value,
+                    step=t.step,
+                    unit=t.unit,
+                )
                 created_count += 1
             elif t.category == "goal":
                 target = None
@@ -469,7 +507,14 @@ async def cb_save_tasks(query: CallbackQuery):
                         pass
 
                 await create_one_time_task(
-                    session, user_id=user_id, title=t.title, scheduled_date=sched_date, goal_id=goal_id
+                    session,
+                    user_id=user_id,
+                    title=t.title,
+                    scheduled_date=sched_date,
+                    goal_id=goal_id,
+                    target_value=t.target_value,
+                    step=t.step,
+                    unit=t.unit,
                 )
                 created_count += 1
             else:  # one_time
@@ -480,7 +525,13 @@ async def cb_save_tasks(query: CallbackQuery):
                     except Exception:
                         pass
                 await create_one_time_task(
-                    session, user_id=user_id, title=t.title, scheduled_date=sched_date
+                    session,
+                    user_id=user_id,
+                    title=t.title,
+                    scheduled_date=sched_date,
+                    target_value=t.target_value,
+                    step=t.step,
+                    unit=t.unit,
                 )
                 created_count += 1
 
@@ -494,6 +545,82 @@ async def cb_cancel_tasks(query: CallbackQuery):
     PENDING_TASKS_CACHE.pop(cache_id, None)
     await query.message.edit_text("❌ Добавление задач отменено.")
     await query.answer()
+
+
+@router.callback_query(F.data.startswith("task_prog:"))
+async def cb_task_prog(query: CallbackQuery):
+    parts = query.data.split(":")
+    task_id = int(parts[1])
+    delta = float(parts[2])
+
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, query.from_user.id)
+        task = await update_task_progress(session, task_id=task_id, user_id=user.telegram_id, delta=delta)
+
+    if not task:
+        await query.answer("Задача не найдена.", show_alert=True)
+        return
+
+    val_str = f"{task.current_value:g}/{task.target_value:g} {task.unit or ''}"
+    status_msg = f"✅ Цель достигнута! ({val_str})" if task.is_completed else f"Прогресс: {val_str}"
+    await query.answer(status_msg)
+
+    try:
+        status_icon = "✅" if task.is_completed else "▫️"
+        text = f"{status_icon} <b>Задача:</b> {task.title}\n📊 Прогресс: <b>{val_str}</b>"
+        await query.message.edit_text(
+            text,
+            reply_markup=get_task_actions_kb(
+                task.id,
+                task.is_completed,
+                is_overdue=task.is_overdue,
+                target_value=task.target_value,
+                step=task.step,
+                unit=task.unit,
+            ),
+        )
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("routine_prog:"))
+async def cb_routine_prog(query: CallbackQuery):
+    parts = query.data.split(":")
+    routine_id = int(parts[1])
+    delta = float(parts[2])
+
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, query.from_user.id)
+        now = get_user_now(user.timezone)
+        effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+        res = await update_routine_progress(
+            session, routine_id=routine_id, user_id=user.telegram_id, target_date=effective_date, delta=delta
+        )
+
+    if not res:
+        await query.answer("Рутина не найдена.", show_alert=True)
+        return
+
+    val_str = f"{res.current_value:g}/{res.target_value:g} {res.unit or ''}"
+    status_msg = f"🔥 Привычка выполнена! ({val_str}) Стрик: {res.current_streak} дн." if res.is_completed_today else f"Прогресс: {val_str}"
+    await query.answer(status_msg)
+
+    try:
+        icon = "✅" if res.is_completed_today else "⏳"
+        streak_str = f" | 🔥 {res.current_streak} дн." if res.current_streak > 0 else ""
+        text = f"{icon} <b>Рутина:</b> {res.title}\n📊 Прогресс: <b>{val_str}</b>{streak_str}"
+        await query.message.edit_text(
+            text,
+            reply_markup=get_routine_actions_kb(
+                res.id,
+                res.is_completed_today,
+                target_value=res.target_value,
+                step=res.step,
+                unit=res.unit,
+            ),
+        )
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data.startswith("task_toggle:"))
@@ -510,7 +637,14 @@ async def cb_task_toggle(query: CallbackQuery):
     await query.answer(f"Задача {status}")
     try:
         await query.message.edit_reply_markup(
-            reply_markup=get_task_actions_kb(task.id, task.is_completed, task.is_overdue)
+            reply_markup=get_task_actions_kb(
+                task.id,
+                task.is_completed,
+                task.is_overdue,
+                target_value=task.target_value,
+                step=task.step,
+                unit=task.unit,
+            )
         )
     except Exception:
         pass
@@ -561,7 +695,13 @@ async def cb_routine_toggle(query: CallbackQuery):
     await query.answer(status_msg)
     try:
         await query.message.edit_reply_markup(
-            reply_markup=get_routine_actions_kb(res.id, res.is_completed_today)
+            reply_markup=get_routine_actions_kb(
+                res.id,
+                res.is_completed_today,
+                target_value=res.target_value,
+                step=res.step,
+                unit=res.unit,
+            )
         )
     except Exception:
         pass

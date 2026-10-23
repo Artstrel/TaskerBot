@@ -48,23 +48,54 @@ def get_webapp_inline_keyboard(webapp_url: Optional[str] = None) -> InlineKeyboa
     )
 
 
-def get_task_actions_kb(task_id: int, is_completed: bool, is_overdue: bool = False) -> InlineKeyboardMarkup:
+def get_task_actions_kb(
+    task_id: int,
+    is_completed: bool,
+    is_overdue: bool = False,
+    target_value: Optional[float] = None,
+    step: Optional[float] = 1.0,
+    unit: Optional[str] = None,
+) -> InlineKeyboardMarkup:
+    rows = []
+    if target_value is not None and target_value > 0:
+        step_val = step or 1.0
+        step_str = f"{step_val:g}"
+        unit_str = f" {unit}" if unit else ""
+        rows.append([
+            InlineKeyboardButton(text=f"➖ {step_str}{unit_str}", callback_data=f"task_prog:{task_id}:-{step_val}"),
+            InlineKeyboardButton(text=f"➕ {step_str}{unit_str}", callback_data=f"task_prog:{task_id}:+{step_val}"),
+        ])
     status_text = "↩️ Вернуть" if is_completed else "✅ Сделано"
-    buttons = [
+    rows.append([
         InlineKeyboardButton(text=status_text, callback_data=f"task_toggle:{task_id}"),
         InlineKeyboardButton(text="➡️ Завтра", callback_data=f"task_postpone:{task_id}"),
         InlineKeyboardButton(text="🗑", callback_data=f"task_delete:{task_id}"),
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=[buttons])
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def get_routine_actions_kb(routine_id: int, is_completed: bool) -> InlineKeyboardMarkup:
+def get_routine_actions_kb(
+    routine_id: int,
+    is_completed: bool,
+    target_value: Optional[float] = None,
+    step: Optional[float] = 1.0,
+    unit: Optional[str] = None,
+) -> InlineKeyboardMarkup:
+    rows = []
+    if target_value is not None and target_value > 0:
+        step_val = step or 1.0
+        step_str = f"{step_val:g}"
+        unit_str = f" {unit}" if unit else ""
+        rows.append([
+            InlineKeyboardButton(text=f"➖ {step_str}{unit_str}", callback_data=f"routine_prog:{routine_id}:-{step_val}"),
+            InlineKeyboardButton(text=f"➕ {step_str}{unit_str}", callback_data=f"routine_prog:{routine_id}:+{step_val}"),
+        ])
     status_text = "↩️ Отменить" if is_completed else "✅ Выполнено"
-    buttons = [
+    rows.append([
         InlineKeyboardButton(text=status_text, callback_data=f"routine_toggle:{routine_id}"),
         InlineKeyboardButton(text="🗑 Удалить", callback_data=f"routine_delete:{routine_id}"),
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=[buttons])
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_parsed_tasks_confirmation_kb(cache_id: str, tasks_count: int = 0) -> InlineKeyboardMarkup:

@@ -20,6 +20,15 @@ class ExtractedTask(BaseModel):
     target_date: Optional[str] = Field(
         None, description="Target completion date for a goal (YYYY-MM-DD)"
     )
+    target_value: Optional[float] = Field(
+        None, description="Numeric target (e.g. 2 for 2 liters, 20 for 20 pushups, 5 for 5 tomatoes)"
+    )
+    step: Optional[float] = Field(
+        None, description="Increment/decrement step (e.g. 0.25 for liters, 1 for reps/items)"
+    )
+    unit: Optional[str] = Field(
+        None, description="Unit of measurement (e.g. 'л', 'мл', 'шт', 'раз', 'кг', 'км', 'стр')"
+    )
 
 
 class ExtractedTaskList(BaseModel):
@@ -81,12 +90,18 @@ class UserUpdate(BaseModel):
 class RoutineTaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
+    target_value: Optional[float] = None
+    step: Optional[float] = 1.0
+    unit: Optional[str] = None
 
 
 class RoutineTaskUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    target_value: Optional[float] = None
+    step: Optional[float] = None
+    unit: Optional[str] = None
 
 
 class RoutineWithStatus(BaseModel):
@@ -98,9 +113,18 @@ class RoutineWithStatus(BaseModel):
     best_streak: int
     is_completed_today: bool
     completed_at: Optional[datetime] = None
+    target_value: Optional[float] = None
+    current_value: float = 0.0
+    step: Optional[float] = 1.0
+    unit: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+
+class ProgressUpdate(BaseModel):
+    current_value: Optional[float] = None
+    delta: Optional[float] = None
 
 
 # --- Goal Schemas ---
@@ -143,6 +167,10 @@ class OneTimeTaskRead(BaseModel):
     is_overdue: bool
     overdue_days: int
     priority: int
+    target_value: Optional[float] = None
+    current_value: float = 0.0
+    step: Optional[float] = 1.0
+    unit: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -171,6 +199,10 @@ class OneTimeTaskCreate(BaseModel):
     scheduled_date: Optional[date] = None  # None = today
     goal_id: Optional[int] = None
     priority: int = 0
+    target_value: Optional[float] = None
+    current_value: Optional[float] = 0.0
+    step: Optional[float] = 1.0
+    unit: Optional[str] = None
 
     @field_validator("scheduled_date", mode="before")
     @classmethod
@@ -200,6 +232,10 @@ class OneTimeTaskUpdate(BaseModel):
     is_completed: Optional[bool] = None
     goal_id: Optional[int] = None
     priority: Optional[int] = None
+    target_value: Optional[float] = None
+    current_value: Optional[float] = None
+    step: Optional[float] = None
+    unit: Optional[str] = None
 
     @field_validator("scheduled_date", mode="before")
     @classmethod

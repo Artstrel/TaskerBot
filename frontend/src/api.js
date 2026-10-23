@@ -459,6 +459,10 @@ export const createTask = async (taskData) => {
     category: taskData.category || 'one_time',
     priority: taskData.priority || 'medium',
     scheduled_date: taskData.scheduled_date || new Date().toISOString().split('T')[0],
+    target_value: taskData.target_value || null,
+    current_value: 0.0,
+    step: taskData.step || 1.0,
+    unit: taskData.unit || null,
     is_completed: false,
     created_at: new Date().toISOString(),
   };
@@ -486,6 +490,87 @@ export const updateTask = async (taskId, updateData) => {
     return task;
   }
   return { id: taskId, ...updateData };
+};
+
+export const updateTaskProgress = async (taskId, { current_value, delta }) => {
+  hapticFeedback('light');
+  try {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}/progress?telegram_id=${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_value, delta }),
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  const task = db.tasks.find((t) => t.id === taskId);
+  if (task) {
+    let newVal = task.current_value || 0;
+    if (current_value !== undefined) newVal = current_value;
+    else if (delta !== undefined) newVal += delta;
+    newVal = Math.max(0, Math.round(newVal * 100) / 100);
+    task.current_value = newVal;
+    if (task.target_value && newVal >= task.target_value) {
+      task.is_completed = true;
+    } else if (task.target_value && newVal < task.target_value) {
+      task.is_completed = false;
+    }
+    saveLocalDb(db);
+    return task;
+  }
+  return { id: taskId, current_value };
+};
+
+export const updateRoutine = async (routineId, updateData) => {
+  hapticFeedback('selection');
+  try {
+    const res = await fetch(`${API_BASE}/routines/${routineId}?telegram_id=${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData),
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  const r = db.routines.find((item) => item.id === routineId);
+  if (r) {
+    Object.assign(r, updateData);
+    saveLocalDb(db);
+    return r;
+  }
+  return { id: routineId, ...updateData };
+};
+
+export const updateRoutineProgress = async (routineId, { current_value, delta }) => {
+  hapticFeedback('light');
+  try {
+    const res = await fetch(`${API_BASE}/routines/${routineId}/progress?telegram_id=${currentUser.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_value, delta }),
+    });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  const r = db.routines.find((item) => item.id === routineId);
+  if (r) {
+    let newVal = r.current_value || 0;
+    if (current_value !== undefined) newVal = current_value;
+    else if (delta !== undefined) newVal += delta;
+    newVal = Math.max(0, Math.round(newVal * 100) / 100);
+    r.current_value = newVal;
+    if (r.target_value && newVal >= r.target_value) {
+      r.is_completed_today = true;
+    } else if (r.target_value && newVal < r.target_value) {
+      r.is_completed_today = false;
+    }
+    saveLocalDb(db);
+    return r;
+  }
+  return { id: routineId, current_value };
 };
 
 export const toggleRoutine = async (routineId, completed = null) => {
@@ -545,6 +630,10 @@ export const createRoutine = async (routineData) => {
   const newRoutine = {
     id: Date.now(),
     title: routineData.title,
+    target_value: routineData.target_value || null,
+    current_value: 0.0,
+    step: routineData.step || 1.0,
+    unit: routineData.unit || null,
     is_completed_today: false,
     current_streak: 0,
     best_streak: 0,
@@ -778,6 +867,9 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
           category: cat,
           scheduled_date: sched,
           description: item.description || null,
+          target_value: item.target_value !== undefined && item.target_value !== null ? Number(item.target_value) : null,
+          step: item.step !== undefined && item.step !== null ? Number(item.step) : (item.target_value ? 1.0 : null),
+          unit: item.unit ? String(item.unit) : null,
           selected: item.selected !== false,
         };
       }
