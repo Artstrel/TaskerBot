@@ -93,7 +93,7 @@ h1, h2, h3, h4, .brand-font {
   display: flex;
   flex-direction: column;
   position: relative;
-  padding-bottom: 96px; /* space for bottom dock */
+  padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px)); /* space for bottom dock & raised FAB */
 }
 
 /* Minimalist App Header */
@@ -189,7 +189,7 @@ h1, h2, h3, h4, .brand-font {
 .app-fab {
   position: fixed;
   right: 20px;
-  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   z-index: 45;
   width: 52px;
   height: 52px;

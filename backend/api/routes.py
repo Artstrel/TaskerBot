@@ -333,7 +333,7 @@ async def list_goals(
     return await get_user_goals(session, user.telegram_id)
 
 
-@router.post("/goals", response_model=GoalCreate)
+@router.post("/goals", response_model=GoalWithProgress)
 async def add_goal(
     goal_in: GoalCreate,
     user: User = Depends(get_current_user),
@@ -346,10 +346,17 @@ async def add_goal(
         goal_in.description,
         goal_in.target_date,
     )
-    return GoalCreate(
+    return GoalWithProgress(
+        id=goal.id,
         title=goal.title,
         description=goal.description,
         target_date=goal.target_date,
+        is_completed=goal.is_completed,
+        completed_at=goal.completed_at,
+        total_subtasks=0,
+        completed_subtasks=0,
+        progress_percentage=0,
+        subtasks=[],
     )
 
 
@@ -394,11 +401,16 @@ async def ai_parse_text(
     text: str = Form(...),
     provider: Optional[str] = Form(None),
     user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
 ):
     now = get_user_now(user.timezone)
     effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
     chosen_provider = provider or user.ai_provider
-    return await ai_service.parse_text_tasks(text, effective_date, provider=chosen_provider)
+    user_goals = await get_user_goals(session, user.telegram_id)
+    goal_titles = [g.title for g in user_goals if not g.is_completed]
+    return await ai_service.parse_text_tasks(
+        text, effective_date, provider=chosen_provider, existing_goals=goal_titles
+    )
 
 
 @router.post("/ai/parse-audio", response_model=ExtractedTaskList)
@@ -406,14 +418,18 @@ async def ai_parse_audio(
     audio: UploadFile = File(...),
     provider: Optional[str] = Form(None),
     user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
 ):
     now = get_user_now(user.timezone)
     effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
     audio_bytes = await audio.read()
     chosen_provider = provider or user.ai_provider
+    user_goals = await get_user_goals(session, user.telegram_id)
+    goal_titles = [g.title for g in user_goals if not g.is_completed]
     return await ai_service.parse_audio_voice(
         audio_bytes,
         effective_date,
         provider=chosen_provider,
         filename=audio.filename or "audio.ogg",
+        existing_goals=goal_titles,
     )

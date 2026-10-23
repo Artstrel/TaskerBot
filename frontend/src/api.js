@@ -457,6 +457,8 @@ export const createTask = async (taskData) => {
     id: Date.now(),
     title: taskData.title,
     category: taskData.category || 'one_time',
+    goal_id: taskData.goal_id || null,
+    goal_title: taskData.goal_title || null,
     priority: taskData.priority || 'medium',
     scheduled_date: taskData.scheduled_date || new Date().toISOString().split('T')[0],
     target_value: taskData.target_value || null,

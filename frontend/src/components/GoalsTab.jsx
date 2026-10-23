@@ -6,6 +6,8 @@ import {
   Check,
   Trash2,
   Clock,
+  Sparkles,
+  Mic,
 } from 'lucide-react';
 import {
   createGoal,
@@ -27,6 +29,7 @@ export default function GoalsTab({
   dashboardData,
   setDashboardData,
   onRefresh,
+  onOpenQuickAdd,
 }) {
   const [expandedGoalId, setExpandedGoalId] = useState(null);
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
@@ -34,6 +37,7 @@ export default function GoalsTab({
   const [newGoalDesc, setNewGoalDesc] = useState('');
   const [newGoalDate, setNewGoalDate] = useState('');
   const [newSubtaskTitles, setNewSubtaskTitles] = useState({});
+  const [aiGoalInput, setAiGoalInput] = useState('');
 
   const toggleExpand = (id) => {
     hapticFeedback('selection');
@@ -337,6 +341,30 @@ export default function GoalsTab({
       });
   };
 
+  const handleAiGoalSubmit = (e) => {
+    if (e) e.preventDefault();
+    const text = aiGoalInput.trim();
+    if (!text) return;
+    hapticFeedback('medium');
+    if (onOpenQuickAdd) {
+      onOpenQuickAdd({
+        initialText: text,
+        initialCategory: 'goal',
+      });
+      setAiGoalInput('');
+    }
+  };
+
+  const handleVoiceGoalClick = () => {
+    hapticFeedback('medium');
+    if (onOpenQuickAdd) {
+      onOpenQuickAdd({
+        initialCategory: 'goal',
+        autoStartVoice: true,
+      });
+    }
+  };
+
   return (
     <div className="linear-section" style={{ paddingBottom: '30px' }}>
       {/* Header bar */}
@@ -355,12 +383,71 @@ export default function GoalsTab({
             hapticFeedback('light');
             setIsCreatingGoal((prev) => !prev);
           }}
-          className="submit-task-btn"
-          style={{ padding: '6px 12px', fontSize: '12px' }}
+          className="filter-chip"
+          style={{ padding: '6px 10px', fontSize: '12px' }}
         >
           <Plus size={14} />
-          <span>Новая цель</span>
+          <span>Вручную</span>
         </button>
+      </div>
+
+      {/* AI Smart Goal Input Card */}
+      <div
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-subtle)',
+          borderRadius: 'var(--radius-md)',
+          padding: '10px 12px',
+          marginBottom: '16px',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+          <Sparkles size={14} color="var(--accent-primary)" />
+          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            ИИ-ввод цели с шагами
+          </span>
+        </div>
+        <form onSubmit={handleAiGoalSubmit} style={{ display: 'flex', gap: '8px' }}>
+          <input
+            type="text"
+            className="unified-textarea"
+            placeholder="Опишите цель или надиктуйте её с шагами..."
+            value={aiGoalInput}
+            onChange={(e) => setAiGoalInput(e.target.value)}
+            style={{
+              flex: 1,
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '8px 12px',
+              fontSize: '13px',
+              minHeight: '38px',
+              height: '38px',
+              color: 'var(--text-primary)',
+            }}
+          />
+          <button
+            type="button"
+            className="voice-recording-btn"
+            onClick={handleVoiceGoalClick}
+            title="Надиктовать цель голосом"
+            style={{ height: '38px', padding: '0 12px' }}
+          >
+            <Mic size={15} />
+            <span>Голос</span>
+          </button>
+          {aiGoalInput.trim() && (
+            <button
+              type="submit"
+              className="submit-task-btn"
+              title="Распознать через ИИ"
+              style={{ height: '38px', padding: '0 12px' }}
+            >
+              <Sparkles size={14} />
+              <span>Создать</span>
+            </button>
+          )}
+        </form>
       </div>
 
       {/* Create Goal Form */}
@@ -553,8 +640,52 @@ export default function GoalsTab({
                       padding: '12px 16px',
                     }}
                   >
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '8px' }}>
-                      Шаги ({goal.completed_subtasks} из {goal.total_subtasks})
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                        Шаги ({goal.completed_subtasks} из {goal.total_subtasks})
+                      </div>
+                      {onOpenQuickAdd && (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            type="button"
+                            className="item-mini-btn"
+                            title="Надиктовать шаги голосом"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              hapticFeedback('medium');
+                              onOpenQuickAdd({
+                                initialCategory: 'subtask',
+                                initialGoalId: goal.id,
+                                initialGoalTitle: goal.title,
+                                autoStartVoice: true,
+                              });
+                            }}
+                            style={{ color: 'var(--accent-primary)', padding: '2px 6px', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px' }}
+                          >
+                            <Mic size={11} />
+                            <span>Голос</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="item-mini-btn"
+                            title="Сгенерировать шаги через ИИ"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              hapticFeedback('medium');
+                              onOpenQuickAdd({
+                                initialCategory: 'subtask',
+                                initialGoalId: goal.id,
+                                initialGoalTitle: goal.title,
+                                initialText: `Шаги для цели «${goal.title}»: `,
+                              });
+                            }}
+                            style={{ color: 'var(--accent-primary)', padding: '2px 6px', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px' }}
+                          >
+                            <Sparkles size={11} />
+                            <span>ИИ</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     {goal.subtasks && goal.subtasks.length > 0 ? (
@@ -625,6 +756,25 @@ export default function GoalsTab({
                           outline: 'none',
                         }}
                       />
+                      {onOpenQuickAdd && (
+                        <button
+                          type="button"
+                          className="filter-chip"
+                          title="Голосовой ввод шага"
+                          onClick={() => {
+                            hapticFeedback('medium');
+                            onOpenQuickAdd({
+                              initialCategory: 'subtask',
+                              initialGoalId: goal.id,
+                              initialGoalTitle: goal.title,
+                              autoStartVoice: true,
+                            });
+                          }}
+                          style={{ padding: '0 8px', height: '32px' }}
+                        >
+                          <Mic size={13} color="var(--accent-primary)" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="submit-task-btn"

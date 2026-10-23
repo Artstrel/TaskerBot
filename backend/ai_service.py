@@ -19,7 +19,14 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 1. "routine": регулярные ежедневные привычки и действия (маркеры: "каждый день", "ежедневно", "по утрам", "каждый вечер", "пить воду", "делать зарядку", "отжиматься каждый день").
 2. "one_time": разовые задачи на конкретный день (маркеры: "сегодня", "завтра", "купить хлеб", "позвонить врачу", "заехать в автосервис").
 3. "goal": глобальные крупные цели, проекты или майлстоуны (маркеры: "цель", "хочу запустить проект", "сделать ремонт", "выучить английский", "похудеть").
-4. "subtask": конкретный шаг для достижения цели (если пользователь говорит "к цели X сделать Y", "для ремонта заказать краску").
+4. "subtask": конкретный шаг для достижения цели (если пользователь говорит "к цели X сделать Y", "для ремонта заказать краску", либо если задача логически относится к одной из существующих целей, либо если диктуется новая цель и шаги к ней).
+
+Существующие активные цели пользователя:
+{existing_goals_info}
+
+Правила связывания задач с целями:
+- Если задача относится к существующей цели из списка выше, укажи "category": "subtask" и "goal_title": "точное название цели из списка".
+- Если пользователь диктует новую цель вместе с её шагами/подзадачами (например: "Цель: Запустить MVP. Шаги: дизайн, верстка, деплой"), создай саму цель с "category": "goal" (title="Запустить MVP"), а шаги выдели в отдельные задачи с "category": "subtask" и "goal_title": "Запустить MVP".
 
 Правила для числовых (количественных) задач и привычек со счётчиком:
 - Если задача или привычка содержит измеримую количественную цель (например: "выпить 2 литра воды", "отжаться 20 раз", "купить 5 помидоров", "пробежать 5 км", "прочитать 30 страниц", "сделать 10 подтягиваний"):
@@ -44,6 +51,19 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 - "step": шаг (float) или null
 - "unit": строка единицы измерения ("л", "шт", "раз" и т.п.) или null
 """
+
+
+def _format_system_prompt(current_date: date, existing_goals: Optional[List[str]] = None) -> str:
+    goals_info = "Список существующих целей пуст."
+    if existing_goals:
+        cleaned_goals = [g.strip() for g in existing_goals if g and g.strip()]
+        if cleaned_goals:
+            goals_info = "\n".join(f"- {g}" for g in cleaned_goals)
+    return SYSTEM_PROMPT.format(
+        current_date=current_date.isoformat(),
+        existing_goals_info=goals_info,
+    )
+
 
 
 def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
@@ -127,10 +147,13 @@ def _parse_json_tasks(raw: str) -> Optional[ExtractedTaskList]:
     return None
 
 
-def _fallback_parse(text: str, current_date: date) -> ExtractedTaskList:
+def _fallback_parse(
+    text: str, current_date: date, existing_goals: Optional[List[str]] = None
+) -> ExtractedTaskList:
     """Fallback keyword and regex parser when AI keys are missing or offline."""
     lines = [l.strip() for l in re.split(r"[\n;,]+|\s+и\s+", text) if l.strip()]
     tasks: List[ExtractedTask] = []
+    current_goal: Optional[str] = None
 
     for line in lines:
         lower = line.lower()
@@ -194,37 +217,67 @@ def _fallback_parse(text: str, current_date: date) -> ExtractedTaskList:
         # Goal check
         elif any(w in lower for w in ["цель:", "цель ", "проект:", "проект "]):
             title = re.sub(r"\b(цель|проект)\b:?", "", line, flags=re.IGNORECASE).strip()
+            current_goal = title or line
             tasks.append(
                 ExtractedTask(
                     category="goal",
-                    title=title or line,
+                    title=current_goal,
                 )
             )
-        # One time task check
+        # Subtask check or One-time task check
         else:
-            sched_date = None
-            if "послезавтра" in lower:
-                sched_date = (current_date + timedelta(days=2)).isoformat()
-            elif "завтра" in lower:
-                sched_date = (current_date + timedelta(days=1)).isoformat()
+            matched_goal = None
+            clean_subtask = line
 
-            clean_title = re.sub(
-                r"\b(завтра|послезавтра|сегодня|надо|нужно|задача)\b",
-                "",
-                line,
-                flags=re.IGNORECASE,
-            ).strip()
+            goal_ref_match = re.search(r"\b(?:к цели|для цели|по цели)\s+([^,:]+)", line, re.IGNORECASE)
+            if goal_ref_match:
+                matched_goal = goal_ref_match.group(1).strip()
+                clean_subtask = re.sub(r"\b(?:к цели|для цели|по цели)\s+[^,:]+[:\s]*", "", line, flags=re.IGNORECASE).strip()
+            elif existing_goals:
+                for eg in existing_goals:
+                    if eg and eg.lower() in lower:
+                        matched_goal = eg
+                        break
 
-            tasks.append(
-                ExtractedTask(
-                    category="one_time",
-                    title=clean_title or line,
-                    scheduled_date=sched_date,
-                    target_value=target_val,
-                    step=step_val,
-                    unit=unit_val,
+            if not matched_goal and current_goal and any(w in lower for w in ["шаг", "подзадач", "пункт"]):
+                matched_goal = current_goal
+                clean_subtask = re.sub(r"\b(шаг|подзадача|пункт)\s*\d*[:\s]*", "", line, flags=re.IGNORECASE).strip()
+
+            if matched_goal:
+                tasks.append(
+                    ExtractedTask(
+                        category="subtask",
+                        title=clean_subtask or line,
+                        goal_title=matched_goal,
+                        target_value=target_val,
+                        step=step_val,
+                        unit=unit_val,
+                    )
                 )
-            )
+            else:
+                sched_date = None
+                if "послезавтра" in lower:
+                    sched_date = (current_date + timedelta(days=2)).isoformat()
+                elif "завтра" in lower:
+                    sched_date = (current_date + timedelta(days=1)).isoformat()
+
+                clean_title = re.sub(
+                    r"\b(завтра|послезавтра|сегодня|надо|нужно|задача)\b",
+                    "",
+                    line,
+                    flags=re.IGNORECASE,
+                ).strip()
+
+                tasks.append(
+                    ExtractedTask(
+                        category="one_time",
+                        title=clean_title or line,
+                        scheduled_date=sched_date,
+                        target_value=target_val,
+                        step=step_val,
+                        unit=unit_val,
+                    )
+                )
 
     if not tasks and text.strip():
         tasks.append(ExtractedTask(category="one_time", title=text.strip()))
@@ -325,68 +378,74 @@ class AIService:
         return prov
 
     async def parse_text_tasks(
-        self, text: str, current_date: date, provider: Optional[str] = None
+        self,
+        text: str,
+        current_date: date,
+        provider: Optional[str] = None,
+        existing_goals: Optional[List[str]] = None,
     ) -> ExtractedTaskList:
         chosen = self.resolve_provider(provider)
         logger.info(f"Parsing text tasks with requested provider: {chosen}")
 
         if chosen == "auto":
             # Auto-Fast cascade: Groq -> OpenRouter Free -> Gemini -> Fallback
-            res = await self._parse_text_groq(text, current_date)
+            res = await self._parse_text_groq(text, current_date, existing_goals)
             if res is not None:
                 logger.info("Successfully parsed tasks via Groq (Fast)")
                 return res
 
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date)
+                res = await self._parse_text_openrouter(text, current_date, existing_goals)
                 if res is not None:
                     logger.info("Successfully parsed tasks via OpenRouter Free")
                     return res
 
-            res = await self._parse_text_gemini(text, current_date)
+            res = await self._parse_text_gemini(text, current_date, existing_goals)
             if res is not None:
                 logger.info("Successfully parsed tasks via Gemini Flash fallback")
                 return res
 
         elif chosen == "groq":
-            res = await self._parse_text_groq(text, current_date)
+            res = await self._parse_text_groq(text, current_date, existing_goals)
             if res is not None:
                 return res
             # Cascade fallbacks
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date)
+                res = await self._parse_text_openrouter(text, current_date, existing_goals)
                 if res is not None:
                     return res
-            res = await self._parse_text_gemini(text, current_date)
+            res = await self._parse_text_gemini(text, current_date, existing_goals)
             if res is not None:
                 return res
 
         elif chosen == "openrouter":
-            res = await self._parse_text_openrouter(text, current_date)
+            res = await self._parse_text_openrouter(text, current_date, existing_goals)
             if res is not None:
                 return res
-            res = await self._parse_text_groq(text, current_date)
+            res = await self._parse_text_groq(text, current_date, existing_goals)
             if res is not None:
                 return res
-            res = await self._parse_text_gemini(text, current_date)
+            res = await self._parse_text_gemini(text, current_date, existing_goals)
             if res is not None:
                 return res
 
         elif chosen == "gemini":
-            res = await self._parse_text_gemini(text, current_date)
+            res = await self._parse_text_gemini(text, current_date, existing_goals)
             if res is not None:
                 return res
-            res = await self._parse_text_groq(text, current_date)
+            res = await self._parse_text_groq(text, current_date, existing_goals)
             if res is not None:
                 return res
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date)
+                res = await self._parse_text_openrouter(text, current_date, existing_goals)
                 if res is not None:
                     return res
 
-        return _fallback_parse(text, current_date)
+        return _fallback_parse(text, current_date, existing_goals)
 
-    async def _parse_text_groq(self, text: str, current_date: date) -> Optional[ExtractedTaskList]:
+    async def _parse_text_groq(
+        self, text: str, current_date: date, existing_goals: Optional[List[str]] = None
+    ) -> Optional[ExtractedTaskList]:
         client = self._get_groq_client()
         if not client:
             return None
@@ -405,7 +464,7 @@ class AIService:
                         {
                             "role": "system",
                             "content": (
-                                SYSTEM_PROMPT.format(current_date=current_date.isoformat())
+                                _format_system_prompt(current_date, existing_goals)
                                 + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
                             ),
                         },
@@ -424,7 +483,9 @@ class AIService:
                 continue
         return None
 
-    async def _parse_text_openrouter(self, text: str, current_date: date) -> Optional[ExtractedTaskList]:
+    async def _parse_text_openrouter(
+        self, text: str, current_date: date, existing_goals: Optional[List[str]] = None
+    ) -> Optional[ExtractedTaskList]:
         api_key = settings.OPENROUTER_API_KEY.strip() if settings.OPENROUTER_API_KEY else ""
         if not api_key:
             return None
@@ -448,7 +509,7 @@ class AIService:
         ]
 
         system_msg = (
-            SYSTEM_PROMPT.format(current_date=current_date.isoformat())
+            _format_system_prompt(current_date, existing_goals)
             + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
         )
 
@@ -487,13 +548,15 @@ class AIService:
                 continue
         return None
 
-    async def _parse_text_gemini(self, text: str, current_date: date) -> Optional[ExtractedTaskList]:
+    async def _parse_text_gemini(
+        self, text: str, current_date: date, existing_goals: Optional[List[str]] = None
+    ) -> Optional[ExtractedTaskList]:
         client = self._get_gemini_client()
         if not client:
             return None
 
         prompt = (
-            SYSTEM_PROMPT.format(current_date=current_date.isoformat())
+            _format_system_prompt(current_date, existing_goals)
             + f"\n\nТекст сообщения пользователя:\n{text}"
         )
 
@@ -540,6 +603,7 @@ class AIService:
         current_date: date,
         provider: Optional[str] = None,
         filename: Optional[str] = None,
+        existing_goals: Optional[List[str]] = None,
     ) -> ExtractedTaskList:
         chosen = self.resolve_provider(provider)
         logger.info(f"Parsing audio voice with provider setting: {chosen}")
@@ -568,14 +632,18 @@ class AIService:
                 text = str(transcription).strip()
                 logger.info(f"Audio transcribed successfully via Whisper: {text[:100]}")
                 # Parse through Auto-Fast cascade (Groq 8B -> OpenRouter -> Gemini)
-                res = await self.parse_text_tasks(text, current_date, provider=chosen)
+                res = await self.parse_text_tasks(
+                    text, current_date, provider=chosen, existing_goals=existing_goals
+                )
                 if res and res.tasks:
                     return res
-                return _fallback_parse(text, current_date)
+                return _fallback_parse(text, current_date, existing_goals)
 
         # 2. Fallback to Gemini multimodal audio if Groq client not available
         if self._get_gemini_client():
-            res = await self._parse_audio_gemini(audio_bytes, current_date, mime_type)
+            res = await self._parse_audio_gemini(
+                audio_bytes, current_date, mime_type, existing_goals=existing_goals
+            )
             if res and res.tasks:
                 return res
 
@@ -589,14 +657,18 @@ class AIService:
         )
 
     async def _parse_audio_gemini(
-        self, audio_bytes: bytes, current_date: date, mime_type: str
+        self,
+        audio_bytes: bytes,
+        current_date: date,
+        mime_type: str,
+        existing_goals: Optional[List[str]] = None,
     ) -> Optional[ExtractedTaskList]:
         client = self._get_gemini_client()
         if not client:
             return None
 
         prompt = (
-            SYSTEM_PROMPT.format(current_date=current_date.isoformat())
+            _format_system_prompt(current_date, existing_goals)
             + "\n\nРасшифруй это аудиосообщение и извлеки задачи строго в формате JSON."
         )
 

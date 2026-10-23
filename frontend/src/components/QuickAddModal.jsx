@@ -34,9 +34,19 @@ export default function QuickAddModal({
   onTaskCreated,
   setDashboardData,
   setGoalsData,
+  goalsData = [],
+  initialCategory,
+  initialGoalId,
+  initialGoalTitle,
+  initialText,
+  autoStartVoice = false,
 }) {
-  const [inputText, setInputText] = useState('');
-  const [category, setCategory] = useState('one_time'); // 'one_time' | 'routine' | 'goal'
+  const [inputText, setInputText] = useState(initialText || '');
+  const [category, setCategory] = useState(
+    initialCategory || (initialGoalId ? 'subtask' : 'one_time')
+  ); // 'one_time' | 'routine' | 'goal' | 'subtask'
+  const [selectedGoalId, setSelectedGoalId] = useState(initialGoalId || null);
+  const [selectedGoalTitle, setSelectedGoalTitle] = useState(initialGoalTitle || '');
   const [dueDateOption, setDueDateOption] = useState('today'); // 'today' | 'tomorrow' | 'none'
   const [priority, setPriority] = useState('medium'); // 'medium' | 'high'
 
@@ -140,6 +150,65 @@ export default function QuickAddModal({
     return d.toISOString().split('T')[0];
   };
 
+  // Map and attach goal associations to extracted AI tasks
+  const mapExtractedTask = useCallback(
+    (t, i) => {
+      let cat = t.category || 'one_time';
+      let gId = t.goal_id || null;
+      let gTitle = t.goal_title || null;
+
+      if (initialGoalId && !gId && cat !== 'routine' && cat !== 'goal') {
+        gId = initialGoalId;
+        gTitle = initialGoalTitle || gTitle;
+        cat = 'subtask';
+      } else if (gTitle && !gId) {
+        const matched =
+          (goalsData || []).find(
+            (g) => g.title && g.title.toLowerCase() === gTitle.toLowerCase()
+          ) ||
+          (goalsData || []).find(
+            (g) => g.title && g.title.toLowerCase().includes(gTitle.toLowerCase())
+          );
+        if (matched) {
+          gId = matched.id;
+          gTitle = matched.title;
+        }
+      }
+
+      return {
+        ...t,
+        category: cat,
+        goal_id: gId,
+        goal_title: gTitle,
+        id: `task_${Date.now()}_${i}`,
+        selected: true,
+      };
+    },
+    [initialGoalId, initialGoalTitle, goalsData]
+  );
+
+  const handleUpdateTaskGoal = (taskId, goalId, goalTitle) => {
+    hapticFeedback('selection');
+    setExtractedTasks((prev) =>
+      (prev || []).map((t) => {
+        if (t.id === taskId) {
+          return {
+            ...t,
+            goal_id: goalId,
+            goal_title: goalTitle,
+            category:
+              goalId || goalTitle
+                ? 'subtask'
+                : t.category === 'subtask'
+                ? 'one_time'
+                : t.category,
+          };
+        }
+        return t;
+      })
+    );
+  };
+
   // Process audio with backend AI
   const handleAudioProcess = async (audioBlob) => {
     setIsProcessing(true);
@@ -147,13 +216,7 @@ export default function QuickAddModal({
     try {
       const res = await parseSmartAudio(audioBlob, selectedProvider);
       if (res && res.tasks && res.tasks.length > 0) {
-        setExtractedTasks(
-          res.tasks.map((t, i) => ({
-            ...t,
-            id: `task_${Date.now()}_${i}`,
-            selected: true,
-          }))
-        );
+        setExtractedTasks(res.tasks.map(mapExtractedTask));
         setIsProcessing(false);
         return;
       }
@@ -167,13 +230,7 @@ export default function QuickAddModal({
       try {
         const res = await parseSmartText(clientText, selectedProvider);
         if (res && res.tasks && res.tasks.length > 0) {
-          setExtractedTasks(
-            res.tasks.map((t, i) => ({
-              ...t,
-              id: `task_${Date.now()}_${i}`,
-              selected: true,
-            }))
-          );
+          setExtractedTasks(res.tasks.map(mapExtractedTask));
           setIsProcessing(false);
           return;
         }
@@ -284,21 +341,36 @@ export default function QuickAddModal({
     }
   };
 
+  // Auto start voice if requested (e.g. from Goals tab voice action)
+  useEffect(() => {
+    if (autoStartVoice) {
+      const t = setTimeout(() => {
+        startRecording();
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [autoStartVoice]);
+
+  // Auto parse initial text if passed (e.g. from Goals tab AI input)
+  useEffect(() => {
+    if (initialText && initialText.trim()) {
+      const t = setTimeout(() => {
+        handleSmartAiParse(initialText.trim());
+      }, 250);
+      return () => clearTimeout(t);
+    }
+  }, [initialText]);
+
   // Submit via Smart AI parse
-  const handleSmartAiParse = async () => {
-    if (!inputText.trim()) return;
+  const handleSmartAiParse = async (overrideText) => {
+    const textToParse = typeof overrideText === 'string' ? overrideText.trim() : inputText.trim();
+    if (!textToParse) return;
     setIsProcessing(true);
     setErrorMsg('');
     try {
-      const res = await parseSmartText(inputText.trim(), selectedProvider);
-      if (res.tasks && res.tasks.length > 0) {
-        setExtractedTasks(
-          res.tasks.map((t, i) => ({
-            ...t,
-            id: `task_${Date.now()}_${i}`,
-            selected: true,
-          }))
-        );
+      const res = await parseSmartText(textToParse, selectedProvider);
+      if (res && res.tasks && res.tasks.length > 0) {
+        setExtractedTasks(res.tasks.map(mapExtractedTask));
       } else {
         setErrorMsg('Не удалось распознать структуру задачи. Добавьте напрямую через «Создать».');
       }
@@ -418,6 +490,120 @@ export default function QuickAddModal({
           console.error('Failed to create goal on server:', err);
           removePendingMutation(mutationId);
         });
+    } else if (category === 'subtask' || selectedGoalId) {
+      const gId = selectedGoalId;
+      const goalObj = (goalsData || []).find((g) => g.id === gId);
+      const goalTitle = goalObj ? goalObj.title : (selectedGoalTitle || null);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const sched = selectedDate || todayStr;
+
+      if (setGoalsData && gId) {
+        setGoalsData((prev) => {
+          const optSubtask = {
+            id: tempId,
+            title,
+            is_completed: false,
+            scheduled_date: sched,
+            goal_id: gId,
+            goal_title: goalTitle,
+            is_optimistic: true,
+          };
+          const updated = (prev || []).map((g) => {
+            if (g.id === gId) {
+              const subtasks = [...(g.subtasks || []), optSubtask];
+              const completedCount = subtasks.filter((s) => s.is_completed).length;
+              const progress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+              return {
+                ...g,
+                subtasks,
+                progress,
+                total_subtasks: subtasks.length,
+                completed_subtasks: completedCount,
+                progress_percentage: progress,
+              };
+            }
+            return g;
+          });
+          setCachedGoals(updated);
+          return updated;
+        });
+      }
+
+      if (setDashboardData && sched === todayStr) {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          const optTask = {
+            id: tempId,
+            title,
+            category: 'one_time',
+            goal_id: gId,
+            goal_title: goalTitle,
+            priority: prioInt,
+            is_completed: false,
+            target_value: parsedTarget,
+            current_value: 0.0,
+            step: parsedStep,
+            unit: cleanUnit,
+            scheduled_date: sched,
+            created_at: new Date().toISOString(),
+            is_optimistic: true,
+          };
+          const updated = {
+            ...prev,
+            today_tasks: [optTask, ...(prev.today_tasks || [])],
+            total_count: (prev.total_count || 0) + 1,
+          };
+          setCachedDashboard(updated);
+          return updated;
+        });
+      }
+
+      addPendingMutation({ id: mutationId, type: 'create_subtask', tempId, title, timestamp: Date.now() });
+
+      createTask({
+        title,
+        scheduled_date: sched,
+        goal_id: typeof gId === 'number' ? gId : null,
+        priority: prioInt,
+        target_value: parsedTarget,
+        step: parsedStep,
+        unit: cleanUnit,
+      })
+        .then((realTask) => {
+          removePendingMutation(mutationId);
+          if (setDashboardData && realTask) {
+            setDashboardData((prev) => {
+              if (!prev) return prev;
+              const updated = {
+                ...prev,
+                today_tasks: (prev.today_tasks || []).map((t) =>
+                  t.id === tempId ? { ...realTask, is_optimistic: false } : t
+                ),
+              };
+              setCachedDashboard(updated);
+              return updated;
+            });
+          }
+          if (setGoalsData && realTask && gId) {
+            setGoalsData((prev) => {
+              const updated = (prev || []).map((g) => {
+                if (g.id === gId) {
+                  const subtasks = (g.subtasks || []).map((st) =>
+                    st.id === tempId ? { ...realTask, is_optimistic: false } : st
+                  );
+                  return { ...g, subtasks };
+                }
+                return g;
+              });
+              setCachedGoals(updated);
+              return updated;
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to create subtask on server:', err);
+          removePendingMutation(mutationId);
+        });
     } else {
       if (setDashboardData) {
         setDashboardData((prev) => {
@@ -516,7 +702,19 @@ export default function QuickAddModal({
   const handleUpdateTaskCategory = (taskId, newCategory) => {
     hapticFeedback('selection');
     setExtractedTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, category: newCategory } : t))
+      prev.map((t) => {
+        if (t.id === taskId) {
+          let updated = { ...t, category: newCategory };
+          if (newCategory === 'subtask' && !updated.goal_id && !updated.goal_title) {
+            if (goalsData && goalsData.length > 0) {
+              updated.goal_id = goalsData[0].id;
+              updated.goal_title = goalsData[0].title;
+            }
+          }
+          return updated;
+        }
+        return t;
+      })
     );
   };
 
@@ -533,11 +731,63 @@ export default function QuickAddModal({
     onClose();
 
     const todayStr = new Date().toISOString().split('T')[0];
+    const createdGoalsMap = {};
 
-    // Optimistically insert items into React state and local storage cache
+    // 1. Pass 1: Goals
     selected.forEach((t, i) => {
+      if (t.category !== 'goal') return;
       const cleanTitle = (t.title || '').trim();
       if (!cleanTitle) return;
+
+      const tempId = `temp_ai_goal_${Date.now()}_${i}`;
+      const mutationId = `create_ai_goal_${tempId}`;
+
+      const optGoal = {
+        id: tempId,
+        title: cleanTitle,
+        description: t.description || null,
+        target_date: t.target_date || null,
+        progress: 0,
+        subtasks: [],
+        total_subtasks: 0,
+        completed_subtasks: 0,
+        progress_percentage: 0,
+        is_optimistic: true,
+      };
+
+      if (setGoalsData) {
+        setGoalsData((prev) => {
+          const updated = [optGoal, ...(prev || [])];
+          setCachedGoals(updated);
+          return updated;
+        });
+      }
+
+      createdGoalsMap[cleanTitle.toLowerCase()] = { id: tempId, title: cleanTitle };
+
+      addPendingMutation({ id: mutationId, type: 'create_goal', tempId, title: cleanTitle, timestamp: Date.now() });
+
+      createGoal({ title: cleanTitle, description: t.description || null, target_date: t.target_date || null })
+        .then((real) => {
+          removePendingMutation(mutationId);
+          if (setGoalsData && real && real.id) {
+            setGoalsData((prev) => {
+              const updated = (prev || []).map((g) =>
+                g.id === tempId ? { ...real, is_optimistic: false } : g
+              );
+              setCachedGoals(updated);
+              return updated;
+            });
+            createdGoalsMap[cleanTitle.toLowerCase()] = real;
+          }
+        })
+        .catch(() => removePendingMutation(mutationId));
+    });
+
+    // 2. Pass 2: Routines, Subtasks, One-Time tasks
+    selected.forEach((t, i) => {
+      const cleanTitle = (t.title || '').trim();
+      if (!cleanTitle || t.category === 'goal') return;
 
       const tempId = `temp_ai_${Date.now()}_${i}`;
       const mutationId = `create_ai_${tempId}`;
@@ -592,32 +842,129 @@ export default function QuickAddModal({
             }
           })
           .catch(() => removePendingMutation(mutationId));
-      } else if (t.category === 'goal') {
-        if (setGoalsData) {
+      } else if (t.category === 'subtask' || t.goal_id || t.goal_title) {
+        let targetGoalId = t.goal_id || null;
+        let targetGoalTitle = t.goal_title || null;
+
+        if (!targetGoalId && targetGoalTitle) {
+          const matchedNew = createdGoalsMap[targetGoalTitle.toLowerCase()];
+          if (matchedNew) {
+            targetGoalId = matchedNew.id;
+          } else {
+            const matchedExisting = (goalsData || []).find(
+              (g) => g.title && g.title.toLowerCase().includes(targetGoalTitle.toLowerCase())
+            );
+            if (matchedExisting) {
+              targetGoalId = matchedExisting.id;
+              targetGoalTitle = matchedExisting.title;
+            }
+          }
+        } else if (targetGoalId && !targetGoalTitle) {
+          const gObj = (goalsData || []).find((g) => g.id === targetGoalId);
+          if (gObj) targetGoalTitle = gObj.title;
+        }
+
+        const prioInt = t.priority === 'high' || t.priority === 1 || t.priority === '1' ? 1 : 0;
+        const sched = t.scheduled_date || todayStr;
+
+        if (targetGoalId && setGoalsData) {
+          const optSubtask = {
+            id: tempId,
+            title: cleanTitle,
+            is_completed: false,
+            scheduled_date: sched,
+            goal_id: targetGoalId,
+            goal_title: targetGoalTitle,
+            is_optimistic: true,
+          };
           setGoalsData((prev) => {
-            const optGoal = {
-              id: tempId,
-              title: cleanTitle,
-              description: t.description || null,
-              target_date: t.target_date || null,
-              progress: 0,
-              subtasks: [],
-              is_optimistic: true,
-            };
-            const updated = [optGoal, ...(prev || [])];
+            const updated = (prev || []).map((g) => {
+              if (g.id === targetGoalId || (g.title && targetGoalTitle && g.title.toLowerCase() === targetGoalTitle.toLowerCase())) {
+                const subtasks = [...(g.subtasks || []), optSubtask];
+                const completedCount = subtasks.filter((s) => s.is_completed).length;
+                const progress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+                return {
+                  ...g,
+                  subtasks,
+                  progress,
+                  total_subtasks: subtasks.length,
+                  completed_subtasks: completedCount,
+                  progress_percentage: progress,
+                };
+              }
+              return g;
+            });
             setCachedGoals(updated);
             return updated;
           });
         }
-        addPendingMutation({ id: mutationId, type: 'create_goal', tempId, title: cleanTitle, timestamp: Date.now() });
-        createGoal({ title: cleanTitle, description: t.description || null, target_date: t.target_date || null })
+
+        if (sched === todayStr && setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const optTask = {
+              id: tempId,
+              title: cleanTitle,
+              category: 'one_time',
+              goal_id: targetGoalId,
+              goal_title: targetGoalTitle,
+              priority: prioInt,
+              is_completed: false,
+              target_value: t.target_value || null,
+              current_value: 0.0,
+              step: t.step || 1.0,
+              unit: t.unit || null,
+              scheduled_date: sched,
+              created_at: new Date().toISOString(),
+              is_optimistic: true,
+            };
+            const updated = {
+              ...prev,
+              today_tasks: [optTask, ...(prev.today_tasks || [])],
+              total_count: (prev.total_count || 0) + 1,
+            };
+            setCachedDashboard(updated);
+            return updated;
+          });
+        }
+
+        addPendingMutation({ id: mutationId, type: 'create_subtask', tempId, title: cleanTitle, timestamp: Date.now() });
+
+        createTask({
+          title: cleanTitle,
+          scheduled_date: sched,
+          goal_id: typeof targetGoalId === 'number' ? targetGoalId : null,
+          priority: prioInt,
+          target_value: t.target_value || null,
+          step: t.step || 1.0,
+          unit: t.unit || null,
+        })
           .then((real) => {
             removePendingMutation(mutationId);
-            if (setGoalsData && real) {
+            if (setDashboardData && real) {
+              setDashboardData((prev) => {
+                if (!prev) return prev;
+                const updated = {
+                  ...prev,
+                  today_tasks: (prev.today_tasks || []).map((tk) =>
+                    tk.id === tempId ? { ...real, is_optimistic: false } : tk
+                  ),
+                };
+                setCachedDashboard(updated);
+                return updated;
+              });
+            }
+            if (setGoalsData && real && targetGoalId) {
               setGoalsData((prev) => {
-                const updated = (prev || []).map((g) =>
-                  g.id === tempId ? { ...real, is_optimistic: false } : g
-                );
+                const updated = (prev || []).map((g) => {
+                  if (g.id === targetGoalId || g.id === real.goal_id) {
+                    const subtasks = (g.subtasks || []).map((st) =>
+                      st.id === tempId ? { ...real, is_optimistic: false } : st
+                    );
+                    return { ...g, subtasks };
+                  }
+                  return g;
+                });
                 setCachedGoals(updated);
                 return updated;
               });
@@ -715,6 +1062,10 @@ export default function QuickAddModal({
                 ? 'Запись голоса...'
                 : extractedTasks
                 ? 'Подтверждение задач'
+                : initialGoalTitle
+                ? `Шаг к цели: ${initialGoalTitle}`
+                : category === 'goal'
+                ? 'Новая цель'
                 : 'Создать задачу'}
             </span>
           </div>
@@ -805,6 +1156,13 @@ export default function QuickAddModal({
                             </button>
                             <button
                               type="button"
+                              className={`mini-cat-chip ${task.category === 'subtask' ? 'active' : ''}`}
+                              onClick={() => handleUpdateTaskCategory(task.id, 'subtask')}
+                            >
+                              <Target size={10} /> Подзадача
+                            </button>
+                            <button
+                              type="button"
                               className={`mini-cat-chip ${task.category === 'goal' ? 'active' : ''}`}
                               onClick={() => handleUpdateTaskCategory(task.id, 'goal')}
                             >
@@ -873,16 +1231,63 @@ export default function QuickAddModal({
                           >
                             {task.title}
                           </div>
-                          <div className="item-meta-row">
+                          <div className="item-meta-row" style={{ flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
                             <span className="item-tag">
                               {task.category === 'routine' ? (
                                 <><Flame size={10} /> Привычка</>
                               ) : task.category === 'goal' ? (
                                 <><Target size={10} /> Цель</>
+                              ) : task.category === 'subtask' || task.goal_id || task.goal_title ? (
+                                <><Target size={10} /> Подзадача</>
                               ) : (
                                 <><Calendar size={10} /> Задача</>
                               )}
                             </span>
+
+                            {/* Goal association selector for non-goals */}
+                            {task.category !== 'goal' && ((goalsData && goalsData.length > 0) || (extractedTasks && extractedTasks.some(et => et.category === 'goal' && et.id !== task.id))) && (
+                              <select
+                                className="quickadd-goal-select-mini"
+                                value={task.goal_id ? String(task.goal_id) : (task.goal_title ? `title:${task.goal_title}` : '')}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (!val) {
+                                    handleUpdateTaskGoal(task.id, null, null);
+                                  } else if (val.startsWith('title:')) {
+                                    handleUpdateTaskGoal(task.id, null, val.replace('title:', ''));
+                                  } else {
+                                    const gObj = goalsData.find((g) => String(g.id) === val);
+                                    handleUpdateTaskGoal(task.id, gObj ? gObj.id : val, gObj ? gObj.title : null);
+                                  }
+                                }}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.08)',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '4px',
+                                  color: task.goal_id || task.goal_title ? 'var(--accent-primary, #60a5fa)' : 'var(--text-tertiary)',
+                                  fontSize: '11px',
+                                  padding: '1px 5px',
+                                  maxWidth: '150px',
+                                  cursor: 'pointer',
+                                }}
+                                title="Привязать к цели"
+                              >
+                                <option value="">Без цели</option>
+                                {(extractedTasks || [])
+                                  .filter((et) => et.category === 'goal' && et.id !== task.id && et.title)
+                                  .map((eg) => (
+                                    <option key={eg.id} value={`title:${eg.title}`}>
+                                      🎯 {eg.title} (новая цель)
+                                    </option>
+                                  ))}
+                                {(goalsData || []).map((g) => (
+                                  <option key={g.id} value={String(g.id)}>
+                                    🎯 {g.title}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
                             {task.target_value && (
                               <span className="item-tag tag-due">
                                 🎯 {task.target_value} {task.unit || ''} (шаг {task.step || 1})
@@ -1068,6 +1473,22 @@ export default function QuickAddModal({
                   >
                     <Flame size={12} /> Привычка
                   </button>
+                  {goalsData && goalsData.length > 0 && (
+                    <button
+                      type="button"
+                      className={`filter-chip ${category === 'subtask' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setCategory('subtask');
+                        if (!selectedGoalId && goalsData.length > 0) {
+                          setSelectedGoalId(goalsData[0].id);
+                          setSelectedGoalTitle(goalsData[0].title);
+                        }
+                      }}
+                    >
+                      <Target size={12} /> Шаг цели
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={`filter-chip ${category === 'goal' ? 'active' : ''}`}
@@ -1080,6 +1501,40 @@ export default function QuickAddModal({
                   </button>
                 </div>
               </div>
+
+              {/* Goal selector for subtask */}
+              {category === 'subtask' && goalsData && goalsData.length > 0 && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
+                    ЦЕЛЬ
+                  </div>
+                  <select
+                    className="form-input"
+                    value={selectedGoalId || ''}
+                    onChange={(e) => {
+                      const val = e.target.value ? (isNaN(e.target.value) ? e.target.value : Number(e.target.value)) : null;
+                      setSelectedGoalId(val);
+                      const gObj = (goalsData || []).find((g) => String(g.id) === String(e.target.value));
+                      setSelectedGoalTitle(gObj ? gObj.title : '');
+                    }}
+                    style={{
+                      width: '100%',
+                      fontSize: '13px',
+                      padding: '8px 10px',
+                      background: 'var(--bg-card)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    {goalsData.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        🎯 {g.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Chips: Due Date & Priority (for one_time tasks) */}
               {category === 'one_time' && (

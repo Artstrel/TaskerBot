@@ -309,6 +309,9 @@ async def handle_voice_message(message: Message):
         effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
         user_provider = user.ai_provider
 
+        goals = await get_user_goals(session, message.from_user.id)
+        goal_titles = [g.title for g in goals if not g.is_completed]
+
     provider_label = (
         "Groq"
         if user_provider == "groq"
@@ -324,7 +327,9 @@ async def handle_voice_message(message: Message):
         await bot.download_file(file_info.file_path, file_bytes_io)
         audio_bytes = file_bytes_io.getvalue()
 
-        extracted = await ai_service.parse_audio_voice(audio_bytes, effective_date, provider=user_provider)
+        extracted = await ai_service.parse_audio_voice(
+            audio_bytes, effective_date, provider=user_provider, existing_goals=goal_titles
+        )
         await status_msg.delete()
 
         if not extracted.tasks:
@@ -360,8 +365,12 @@ async def handle_text_message(message: Message):
             now = get_user_now(user.timezone)
             effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
             user_provider = user.ai_provider
+            goals = await get_user_goals(session, user.telegram_id)
+            goal_titles = [g.title for g in goals if not g.is_completed]
 
-        extracted = await ai_service.parse_text_tasks(text, effective_date, provider=user_provider)
+        extracted = await ai_service.parse_text_tasks(
+            text, effective_date, provider=user_provider, existing_goals=goal_titles
+        )
         await status_msg.delete()
 
         if not extracted.tasks:
@@ -467,6 +476,25 @@ async def cb_save_tasks(query: CallbackQuery):
 
     async with AsyncSessionLocal() as session:
         created_count = 0
+        newly_created_goals = {}
+
+        # 1. First pass: create all goals so subtasks can link to them
+        for t in tasks:
+            if t.category == "goal":
+                target = None
+                if t.target_date:
+                    try:
+                        target = datetime.strptime(t.target_date, "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                g = await create_goal(session, user_id=user_id, title=t.title, description=t.description, target_date=target)
+                if g and g.title:
+                    newly_created_goals[g.title.strip().lower()] = g
+                created_count += 1
+
+        # 2. Second pass: create routines, subtasks, and one-time tasks
+        existing_goals = await get_user_goals(session, user_id)
+
         for t in tasks:
             if t.category == "routine":
                 await create_routine(
@@ -479,25 +507,22 @@ async def cb_save_tasks(query: CallbackQuery):
                     unit=t.unit,
                 )
                 created_count += 1
-            elif t.category == "goal":
-                target = None
-                if t.target_date:
-                    try:
-                        target = datetime.strptime(t.target_date, "%Y-%m-%d").date()
-                    except Exception:
-                        pass
-                await create_goal(session, user_id=user_id, title=t.title, description=t.description, target_date=target)
-                created_count += 1
             elif t.category == "subtask":
-                # Find goal if exists
-                goals = await get_user_goals(session, user_id)
                 matched_goal = None
-                if t.goal_title and goals:
-                    for g in goals:
-                        if t.goal_title.lower() in g.title.lower():
-                            matched_goal = g
+                if t.goal_title:
+                    gt_clean = t.goal_title.strip().lower()
+                    # Check newly created goals first
+                    for title_k, g_obj in newly_created_goals.items():
+                        if gt_clean in title_k or title_k in gt_clean:
+                            matched_goal = g_obj
                             break
-                goal_id = matched_goal.id if matched_goal else (goals[0].id if goals else None)
+                    # Then check existing goals
+                    if not matched_goal and existing_goals:
+                        for eg in existing_goals:
+                            if gt_clean in eg.title.lower() or eg.title.lower() in gt_clean:
+                                matched_goal = eg
+                                break
+                goal_id = matched_goal.id if matched_goal else (existing_goals[0].id if existing_goals else None)
 
                 sched_date = effective_date
                 if t.scheduled_date:

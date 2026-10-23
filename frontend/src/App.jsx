@@ -73,6 +73,7 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [warmupTimerElapsed, setWarmupTimerElapsed] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddOptions, setQuickAddOptions] = useState(null);
   const [mascotMood, setMascotMood] = useState('idle');
 
   useEffect(() => {
@@ -222,6 +223,10 @@ export default function App() {
             dashboardData={dashboardData}
             setDashboardData={setDashboardData}
             onRefresh={loadData}
+            onOpenQuickAdd={(opts) => {
+              setQuickAddOptions(opts);
+              setIsQuickAddOpen(true);
+            }}
           />
         )}
         {activeTab === 'settings' && (
@@ -237,10 +242,13 @@ export default function App() {
           className="app-fab"
           onClick={() => {
             hapticFeedback('medium');
+            setQuickAddOptions({
+              initialCategory: activeTab === 'goals' ? 'goal' : 'one_time',
+            });
             setIsQuickAddOpen(true);
           }}
-          title="Создать задачу"
-          aria-label="Создать задачу"
+          title={activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
+          aria-label={activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
         >
           <Plus size={24} strokeWidth={2.4} />
         </button>
@@ -279,10 +287,18 @@ export default function App() {
       {/* Quick Add Bottom Sheet Modal */}
       {isQuickAddOpen && (
         <QuickAddModal
-          onClose={() => setIsQuickAddOpen(false)}
+          onClose={() => {
+            setIsQuickAddOpen(false);
+            setQuickAddOptions(null);
+          }}
           onTaskCreated={loadData}
           setDashboardData={setDashboardData}
           setGoalsData={setGoalsData}
+          goalsData={goalsData}
+          initialCategory={quickAddOptions?.initialCategory}
+          initialGoalId={quickAddOptions?.initialGoalId}
+          initialGoalTitle={quickAddOptions?.initialGoalTitle}
+          autoStartVoice={quickAddOptions?.autoStartVoice}
         />
       )}
       </div>
