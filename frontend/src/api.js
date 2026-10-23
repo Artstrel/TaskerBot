@@ -712,10 +712,12 @@ export const GROQ_CHAT_MODELS = [
 ];
 
 export const OPENROUTER_FREE_MODELS = [
-  'openrouter/free',
+  'dots-studio/dots-3-note-preview:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'google/gemma-4-31b-it:free',
   'google/gemma-4-26b-a4b-it:free',
   'liquid/lfm-2.5-2.6b:free',
-  'nvidia/nemotron-3.5-lightning:free',
+  'openrouter/free',
 ];
 
 export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
@@ -1015,6 +1017,70 @@ export const transcribeWithDirectGroqWhisper = async (audioBlob) => {
   return null;
 };
 
+export const parseTextWithDirectOpenRouter = async (text) => {
+  const openRouterKey = getOpenRouterKey();
+  if (!openRouterKey) return null;
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const systemPrompt = `Ты — интеллектуальный ассистент по планированию задач TaskerBot.
+Твоя задача — извлечь ВСЕ упомянутые задачи из текста пользователя.
+Текущая дата: ${todayStr}.
+Категории:
+- routine: регулярные ежедневные дела (каждый день, по утрам)
+- one_time: разовые дела (сегодня, завтра, в пятницу)
+- goal: глобальные цели и проекты
+- subtask: подзадачи для цели
+
+Верни ответ СТРОГО в формате JSON с ключом "tasks":
+{"tasks": [{"category": "one_time", "title": "название", "scheduled_date": "YYYY-MM-DD"}]}`;
+
+  for (const model of OPENROUTER_FREE_MODELS) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterKey}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://taskerbot.local',
+          'X-Title': 'TaskerBot',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Текст пользователя:\n${text}` },
+          ],
+          temperature: 0.1,
+        }),
+      });
+
+      if (!res.ok) continue;
+      const data = await res.json();
+      const msg = data.choices?.[0]?.message;
+      const content = msg?.content || msg?.reasoning;
+      if (!content) continue;
+
+      let cleaned = content.trim();
+      if (cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+      }
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) {
+        cleaned = match[0];
+      }
+      const parsed = JSON.parse(cleaned);
+      const normalized = normalizeTasks(parsed);
+      if (normalized && normalized.tasks.length > 0) {
+        return normalized;
+      }
+    } catch (e) {
+      console.warn(`Direct OpenRouter failed on model ${model}:`, e);
+      continue;
+    }
+  }
+  return null;
+};
+
 export const parseSmartText = async (text, provider = null) => {
   // 1. Try Backend API first if reachable
   try {
@@ -1034,29 +1100,70 @@ export const parseSmartText = async (text, provider = null) => {
     }
   } catch (e) {}
 
-  // 2. Direct Neural AI call (Gemini 3.8 / 3.5 Flash or Groq)
-  const chosen = provider || 'gemini';
-  if (chosen === 'groq') {
+  // 2. Direct Neural AI call (OpenRouter, Groq, or Gemini)
+  const chosen = provider || 'auto';
+
+  if (chosen === 'openrouter') {
+    // OpenRouter requested
+    try {
+      const orRes = await parseTextWithDirectOpenRouter(text);
+      if (orRes && orRes.tasks && orRes.tasks.length > 0) return orRes;
+    } catch (e) {
+      console.warn('Direct OpenRouter failed, trying Groq fallback:', e);
+    }
     try {
       const gRes = await parseTextWithDirectGroq(text);
       if (gRes && gRes.tasks && gRes.tasks.length > 0) return gRes;
-    } catch (e) {
-      console.warn('Direct Groq failed, trying direct Gemini fallback:', e);
-    }
+    } catch (e) {}
     try {
       const gemRes = await parseTextWithDirectGemini(text);
       if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
     } catch (e) {}
-  } else {
+  } else if (chosen === 'groq') {
+    // Groq requested
+    try {
+      const gRes = await parseTextWithDirectGroq(text);
+      if (gRes && gRes.tasks && gRes.tasks.length > 0) return gRes;
+    } catch (e) {
+      console.warn('Direct Groq failed, trying OpenRouter fallback:', e);
+    }
+    try {
+      const orRes = await parseTextWithDirectOpenRouter(text);
+      if (orRes && orRes.tasks && orRes.tasks.length > 0) return orRes;
+    } catch (e) {}
+    try {
+      const gemRes = await parseTextWithDirectGemini(text);
+      if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
+    } catch (e) {}
+  } else if (chosen === 'gemini') {
+    // Gemini requested
     try {
       const gemRes = await parseTextWithDirectGemini(text);
       if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
     } catch (e) {
-      console.warn('Direct Gemini failed, trying direct Groq fallback:', e);
+      console.warn('Direct Gemini failed, trying Groq fallback:', e);
     }
     try {
       const gRes = await parseTextWithDirectGroq(text);
       if (gRes && gRes.tasks && gRes.tasks.length > 0) return gRes;
+    } catch (e) {}
+    try {
+      const orRes = await parseTextWithDirectOpenRouter(text);
+      if (orRes && orRes.tasks && orRes.tasks.length > 0) return orRes;
+    } catch (e) {}
+  } else {
+    // Auto-Fast cascade: Groq -> OpenRouter -> Gemini
+    try {
+      const gRes = await parseTextWithDirectGroq(text);
+      if (gRes && gRes.tasks && gRes.tasks.length > 0) return gRes;
+    } catch (e) {}
+    try {
+      const orRes = await parseTextWithDirectOpenRouter(text);
+      if (orRes && orRes.tasks && orRes.tasks.length > 0) return orRes;
+    } catch (e) {}
+    try {
+      const gemRes = await parseTextWithDirectGemini(text);
+      if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
     } catch (e) {}
   }
 
@@ -1118,11 +1225,14 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
     }
   } catch (e) {}
 
-  const chosen = provider || 'gemini';
+  const chosen = provider || 'auto';
 
   // 2. Direct browser AI calls
+  // Note: OpenRouter is a text LLM inference service (chat completions) and does not transcribe voice directly.
+  // We use Groq Whisper (lightning-fast ~300ms) or Gemini Multimodal Audio to transcribe speech,
+  // then pass the transcribed text to the chosen provider (OpenRouter / Groq / Gemini).
   if (chosen === 'gemini') {
-    // Try Gemini Multimodal Audio
+    // Gemini chosen: try Gemini Multimodal Audio first
     try {
       const gemRes = await parseAudioWithDirectGemini(audioBlob);
       if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
@@ -1137,29 +1247,19 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
       }
     } catch (we) {}
   } else {
-    // Chosen Groq: Whisper transcription (~300ms) + Gemini structured task parsing!
+    // chosen is 'openrouter', 'groq', or 'auto'
+    // Step A: Transcribe via Groq Whisper
     try {
       const whisperText = await transcribeWithDirectGroqWhisper(audioBlob);
       if (whisperText) {
-        // As requested: Use Whisper for voice + Gemini for parsing tasks
-        try {
-          const gemRes = await parseTextWithDirectGemini(whisperText);
-          if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;
-        } catch (ge) {
-          console.warn('Gemini parse after Whisper failed, falling back to Groq text LLM:', ge);
-        }
-        // Fallback to Groq text LLM if Gemini direct is unavailable
-        try {
-          const groqRes = await parseTextWithDirectGroq(whisperText);
-          if (groqRes && groqRes.tasks && groqRes.tasks.length > 0) return groqRes;
-        } catch (gerr) {}
-        // Fallback to rule-based parser on transcribed text
-        return await parseSmartText(whisperText, 'gemini');
+        // Transcribed successfully: parse via chosen provider (OpenRouter / Groq)
+        return await parseSmartText(whisperText, chosen);
       }
     } catch (we) {
       console.warn('Direct Groq Whisper failed, trying Gemini audio fallback:', we);
     }
-    // Fallback to Gemini Multimodal Audio
+
+    // Step B: Fallback to Gemini Multimodal Audio
     try {
       const gemRes = await parseAudioWithDirectGemini(audioBlob);
       if (gemRes && gemRes.tasks && gemRes.tasks.length > 0) return gemRes;

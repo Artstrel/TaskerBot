@@ -362,12 +362,14 @@ class AIService:
             "Content-Type": "application/json",
         }
 
-        # Free lightweight models on OpenRouter
+        # Free lightweight models on OpenRouter (tested and active)
         free_models = [
-            "openrouter/free",
+            "dots-studio/dots-3-note-preview:free",
+            "nvidia/nemotron-3.5-lightning:free",
+            "google/gemma-4-31b-it:free",
             "google/gemma-4-26b-a4b-it:free",
             "liquid/lfm-2.5-2.6b:free",
-            "nvidia/nemotron-3.5-lightning:free",
+            "openrouter/free",
         ]
 
         system_msg = (
@@ -382,7 +384,6 @@ class AIService:
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": f"Текст сообщения пользователя:\n{text}"},
                 ],
-                "response_format": {"type": "json_object"},
                 "temperature": 0.1,
             }
             try:
@@ -390,16 +391,20 @@ class AIService:
                     "https://openrouter.ai/api/v1/chat/completions",
                     headers=headers,
                     json=payload,
-                    timeout=6.0,
+                    timeout=8.0,
                 )
                 if resp.status_code == 200:
                     data = resp.json()
                     choices = data.get("choices", [])
                     if choices and "message" in choices[0]:
-                        content = choices[0]["message"].get("content", "")
+                        msg = choices[0]["message"]
+                        content = msg.get("content") or msg.get("reasoning") or ""
                         parsed = _parse_json_tasks(content)
-                        if parsed:
+                        if parsed and parsed.tasks:
                             return parsed
+                        logger.warning(
+                            f"OpenRouter model {model_name} returned non-JSON task format: {content[:100]}"
+                        )
                 else:
                     logger.warning(f"OpenRouter model {model_name} HTTP {resp.status_code}: {resp.text[:150]}")
             except Exception as e:
@@ -550,7 +555,15 @@ class AIService:
                     if cleaned.startswith("```"):
                         cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
                         cleaned = re.sub(r"\s*```$", "", cleaned)
-                    return ExtractedTaskList.model_validate_json(cleaned)
+                    try:
+                        parsed_res = ExtractedTaskList.model_validate_json(cleaned)
+                        if parsed_res and parsed_res.tasks:
+                            return parsed_res
+                    except Exception:
+                        pass
+                    fb = _fallback_parse(cleaned, current_date)
+                    if fb and fb.tasks:
+                        return fb
             except Exception as e:
                 logger.warning(f"Gemini audio model {model_name} failed: {e}")
                 continue

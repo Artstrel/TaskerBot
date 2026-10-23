@@ -279,7 +279,11 @@ async def handle_voice_message(message: Message):
         effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
         user_provider = user.ai_provider
 
-    provider_label = "Groq" if user_provider == "groq" else "Gemini"
+    provider_label = (
+        "Groq"
+        if user_provider == "groq"
+        else ("OpenRouter" if user_provider == "openrouter" else ("Auto-Cascade" if user_provider == "auto" else "Gemini"))
+    )
     status_msg = await message.answer(f"🎙 <i>Распознаю аудио через {provider_label}...</i>")
 
     try:
