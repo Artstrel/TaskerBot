@@ -23,10 +23,19 @@ import {
   createTask,
   hapticFeedback,
   calculateDayEndAndUrgency,
+  setCachedDashboard,
+  addPendingMutation,
+  removePendingMutation,
 } from '../api';
 import Mascot from './Mascot';
 
-export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted, warmupTimerElapsed }) {
+export default function TodayTab({
+  dashboardData,
+  setDashboardData,
+  onRefresh,
+  onTaskCompleted,
+  warmupTimerElapsed,
+}) {
   const [quickTitle, setQuickTitle] = useState('');
   const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
   const [isOverdueOpen, setIsOverdueOpen] = useState(true);
@@ -63,18 +72,63 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted, wa
     setEditTaskTitle(task.title);
   };
 
-  const handleSaveEdit = async (taskId) => {
-    if (!editTaskTitle.trim()) {
+  const handleSaveEdit = (taskId) => {
+    const title = editTaskTitle.trim();
+    if (!title) {
       setEditingTaskId(null);
       return;
     }
-    try {
-      await updateTask(taskId, { title: editTaskTitle.trim() });
-      setEditingTaskId(null);
-      onRefresh();
-    } catch (err) {
-      console.error('Failed to update task:', err);
+    const mutationId = `edit_task_${taskId}_${Date.now()}`;
+    setEditingTaskId(null);
+    hapticFeedback('light');
+
+    let oldTitle = '';
+
+    if (setDashboardData) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const updateList = (list) =>
+          (list || []).map((t) => {
+            if (t.id === taskId) {
+              oldTitle = t.title;
+              return { ...t, title };
+            }
+            return t;
+          });
+        const updated = {
+          ...prev,
+          today_tasks: updateList(prev.today_tasks),
+          overdue_tasks: updateList(prev.overdue_tasks),
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
     }
+
+    addPendingMutation({ id: mutationId, type: 'edit_task', taskId, title, timestamp: Date.now() });
+
+    updateTask(taskId, { title })
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to update task:', err);
+        removePendingMutation(mutationId);
+        if (oldTitle && setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const updateList = (list) =>
+              (list || []).map((t) => (t.id === taskId ? { ...t, title: oldTitle } : t));
+            const rolledBack = {
+              ...prev,
+              today_tasks: updateList(prev.today_tasks),
+              overdue_tasks: updateList(prev.overdue_tasks),
+            };
+            setCachedDashboard(rolledBack);
+            return rolledBack;
+          });
+        }
+      });
   };
 
   if (!dashboardData) {
@@ -112,59 +166,325 @@ export default function TodayTab({ dashboardData, onRefresh, onTaskCompleted, wa
   const isDayAllDone = total_count > 0 && completed_count === total_count;
   const isDayCompletelyEmpty = total_count === 0 && overdue_tasks.length === 0;
 
-  const handleToggleTask = async (taskId, currentStatus) => {
-    try {
-      if (!currentStatus && onTaskCompleted) {
-        onTaskCompleted();
-      }
-      await toggleTask(taskId);
-      onRefresh();
-    } catch (e) {
-      console.error('Failed to toggle task:', e);
+  const handleToggleTask = (taskId, currentStatus) => {
+    const nextStatus = !currentStatus;
+    const mutationId = `toggle_task_${taskId}_${Date.now()}`;
+
+    // 1. Instant 0ms Haptic & Mascot Celebration
+    hapticFeedback(nextStatus ? 'medium' : 'light');
+    if (nextStatus && onTaskCompleted) {
+      onTaskCompleted();
     }
+
+    // 2. Instant 0ms Optimistic State & Local Cache
+    if (setDashboardData) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const updateList = (list) =>
+          (list || []).map((t) => (t.id === taskId ? { ...t, is_completed: nextStatus } : t));
+        const newToday = updateList(prev.today_tasks);
+        const newOverdue = updateList(prev.overdue_tasks);
+        const delta = nextStatus ? 1 : -1;
+        const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + delta));
+        const updated = {
+          ...prev,
+          today_tasks: newToday,
+          overdue_tasks: newOverdue,
+          completed_count: newCompletedCount,
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
+    }
+
+    addPendingMutation({ id: mutationId, type: 'toggle_task', taskId, nextStatus, timestamp: Date.now() });
+
+    // 3. Background Async Server Call
+    toggleTask(taskId, nextStatus)
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to toggle task:', err);
+        removePendingMutation(mutationId);
+        // Rollback state on error
+        if (setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const updateList = (list) =>
+              (list || []).map((t) => (t.id === taskId ? { ...t, is_completed: currentStatus } : t));
+            const newToday = updateList(prev.today_tasks);
+            const newOverdue = updateList(prev.overdue_tasks);
+            const delta = currentStatus ? 1 : -1;
+            const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + delta));
+            const rolledBack = {
+              ...prev,
+              today_tasks: newToday,
+              overdue_tasks: newOverdue,
+              completed_count: newCompletedCount,
+            };
+            setCachedDashboard(rolledBack);
+            return rolledBack;
+          });
+        }
+      });
   };
 
-  const handleToggleRoutine = async (routineId, currentStatus) => {
-    try {
-      if (!currentStatus && onTaskCompleted) {
-        onTaskCompleted();
-      }
-      await toggleRoutine(routineId);
-      onRefresh();
-    } catch (e) {
-      console.error('Failed to toggle routine:', e);
+  const handleToggleRoutine = (routineId, currentStatus) => {
+    const nextStatus = !currentStatus;
+    const mutationId = `toggle_routine_${routineId}_${Date.now()}`;
+
+    hapticFeedback(nextStatus ? 'medium' : 'light');
+    if (nextStatus && onTaskCompleted) {
+      onTaskCompleted();
     }
+
+    if (setDashboardData) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const newRoutines = (prev.routine_tasks || []).map((r) => {
+          if (r.id === routineId) {
+            const currentStreak = r.current_streak || 0;
+            const newStreak = nextStatus ? currentStreak + 1 : Math.max(0, currentStreak - 1);
+            return {
+              ...r,
+              is_completed_today: nextStatus,
+              current_streak: newStreak,
+              best_streak: Math.max(r.best_streak || 0, newStreak),
+            };
+          }
+          return r;
+        });
+        const delta = nextStatus ? 1 : -1;
+        const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + delta));
+        const updated = {
+          ...prev,
+          routine_tasks: newRoutines,
+          completed_count: newCompletedCount,
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
+    }
+
+    addPendingMutation({ id: mutationId, type: 'toggle_routine', routineId, nextStatus, timestamp: Date.now() });
+
+    toggleRoutine(routineId)
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to toggle routine:', err);
+        removePendingMutation(mutationId);
+        // Rollback state on error
+        if (setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const newRoutines = (prev.routine_tasks || []).map((r) => {
+              if (r.id === routineId) {
+                const currentStreak = r.current_streak || 0;
+                const newStreak = currentStatus ? currentStreak + 1 : Math.max(0, currentStreak - 1);
+                return {
+                  ...r,
+                  is_completed_today: currentStatus,
+                  current_streak: newStreak,
+                };
+              }
+              return r;
+            });
+            const delta = currentStatus ? 1 : -1;
+            const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + delta));
+            const rolledBack = {
+              ...prev,
+              routine_tasks: newRoutines,
+              completed_count: newCompletedCount,
+            };
+            setCachedDashboard(rolledBack);
+            return rolledBack;
+          });
+        }
+      });
   };
 
-  const handlePostponeTomorrow = async (taskId) => {
+  const handlePostponeTomorrow = (taskId) => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const dateStr = tomorrow.toISOString().split('T')[0];
-    await postponeTask(taskId, dateStr);
-    onRefresh();
-  };
+    const mutationId = `postpone_task_${taskId}_${Date.now()}`;
+    hapticFeedback('medium');
 
-  const handleDeleteTask = async (taskId) => {
-    if (window.confirm('Удалить эту задачу?')) {
-      await deleteTask(taskId);
-      onRefresh();
+    let postponedTask = null;
+
+    if (setDashboardData) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        postponedTask =
+          (prev.today_tasks || []).find((t) => t.id === taskId) ||
+          (prev.overdue_tasks || []).find((t) => t.id === taskId);
+        const wasCompleted = postponedTask?.is_completed || false;
+        const updated = {
+          ...prev,
+          today_tasks: (prev.today_tasks || []).filter((t) => t.id !== taskId),
+          overdue_tasks: (prev.overdue_tasks || []).filter((t) => t.id !== taskId),
+          total_count: Math.max(0, (prev.total_count || 0) - 1),
+          completed_count: wasCompleted
+            ? Math.max(0, (prev.completed_count || 0) - 1)
+            : prev.completed_count,
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
     }
+
+    addPendingMutation({ id: mutationId, type: 'postpone_task', taskId, dateStr, timestamp: Date.now() });
+
+    postponeTask(taskId, dateStr)
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to postpone task:', err);
+        removePendingMutation(mutationId);
+        if (postponedTask && setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const updated = {
+              ...prev,
+              today_tasks: [postponedTask, ...(prev.today_tasks || [])],
+              total_count: (prev.total_count || 0) + 1,
+            };
+            setCachedDashboard(updated);
+            return updated;
+          });
+        }
+      });
   };
 
-  const handleQuickSubmit = async (e) => {
+  const handleDeleteTask = (taskId) => {
+    if (!window.confirm('Удалить эту задачу?')) return;
+    const mutationId = `delete_task_${taskId}_${Date.now()}`;
+    hapticFeedback('warning');
+
+    let deletedTask = null;
+
+    if (setDashboardData) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        deletedTask =
+          (prev.today_tasks || []).find((t) => t.id === taskId) ||
+          (prev.overdue_tasks || []).find((t) => t.id === taskId);
+        const wasCompleted = deletedTask?.is_completed || false;
+        const updated = {
+          ...prev,
+          today_tasks: (prev.today_tasks || []).filter((t) => t.id !== taskId),
+          overdue_tasks: (prev.overdue_tasks || []).filter((t) => t.id !== taskId),
+          total_count: Math.max(0, (prev.total_count || 0) - 1),
+          completed_count: wasCompleted
+            ? Math.max(0, (prev.completed_count || 0) - 1)
+            : prev.completed_count,
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
+    }
+
+    addPendingMutation({ id: mutationId, type: 'delete_task', taskId, timestamp: Date.now() });
+
+    deleteTask(taskId)
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to delete task:', err);
+        removePendingMutation(mutationId);
+        if (deletedTask && setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const wasCompleted = deletedTask.is_completed;
+            const updated = {
+              ...prev,
+              today_tasks: [deletedTask, ...(prev.today_tasks || [])],
+              total_count: (prev.total_count || 0) + 1,
+              completed_count: wasCompleted ? (prev.completed_count || 0) + 1 : prev.completed_count,
+            };
+            setCachedDashboard(updated);
+            return updated;
+          });
+        }
+      });
+  };
+
+  const handleQuickSubmit = (e) => {
     e.preventDefault();
-    if (!quickTitle.trim() || isSubmittingQuick) return;
-    setIsSubmittingQuick(true);
-    try {
-      await createTask({ title: quickTitle.trim() });
-      setQuickTitle('');
-      hapticFeedback('success');
-      onRefresh();
-    } catch (err) {
-      console.error('Failed to create quick task:', err);
-    } finally {
-      setIsSubmittingQuick(false);
+    const title = quickTitle.trim();
+    if (!title || isSubmittingQuick) return;
+
+    const tempId = `temp_task_${Date.now()}`;
+    const mutationId = `create_task_${tempId}`;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const optimisticTask = {
+      id: tempId,
+      title,
+      category: 'one_time',
+      priority: 'medium',
+      is_completed: false,
+      scheduled_date: todayStr,
+      created_at: new Date().toISOString(),
+      is_optimistic: true,
+    };
+
+    setQuickTitle('');
+    hapticFeedback('success');
+
+    if (setDashboardData) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const updated = {
+          ...prev,
+          today_tasks: [optimisticTask, ...(prev.today_tasks || [])],
+          total_count: (prev.total_count || 0) + 1,
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
     }
+
+    addPendingMutation({ id: mutationId, type: 'create_task', tempId, title, timestamp: Date.now() });
+
+    createTask({ title, scheduled_date: todayStr })
+      .then((realTask) => {
+        removePendingMutation(mutationId);
+        if (setDashboardData && realTask && realTask.id) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const updated = {
+              ...prev,
+              today_tasks: (prev.today_tasks || []).map((t) =>
+                t.id === tempId ? { ...realTask, is_optimistic: false } : t
+              ),
+            };
+            setCachedDashboard(updated);
+            return updated;
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to create quick task:', err);
+        removePendingMutation(mutationId);
+        if (setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const updated = {
+              ...prev,
+              today_tasks: (prev.today_tasks || []).filter((t) => t.id !== tempId),
+              total_count: Math.max(0, (prev.total_count || 0) - 1),
+            };
+            setCachedDashboard(updated);
+            return updated;
+          });
+        }
+      });
   };
 
   // Time remaining chip configuration with live ticking clock

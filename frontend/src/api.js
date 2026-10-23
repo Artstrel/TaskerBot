@@ -109,6 +109,48 @@ export const setCachedGoals = (data) => {
 };
 
 // ==============================================================================
+// Pending Sync Queue (Optimistic Offline/Online Buffer)
+// ==============================================================================
+const PENDING_SYNC_KEY = `tasker_pending_sync_${currentUser.id}`;
+
+export const getPendingSyncQueue = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(PENDING_SYNC_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return [];
+};
+
+export const addPendingMutation = (mutation) => {
+  if (typeof window === 'undefined' || !mutation) return;
+  try {
+    const queue = getPendingSyncQueue();
+    queue.push({ ...mutation, created_at: Date.now() });
+    localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(queue));
+  } catch (e) {}
+};
+
+export const removePendingMutation = (mutationId) => {
+  if (typeof window === 'undefined' || !mutationId) return;
+  try {
+    const queue = getPendingSyncQueue().filter((m) => m.id !== mutationId);
+    if (queue.length > 0) {
+      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(queue));
+    } else {
+      localStorage.removeItem(PENDING_SYNC_KEY);
+    }
+  } catch (e) {}
+};
+
+export const clearPendingSyncQueue = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(PENDING_SYNC_KEY);
+  } catch (e) {}
+};
+
+// ==============================================================================
 // Local Fallback Storage (Enables 100% functional Demo Mode on GitHub Pages)
 // ==============================================================================
 const LOCAL_STORAGE_KEY = 'tasker_local_db_v2';
@@ -619,6 +661,25 @@ export const setGroqKey = (key) => {
   }
 };
 
+export const getOpenRouterKey = () => {
+  if (typeof window !== 'undefined') {
+    return (
+      localStorage.getItem('tasker_openrouter_key') ||
+      import.meta.env.VITE_OPENROUTER_API_KEY ||
+      import.meta.env.OPENROUTER_API_KEY ||
+      ''
+    );
+  }
+  return '';
+};
+
+export const setOpenRouterKey = (key) => {
+  if (typeof window !== 'undefined') {
+    if (key && key.trim()) localStorage.setItem('tasker_openrouter_key', key.trim());
+    else localStorage.removeItem('tasker_openrouter_key');
+  }
+};
+
 export const fetchAIProviders = async () => {
   try {
     const res = await fetch(`${API_BASE}/ai/providers?telegram_id=${currentUser.id}`);
@@ -626,10 +687,12 @@ export const fetchAIProviders = async () => {
   } catch (e) {}
 
   return {
-    active_provider: 'gemini',
+    active_provider: 'auto',
     providers: [
-      { id: 'gemini', name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)', is_default: true },
-      { id: 'groq', name: 'Groq (Whisper + Gemini)', is_default: false },
+      { id: 'auto', name: 'Auto-Fast Cascade (Рекомендуется)', is_default: true },
+      { id: 'groq', name: 'Groq LPU (Llama & Whisper)', is_default: false },
+      { id: 'openrouter', name: 'OpenRouter Free Models', is_default: false },
+      { id: 'gemini', name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)', is_default: false },
     ],
   };
 };
@@ -637,16 +700,22 @@ export const fetchAIProviders = async () => {
 export const GEMINI_MODELS = [
   'gemini-3.8-flash',
   'gemini-3.5-flash-lite',
+  'gemini-3.7-flash',
   'gemini-3.6-flash',
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
+  'gemini-3-flash-preview',
 ];
 
 export const GROQ_CHAT_MODELS = [
-  'openai/gpt-oss-120b',
   'openai/gpt-oss-20b',
-  'llama-3.3-70b-versatile',
-  'llama-3.1-8b-instant',
+  'qwen/qwen3.8-27b',
+  'openai/gpt-oss-120b',
+];
+
+export const OPENROUTER_FREE_MODELS = [
+  'openrouter/free',
+  'google/gemma-4-26b-a4b-it:free',
+  'liquid/lfm-2.5-2.6b:free',
+  'nvidia/nemotron-3.5-lightning:free',
 ];
 
 export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {

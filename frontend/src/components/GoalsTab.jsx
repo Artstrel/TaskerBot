@@ -14,10 +14,20 @@ import {
   toggleTask,
   postponeTask,
   hapticFeedback,
+  setCachedGoals,
+  setCachedDashboard,
+  addPendingMutation,
+  removePendingMutation,
 } from '../api';
 import Mascot from './Mascot';
 
-export default function GoalsTab({ goalsData = [], onRefresh }) {
+export default function GoalsTab({
+  goalsData = [],
+  setGoalsData,
+  dashboardData,
+  setDashboardData,
+  onRefresh,
+}) {
   const [expandedGoalId, setExpandedGoalId] = useState(null);
   const [isCreatingGoal, setIsCreatingGoal] = useState(false);
   const [newGoalTitle, setNewGoalTitle] = useState('');
@@ -30,40 +40,301 @@ export default function GoalsTab({ goalsData = [], onRefresh }) {
     setExpandedGoalId((prev) => (prev === id ? null : id));
   };
 
-  const handleCreateGoal = async (e) => {
+  const handleCreateGoal = (e) => {
     e.preventDefault();
-    if (!newGoalTitle.trim()) return;
-    await createGoal({
-      title: newGoalTitle.trim(),
-      description: newGoalDesc.trim() || null,
-      target_date: newGoalDate || null,
-    });
+    const title = newGoalTitle.trim();
+    if (!title) return;
+
+    const tempId = `temp_goal_${Date.now()}`;
+    const mutationId = `create_goal_${tempId}`;
+    const desc = newGoalDesc.trim() || null;
+    const targetDate = newGoalDate || null;
+
+    const optimisticGoal = {
+      id: tempId,
+      title,
+      description: desc,
+      target_date: targetDate,
+      progress: 0,
+      subtasks: [],
+      is_optimistic: true,
+    };
+
     setNewGoalTitle('');
     setNewGoalDesc('');
     setNewGoalDate('');
     setIsCreatingGoal(false);
-    onRefresh();
-  };
+    hapticFeedback('success');
 
-  const handleAddSubtask = async (goalId) => {
-    const title = newSubtaskTitles[goalId];
-    if (!title || !title.trim()) return;
-    await addGoalSubtask(goalId, title.trim());
-    setNewSubtaskTitles((prev) => ({ ...prev, [goalId]: '' }));
-    onRefresh();
-  };
-
-  const handleScheduleForToday = async (subtaskId) => {
-    const today = new Date().toISOString().split('T')[0];
-    await postponeTask(subtaskId, today);
-    onRefresh();
-  };
-
-  const handleDeleteGoal = async (goalId) => {
-    if (window.confirm('Удалить эту цель со всеми подзадачами?')) {
-      await deleteGoal(goalId);
-      onRefresh();
+    if (setGoalsData) {
+      setGoalsData((prev) => {
+        const updated = [optimisticGoal, ...(prev || [])];
+        setCachedGoals(updated);
+        return updated;
+      });
     }
+
+    addPendingMutation({ id: mutationId, type: 'create_goal', tempId, title, timestamp: Date.now() });
+
+    createGoal({ title, description: desc, target_date: targetDate })
+      .then((realGoal) => {
+        removePendingMutation(mutationId);
+        if (setGoalsData && realGoal && realGoal.id) {
+          setGoalsData((prev) => {
+            const updated = (prev || []).map((g) => (g.id === tempId ? { ...realGoal, is_optimistic: false } : g));
+            setCachedGoals(updated);
+            return updated;
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to create goal:', err);
+        removePendingMutation(mutationId);
+        if (setGoalsData) {
+          setGoalsData((prev) => {
+            const updated = (prev || []).filter((g) => g.id !== tempId);
+            setCachedGoals(updated);
+            return updated;
+          });
+        }
+      });
+  };
+
+  const handleAddSubtask = (goalId) => {
+    const title = (newSubtaskTitles[goalId] || '').trim();
+    if (!title) return;
+
+    const tempId = `temp_subtask_${Date.now()}`;
+    const mutationId = `add_subtask_${tempId}`;
+
+    const optimisticSubtask = {
+      id: tempId,
+      title,
+      is_completed: false,
+      scheduled_date: null,
+      is_optimistic: true,
+    };
+
+    setNewSubtaskTitles((prev) => ({ ...prev, [goalId]: '' }));
+    hapticFeedback('light');
+
+    if (setGoalsData) {
+      setGoalsData((prev) => {
+        const updated = (prev || []).map((g) => {
+          if (g.id === goalId) {
+            const subtasks = [...(g.subtasks || []), optimisticSubtask];
+            const completedCount = subtasks.filter((s) => s.is_completed).length;
+            const progress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+            return { ...g, subtasks, progress };
+          }
+          return g;
+        });
+        setCachedGoals(updated);
+        return updated;
+      });
+    }
+
+    addPendingMutation({ id: mutationId, type: 'add_subtask', goalId, tempId, title, timestamp: Date.now() });
+
+    addGoalSubtask(goalId, title)
+      .then((realSubtask) => {
+        removePendingMutation(mutationId);
+        if (setGoalsData && realSubtask && realSubtask.id) {
+          setGoalsData((prev) => {
+            const updated = (prev || []).map((g) => {
+              if (g.id === goalId) {
+                const subtasks = (g.subtasks || []).map((s) => (s.id === tempId ? realSubtask : s));
+                return { ...g, subtasks };
+              }
+              return g;
+            });
+            setCachedGoals(updated);
+            return updated;
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to add subtask:', err);
+        removePendingMutation(mutationId);
+        if (setGoalsData) {
+          setGoalsData((prev) => {
+            const updated = (prev || []).map((g) => {
+              if (g.id === goalId) {
+                const subtasks = (g.subtasks || []).filter((s) => s.id !== tempId);
+                const completedCount = subtasks.filter((s) => s.is_completed).length;
+                const progress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+                return { ...g, subtasks, progress };
+              }
+              return g;
+            });
+            setCachedGoals(updated);
+            return updated;
+          });
+        }
+      });
+  };
+
+  const handleToggleSubtask = (goalId, subtaskId, currentStatus) => {
+    const nextStatus = !currentStatus;
+    const mutationId = `toggle_subtask_${subtaskId}_${Date.now()}`;
+    hapticFeedback(nextStatus ? 'medium' : 'light');
+
+    if (setGoalsData) {
+      setGoalsData((prev) => {
+        const updated = (prev || []).map((g) => {
+          if (g.id === goalId) {
+            const subtasks = (g.subtasks || []).map((s) =>
+              s.id === subtaskId ? { ...s, is_completed: nextStatus } : s
+            );
+            const completedCount = subtasks.filter((s) => s.is_completed).length;
+            const progress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+            return { ...g, subtasks, progress };
+          }
+          return g;
+        });
+        setCachedGoals(updated);
+        return updated;
+      });
+    }
+
+    // Also update in today's dashboard if present
+    if (setDashboardData) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const inToday = (prev.today_tasks || []).some((t) => t.id === subtaskId);
+        if (!inToday) return prev;
+        const newToday = (prev.today_tasks || []).map((t) =>
+          t.id === subtaskId ? { ...t, is_completed: nextStatus } : t
+        );
+        const delta = nextStatus ? 1 : -1;
+        const updated = {
+          ...prev,
+          today_tasks: newToday,
+          completed_count: Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + delta)),
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
+    }
+
+    addPendingMutation({ id: mutationId, type: 'toggle_subtask', subtaskId, nextStatus, timestamp: Date.now() });
+
+    toggleTask(subtaskId, nextStatus)
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to toggle subtask:', err);
+        removePendingMutation(mutationId);
+        // Rollback
+        if (setGoalsData) {
+          setGoalsData((prev) => {
+            const updated = (prev || []).map((g) => {
+              if (g.id === goalId) {
+                const subtasks = (g.subtasks || []).map((s) =>
+                  s.id === subtaskId ? { ...s, is_completed: currentStatus } : s
+                );
+                const completedCount = subtasks.filter((s) => s.is_completed).length;
+                const progress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+                return { ...g, subtasks, progress };
+              }
+              return g;
+            });
+            setCachedGoals(updated);
+            return updated;
+          });
+        }
+      });
+  };
+
+  const handleScheduleForToday = (goalId, subtaskId) => {
+    const today = new Date().toISOString().split('T')[0];
+    const mutationId = `schedule_subtask_${subtaskId}_${Date.now()}`;
+    hapticFeedback('medium');
+
+    let scheduledSubtask = null;
+
+    if (setGoalsData) {
+      setGoalsData((prev) => {
+        const updated = (prev || []).map((g) => {
+          if (g.id === goalId) {
+            const subtasks = (g.subtasks || []).map((s) => {
+              if (s.id === subtaskId) {
+                scheduledSubtask = { ...s, scheduled_date: today };
+                return scheduledSubtask;
+              }
+              return s;
+            });
+            return { ...g, subtasks };
+          }
+          return g;
+        });
+        setCachedGoals(updated);
+        return updated;
+      });
+    }
+
+    // Add to TodayTab list optimistically
+    if (setDashboardData && scheduledSubtask) {
+      setDashboardData((prev) => {
+        if (!prev) return prev;
+        const exists = (prev.today_tasks || []).some((t) => t.id === subtaskId);
+        if (exists) return prev;
+        const updated = {
+          ...prev,
+          today_tasks: [scheduledSubtask, ...(prev.today_tasks || [])],
+          total_count: (prev.total_count || 0) + 1,
+        };
+        setCachedDashboard(updated);
+        return updated;
+      });
+    }
+
+    addPendingMutation({ id: mutationId, type: 'postpone_task', taskId: subtaskId, dateStr: today, timestamp: Date.now() });
+
+    postponeTask(subtaskId, today)
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to schedule subtask for today:', err);
+        removePendingMutation(mutationId);
+      });
+  };
+
+  const handleDeleteGoal = (goalId) => {
+    if (!window.confirm('Удалить эту цель со всеми подзадачами?')) return;
+    const mutationId = `delete_goal_${goalId}_${Date.now()}`;
+    hapticFeedback('warning');
+
+    let deletedGoal = null;
+
+    if (setGoalsData) {
+      setGoalsData((prev) => {
+        deletedGoal = (prev || []).find((g) => g.id === goalId);
+        const updated = (prev || []).filter((g) => g.id !== goalId);
+        setCachedGoals(updated);
+        return updated;
+      });
+    }
+
+    addPendingMutation({ id: mutationId, type: 'delete_goal', goalId, timestamp: Date.now() });
+
+    deleteGoal(goalId)
+      .then(() => {
+        removePendingMutation(mutationId);
+      })
+      .catch((err) => {
+        console.error('Failed to delete goal:', err);
+        removePendingMutation(mutationId);
+        if (deletedGoal && setGoalsData) {
+          setGoalsData((prev) => {
+            const updated = [deletedGoal, ...(prev || [])];
+            setCachedGoals(updated);
+            return updated;
+          });
+        }
+      });
   };
 
   return (
@@ -296,10 +567,7 @@ export default function GoalsTab({ goalsData = [], onRefresh }) {
                             <div key={st.id} className={`linear-list-item ${st.is_completed ? 'completed' : ''}`}>
                               <button
                                 className={`linear-checkbox ${st.is_completed ? 'checked' : ''}`}
-                                onClick={async () => {
-                                  await toggleTask(st.id);
-                                  onRefresh();
-                                }}
+                                onClick={() => handleToggleSubtask(goal.id, st.id, st.is_completed)}
                               >
                                 {st.is_completed && <Check size={12} strokeWidth={3} />}
                               </button>
@@ -313,7 +581,7 @@ export default function GoalsTab({ goalsData = [], onRefresh }) {
                                   type="button"
                                   className={`filter-chip ${isToday ? 'active' : ''}`}
                                   style={{ padding: '3px 8px', fontSize: '11px' }}
-                                  onClick={() => handleScheduleForToday(st.id)}
+                                  onClick={() => handleScheduleForToday(goal.id, st.id)}
                                 >
                                   {isToday ? 'В плане дня' : '+ На сегодня'}
                                 </button>

@@ -2,9 +2,11 @@ import io
 import json
 import logging
 import re
+import asyncio
 from datetime import date, timedelta
 from typing import Optional, List, Dict, Any
 
+import httpx
 from backend.config import settings
 from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AIProvidersResponse
 
@@ -32,6 +34,68 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 - "goal_title": название цели (если это subtask) или null
 - "target_date": дедлайн цели "YYYY-MM-DD" (если это goal) или null
 """
+
+
+def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
+    normalized_tasks = []
+    for t in raw_tasks:
+        if isinstance(t, str):
+            title = t.strip()
+            if title:
+                normalized_tasks.append(ExtractedTask(category="one_time", title=title))
+        elif isinstance(t, dict):
+            cat = t.get("category", "one_time")
+            if cat not in ["routine", "one_time", "goal", "subtask"]:
+                cat = "one_time"
+            title = t.get("title") or t.get("name") or "Новая задача"
+            normalized_tasks.append(
+                ExtractedTask(
+                    category=cat,
+                    title=str(title).strip(),
+                    scheduled_date=t.get("scheduled_date"),
+                    description=t.get("description"),
+                    goal_title=t.get("goal_title"),
+                    target_date=t.get("target_date"),
+                )
+            )
+    return normalized_tasks
+
+
+def _parse_json_tasks(raw: str) -> Optional[ExtractedTaskList]:
+    """Extract and validate tasks from JSON response, handling markdown blocks if present."""
+    if not raw or not raw.strip():
+        return None
+    cleaned = raw.strip()
+    if "```" in cleaned:
+        cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.MULTILINE)
+        cleaned = re.sub(r"\s*```$", "", cleaned, flags=re.MULTILINE)
+        cleaned = cleaned.strip()
+
+    try:
+        parsed = json.loads(cleaned)
+    except Exception:
+        # Try extracting JSON object substring
+        match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+        if match:
+            try:
+                parsed = json.loads(match.group(0))
+            except Exception:
+                return None
+        else:
+            return None
+
+    raw_tasks = []
+    if isinstance(parsed, dict) and "tasks" in parsed:
+        raw_tasks = parsed["tasks"]
+    elif isinstance(parsed, list):
+        raw_tasks = parsed
+    elif isinstance(parsed, dict) and "title" in parsed:
+        raw_tasks = [parsed]
+
+    normalized = _normalize_extracted_tasks(raw_tasks)
+    if normalized:
+        return ExtractedTaskList(tasks=normalized)
+    return None
 
 
 def _fallback_parse(text: str, current_date: date) -> ExtractedTaskList:
@@ -111,32 +175,55 @@ class AIService:
     def __init__(self):
         self._groq_client = None
         self._gemini_client = None
+        self._http_client: Optional[httpx.AsyncClient] = None
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(timeout=httpx.Timeout(7.0, connect=3.0))
+        return self._http_client
 
     def get_providers_status(self, user_active: Optional[str] = None) -> AIProvidersResponse:
         groq_ready = bool(settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip())
+        openrouter_ready = bool(settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip())
         gemini_ready = bool(settings.GEMINI_API_KEY and settings.GEMINI_API_KEY.strip())
 
         providers = [
             AIProviderInfo(
+                id="auto",
+                name="Auto-Fast Cascade (Рекомендуется)",
+                description="Сверхбыстрый каскад: Groq Llama 3.1 8B (~200 мс) и бесплатные модели OpenRouter, с автоматическим переходом на Google Gemini",
+                is_configured=groq_ready or openrouter_ready or gemini_ready,
+            ),
+            AIProviderInfo(
                 id="groq",
-                name="Groq (Whisper + Gemini)",
-                description="Сверхбыстрая транскрипция речи Groq Whisper (~300 мс) + интеллектуальный разбор задач через Gemini",
+                name="Groq Llama 3.1 & Whisper",
+                description="Молниеносная скорость генерации (~150-300 мс) на чипах LPU",
                 is_configured=groq_ready,
+            ),
+            AIProviderInfo(
+                id="openrouter",
+                name="OpenRouter Free Models",
+                description="Бесплатные легковесные модели (Gemma 4, LFM 2.6B, Nemotron)",
+                is_configured=openrouter_ready,
             ),
             AIProviderInfo(
                 id="gemini",
                 name="Google Gemini (3.8 Flash / 3.5 Flash-Lite)",
-                description="Мультимодальные модели Google Gemini 3.8 Flash и 3.5 Flash-Lite",
+                description="Официальные мультимодальные модели Google Gemini",
                 is_configured=gemini_ready,
             ),
         ]
 
-        active = user_active or settings.DEFAULT_AI_PROVIDER
-        # If user active is not configured, fall back to configured one if available
-        if active == "groq" and not groq_ready and gemini_ready:
-            active = "gemini"
-        elif active == "gemini" and not gemini_ready and groq_ready:
-            active = "groq"
+        active = user_active or settings.DEFAULT_AI_PROVIDER or "auto"
+        # Validate active provider availability
+        if active == "auto" and not (groq_ready or openrouter_ready or gemini_ready):
+            active = "fallback"
+        elif active == "groq" and not groq_ready:
+            active = "auto" if (openrouter_ready or gemini_ready) else ("gemini" if gemini_ready else "groq")
+        elif active == "openrouter" and not openrouter_ready:
+            active = "auto" if (groq_ready or gemini_ready) else "openrouter"
+        elif active == "gemini" and not gemini_ready:
+            active = "auto" if (groq_ready or openrouter_ready) else "gemini"
 
         return AIProvidersResponse(active_provider=active, providers=providers)
 
@@ -144,7 +231,7 @@ class AIService:
         if not self._groq_client and settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip():
             try:
                 from groq import AsyncGroq
-                self._groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY.strip())
+                self._groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY.strip(), timeout=6.0)
             except Exception as e:
                 logger.error(f"Failed to initialize Groq client: {e}")
         return self._groq_client
@@ -159,38 +246,66 @@ class AIService:
         return self._gemini_client
 
     def resolve_provider(self, requested: Optional[str]) -> str:
-        prov = (requested or settings.DEFAULT_AI_PROVIDER or "groq").lower()
-        # Fallback if selected provider has no key configured
-        if prov == "groq" and not (settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip()):
-            if settings.GEMINI_API_KEY and settings.GEMINI_API_KEY.strip():
-                return "gemini"
-        elif prov == "gemini" and not (settings.GEMINI_API_KEY and settings.GEMINI_API_KEY.strip()):
-            if settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip():
-                return "groq"
+        prov = (requested or settings.DEFAULT_AI_PROVIDER or "auto").lower()
         return prov
 
     async def parse_text_tasks(
         self, text: str, current_date: date, provider: Optional[str] = None
     ) -> ExtractedTaskList:
         chosen = self.resolve_provider(provider)
-        logger.info(f"Parsing text tasks with provider: {chosen}")
+        logger.info(f"Parsing text tasks with requested provider: {chosen}")
 
-        if chosen == "groq":
+        if chosen == "auto":
+            # Auto-Fast cascade: Groq -> OpenRouter Free -> Gemini -> Fallback
+            res = await self._parse_text_groq(text, current_date)
+            if res is not None:
+                logger.info("Successfully parsed tasks via Groq (Fast)")
+                return res
+
+            if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
+                res = await self._parse_text_openrouter(text, current_date)
+                if res is not None:
+                    logger.info("Successfully parsed tasks via OpenRouter Free")
+                    return res
+
+            res = await self._parse_text_gemini(text, current_date)
+            if res is not None:
+                logger.info("Successfully parsed tasks via Gemini Flash fallback")
+                return res
+
+        elif chosen == "groq":
             res = await self._parse_text_groq(text, current_date)
             if res is not None:
                 return res
-            # Try Gemini fallback if Groq failed
-            if self._get_gemini_client():
-                res = await self._parse_text_gemini(text, current_date)
+            # Cascade fallbacks
+            if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
+                res = await self._parse_text_openrouter(text, current_date)
                 if res is not None:
                     return res
-        else:
             res = await self._parse_text_gemini(text, current_date)
             if res is not None:
                 return res
-            # Try Groq fallback if Gemini failed
-            if self._get_groq_client():
-                res = await self._parse_text_groq(text, current_date)
+
+        elif chosen == "openrouter":
+            res = await self._parse_text_openrouter(text, current_date)
+            if res is not None:
+                return res
+            res = await self._parse_text_groq(text, current_date)
+            if res is not None:
+                return res
+            res = await self._parse_text_gemini(text, current_date)
+            if res is not None:
+                return res
+
+        elif chosen == "gemini":
+            res = await self._parse_text_gemini(text, current_date)
+            if res is not None:
+                return res
+            res = await self._parse_text_groq(text, current_date)
+            if res is not None:
+                return res
+            if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
+                res = await self._parse_text_openrouter(text, current_date)
                 if res is not None:
                     return res
 
@@ -201,19 +316,15 @@ class AIService:
         if not client:
             return None
 
-        prompt = (
-            SYSTEM_PROMPT.format(current_date=current_date.isoformat())
-            + f"\n\nТекст сообщения пользователя:\n{text}"
-        )
-
+        # Ultrafast models on Groq: 20B first (~200ms), then Qwen 27B and 120B
         for model_name in [
-            "openai/gpt-oss-120b",
             "openai/gpt-oss-20b",
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
+            "qwen/qwen3.8-27b",
+            "openai/gpt-oss-120b",
         ]:
             try:
-                response = await client.chat.completions.create(
+                # Wrap with 6.0 second timeout to ensure snappy response
+                coro = client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {
@@ -228,42 +339,71 @@ class AIService:
                     response_format={"type": "json_object"},
                     temperature=0.1,
                 )
+                response = await asyncio.wait_for(coro, timeout=6.0)
                 raw = response.choices[0].message.content
-                if raw:
-                    parsed_dict = json.loads(raw)
-                    raw_tasks = []
-                    if isinstance(parsed_dict, dict) and "tasks" in parsed_dict:
-                        raw_tasks = parsed_dict["tasks"]
-                    elif isinstance(parsed_dict, list):
-                        raw_tasks = parsed_dict
-                    elif isinstance(parsed_dict, dict) and "title" in parsed_dict:
-                        raw_tasks = [parsed_dict]
-
-                    normalized_tasks = []
-                    for t in raw_tasks:
-                        if isinstance(t, str):
-                            title = t.strip()
-                            if title:
-                                normalized_tasks.append(ExtractedTask(category="one_time", title=title))
-                        elif isinstance(t, dict):
-                            cat = t.get("category", "one_time")
-                            if cat not in ["routine", "one_time", "goal", "subtask"]:
-                                cat = "one_time"
-                            title = t.get("title") or t.get("name") or "Новая задача"
-                            normalized_tasks.append(
-                                ExtractedTask(
-                                    category=cat,
-                                    title=title,
-                                    scheduled_date=t.get("scheduled_date"),
-                                    description=t.get("description"),
-                                    goal_title=t.get("goal_title"),
-                                    target_date=t.get("target_date"),
-                                )
-                            )
-                    if normalized_tasks:
-                        return ExtractedTaskList(tasks=normalized_tasks)
+                parsed = _parse_json_tasks(raw)
+                if parsed:
+                    return parsed
             except Exception as e:
                 logger.warning(f"Groq text model {model_name} failed: {e}")
+                continue
+        return None
+
+    async def _parse_text_openrouter(self, text: str, current_date: date) -> Optional[ExtractedTaskList]:
+        api_key = settings.OPENROUTER_API_KEY.strip() if settings.OPENROUTER_API_KEY else ""
+        if not api_key:
+            return None
+
+        client = self._get_http_client()
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://taskerbot.local",
+            "X-Title": "TaskerBot",
+            "Content-Type": "application/json",
+        }
+
+        # Free lightweight models on OpenRouter
+        free_models = [
+            "openrouter/free",
+            "google/gemma-4-26b-a4b-it:free",
+            "liquid/lfm-2.5-2.6b:free",
+            "nvidia/nemotron-3.5-lightning:free",
+        ]
+
+        system_msg = (
+            SYSTEM_PROMPT.format(current_date=current_date.isoformat())
+            + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
+        )
+
+        for model_name in free_models:
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": f"Текст сообщения пользователя:\n{text}"},
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.1,
+            }
+            try:
+                resp = await client.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=6.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    choices = data.get("choices", [])
+                    if choices and "message" in choices[0]:
+                        content = choices[0]["message"].get("content", "")
+                        parsed = _parse_json_tasks(content)
+                        if parsed:
+                            return parsed
+                else:
+                    logger.warning(f"OpenRouter model {model_name} HTTP {resp.status_code}: {resp.text[:150]}")
+            except Exception as e:
+                logger.warning(f"OpenRouter model {model_name} failed: {e}")
                 continue
         return None
 
@@ -279,23 +419,30 @@ class AIService:
 
         from google.genai import types
 
+        # Official supported active models per documentation
         for model_name in [
             "gemini-3.8-flash",
             "gemini-3.5-flash-lite",
+            "gemini-3.7-flash",
             "gemini-3.6-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-2.5-flash",
+            "gemini-3-flash-preview",
         ]:
             try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=ExtractedTaskList,
-                        temperature=0.2,
-                    ),
-                )
+                # Run synchronous call in thread pool with 7.0s timeout
+                def _call():
+                    return client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=ExtractedTaskList,
+                            temperature=0.2,
+                        ),
+                    )
+
+                response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=7.0)
+                if response.parsed and isinstance(response.parsed, ExtractedTaskList) and response.parsed.tasks:
+                    return response.parsed
                 if response.text:
                     cleaned = response.text.strip()
                     if cleaned.startswith("```"):
@@ -315,7 +462,7 @@ class AIService:
         filename: Optional[str] = None,
     ) -> ExtractedTaskList:
         chosen = self.resolve_provider(provider)
-        logger.info(f"Parsing audio voice with provider: {chosen}")
+        logger.info(f"Parsing audio voice with provider setting: {chosen}")
 
         mime_type, detected_fn = detect_audio_mime_and_filename(audio_bytes)
         fn = filename or detected_fn
@@ -340,11 +487,7 @@ class AIService:
             if transcription and str(transcription).strip():
                 text = str(transcription).strip()
                 logger.info(f"Audio transcribed successfully via Whisper: {text[:100]}")
-                # Parse with Gemini (preferred for structured parsing) or fallback to Groq
-                if self._get_gemini_client():
-                    res = await self._parse_text_gemini(text, current_date)
-                    if res and res.tasks:
-                        return res
+                # Parse through Auto-Fast cascade (Groq 8B -> OpenRouter -> Gemini)
                 res = await self.parse_text_tasks(text, current_date, provider=chosen)
                 if res and res.tasks:
                     return res
@@ -382,21 +525,26 @@ class AIService:
         for model_name in [
             "gemini-3.8-flash",
             "gemini-3.5-flash-lite",
+            "gemini-3.7-flash",
             "gemini-3.6-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-2.5-flash",
+            "gemini-3-flash-preview",
         ]:
             try:
-                audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=[audio_part, prompt],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=ExtractedTaskList,
-                        temperature=0.2,
-                    ),
-                )
+                def _call():
+                    audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)
+                    return client.models.generate_content(
+                        model=model_name,
+                        contents=[audio_part, prompt],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=ExtractedTaskList,
+                            temperature=0.2,
+                        ),
+                    )
+
+                response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=10.0)
+                if response.parsed and isinstance(response.parsed, ExtractedTaskList) and response.parsed.tasks:
+                    return response.parsed
                 if response.text:
                     cleaned = response.text.strip()
                     if cleaned.startswith("```"):

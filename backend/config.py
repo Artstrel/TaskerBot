@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     BOT_TOKEN: str = ""
     GEMINI_API_KEY: str = ""
     GROQ_API_KEY: str = ""
-    DEFAULT_AI_PROVIDER: str = "groq"
+    OPENROUTER_API_KEY: str = ""
+    DEFAULT_AI_PROVIDER: str = "auto"
     DATABASE_URL: str = f"sqlite+aiosqlite:///{DATA_DIR}/taskerbot.db"
     WEBAPP_URL: str = ""  # If running behind https domain/tunnel, e.g. https://xyz.ngrok-free.app
     HOST: str = "0.0.0.0"

@@ -22,10 +22,19 @@ import {
   createTask,
   createGoal,
   hapticFeedback,
+  setCachedDashboard,
+  setCachedGoals,
+  addPendingMutation,
+  removePendingMutation,
 } from '../api';
 import Mascot from './Mascot';
 
-export default function QuickAddModal({ onClose, onTaskCreated }) {
+export default function QuickAddModal({
+  onClose,
+  onTaskCreated,
+  setDashboardData,
+  setGoalsData,
+}) {
   const [inputText, setInputText] = useState('');
   const [category, setCategory] = useState('one_time'); // 'one_time' | 'routine' | 'goal'
   const [dueDateOption, setDueDateOption] = useState('today'); // 'today' | 'tomorrow' | 'none'
@@ -44,7 +53,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
 
   // AI Providers state
   const [providers, setProviders] = useState([]);
-  const [selectedProvider, setSelectedProvider] = useState('groq');
+  const [selectedProvider, setSelectedProvider] = useState('auto');
 
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -58,7 +67,7 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
       const data = await fetchAIProviders();
       if (data && data.providers) {
         setProviders(data.providers);
-        setSelectedProvider(data.active_provider || 'groq');
+        setSelectedProvider(data.active_provider || 'auto');
       }
     } catch (e) {
       console.warn('Could not load AI providers:', e);
@@ -293,37 +302,147 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
   };
 
   // Direct Create (Zero AI latency)
-  const handleDirectCreate = async (e) => {
+  const handleDirectCreate = (e) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || isProcessing) return;
+    const title = inputText.trim();
+    if (!title) return;
 
-    setIsProcessing(true);
-    setErrorMsg('');
-    try {
-      if (category === 'routine') {
-        await createRoutine({
-          title: inputText.trim(),
-        });
-      } else if (category === 'goal') {
-        await createGoal({
-          title: inputText.trim(),
-          target_date: getSelectedDate(),
-        });
-      } else {
-        await createTask({
-          title: inputText.trim(),
-          scheduled_date: getSelectedDate(),
-          priority: priority === 'high' ? 1 : 0,
+    const tempId = `temp_${Date.now()}`;
+    const selectedDate = getSelectedDate();
+    const prioInt = priority === 'high' ? 1 : 0;
+    const mutationId = `create_${category}_${tempId}`;
+
+    hapticFeedback('success');
+    onClose();
+
+    if (category === 'routine') {
+      if (setDashboardData) {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          const optRoutine = {
+            id: tempId,
+            title,
+            is_completed_today: false,
+            current_streak: 0,
+            best_streak: 0,
+            is_optimistic: true,
+          };
+          const updated = {
+            ...prev,
+            routine_tasks: [...(prev.routine_tasks || []), optRoutine],
+            total_count: (prev.total_count || 0) + 1,
+          };
+          setCachedDashboard(updated);
+          return updated;
         });
       }
-      hapticFeedback('success');
-      onTaskCreated();
-      onClose();
-    } catch (err) {
-      console.error('Failed to create task directly:', err);
-      setErrorMsg('Не удалось сохранить задачу.');
-    } finally {
-      setIsProcessing(false);
+
+      addPendingMutation({ id: mutationId, type: 'create_routine', tempId, title, timestamp: Date.now() });
+
+      createRoutine({ title })
+        .then((realRoutine) => {
+          removePendingMutation(mutationId);
+          if (setDashboardData && realRoutine) {
+            setDashboardData((prev) => {
+              if (!prev) return prev;
+              const updated = {
+                ...prev,
+                routine_tasks: (prev.routine_tasks || []).map((r) =>
+                  r.id === tempId ? { ...realRoutine, is_optimistic: false } : r
+                ),
+              };
+              setCachedDashboard(updated);
+              return updated;
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to create routine on server:', err);
+          removePendingMutation(mutationId);
+        });
+    } else if (category === 'goal') {
+      if (setGoalsData) {
+        setGoalsData((prev) => {
+          const optGoal = {
+            id: tempId,
+            title,
+            target_date: selectedDate,
+            progress: 0,
+            subtasks: [],
+            is_optimistic: true,
+          };
+          const updated = [optGoal, ...(prev || [])];
+          setCachedGoals(updated);
+          return updated;
+        });
+      }
+
+      addPendingMutation({ id: mutationId, type: 'create_goal', tempId, title, timestamp: Date.now() });
+
+      createGoal({ title, target_date: selectedDate })
+        .then((realGoal) => {
+          removePendingMutation(mutationId);
+          if (setGoalsData && realGoal) {
+            setGoalsData((prev) => {
+              const updated = (prev || []).map((g) =>
+                g.id === tempId ? { ...realGoal, is_optimistic: false } : g
+              );
+              setCachedGoals(updated);
+              return updated;
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to create goal on server:', err);
+          removePendingMutation(mutationId);
+        });
+    } else {
+      if (setDashboardData) {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          const optTask = {
+            id: tempId,
+            title,
+            category: 'one_time',
+            priority: prioInt,
+            is_completed: false,
+            scheduled_date: selectedDate,
+            created_at: new Date().toISOString(),
+            is_optimistic: true,
+          };
+          const updated = {
+            ...prev,
+            today_tasks: [optTask, ...(prev.today_tasks || [])],
+            total_count: (prev.total_count || 0) + 1,
+          };
+          setCachedDashboard(updated);
+          return updated;
+        });
+      }
+
+      addPendingMutation({ id: mutationId, type: 'create_task', tempId, title, timestamp: Date.now() });
+
+      createTask({ title, scheduled_date: selectedDate, priority: prioInt })
+        .then((realTask) => {
+          removePendingMutation(mutationId);
+          if (setDashboardData && realTask) {
+            setDashboardData((prev) => {
+              if (!prev) return prev;
+              const updated = {
+                ...prev,
+                today_tasks: (prev.today_tasks || []).map((t) =>
+                  t.id === tempId ? { ...realTask, is_optimistic: false } : t
+                ),
+              };
+              setCachedDashboard(updated);
+              return updated;
+            });
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to create task on server:', err);
+          removePendingMutation(mutationId);
+        });
     }
   };
 
@@ -352,51 +471,145 @@ export default function QuickAddModal({ onClose, onTaskCreated }) {
   };
 
   // Review Screen: Save selected extracted tasks
-  const handleSaveExtracted = async () => {
+  const handleSaveExtracted = () => {
     const selected = (extractedTasks || []).filter((t) => t.selected);
     if (selected.length === 0) {
       setErrorMsg('Выберите хотя бы одну задачу.');
       return;
     }
 
-    setIsProcessing(true);
-    setErrorMsg('');
-    try {
-      for (const t of selected) {
-        const cleanTitle = (t.title || '').trim();
-        if (!cleanTitle) continue;
+    // Instantly close modal and give feedback
+    hapticFeedback('success');
+    onClose();
 
-        if (t.category === 'routine') {
-          await createRoutine({
-            title: cleanTitle,
-            description: t.description || null,
-          });
-        } else if (t.category === 'goal') {
-          await createGoal({
-            title: cleanTitle,
-            description: t.description || null,
-            target_date: t.target_date || null,
-          });
-        } else {
-          // Normalize priority to int 0 or 1
-          const prioInt =
-            t.priority === 'high' || t.priority === 1 || t.priority === '1' ? 1 : 0;
-          await createTask({
-            title: cleanTitle,
-            scheduled_date: t.scheduled_date || null,
-            priority: prioInt,
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Optimistically insert items into React state and local storage cache
+    selected.forEach((t, i) => {
+      const cleanTitle = (t.title || '').trim();
+      if (!cleanTitle) return;
+
+      const tempId = `temp_ai_${Date.now()}_${i}`;
+      const mutationId = `create_ai_${tempId}`;
+
+      if (t.category === 'routine') {
+        if (setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const optRoutine = {
+              id: tempId,
+              title: cleanTitle,
+              is_completed_today: false,
+              current_streak: 0,
+              best_streak: 0,
+              is_optimistic: true,
+            };
+            const updated = {
+              ...prev,
+              routine_tasks: [...(prev.routine_tasks || []), optRoutine],
+              total_count: (prev.total_count || 0) + 1,
+            };
+            setCachedDashboard(updated);
+            return updated;
           });
         }
+        addPendingMutation({ id: mutationId, type: 'create_routine', tempId, title: cleanTitle, timestamp: Date.now() });
+        createRoutine({ title: cleanTitle, description: t.description || null })
+          .then((real) => {
+            removePendingMutation(mutationId);
+            if (setDashboardData && real) {
+              setDashboardData((prev) => {
+                if (!prev) return prev;
+                const updated = {
+                  ...prev,
+                  routine_tasks: (prev.routine_tasks || []).map((r) =>
+                    r.id === tempId ? { ...real, is_optimistic: false } : r
+                  ),
+                };
+                setCachedDashboard(updated);
+                return updated;
+              });
+            }
+          })
+          .catch(() => removePendingMutation(mutationId));
+      } else if (t.category === 'goal') {
+        if (setGoalsData) {
+          setGoalsData((prev) => {
+            const optGoal = {
+              id: tempId,
+              title: cleanTitle,
+              description: t.description || null,
+              target_date: t.target_date || null,
+              progress: 0,
+              subtasks: [],
+              is_optimistic: true,
+            };
+            const updated = [optGoal, ...(prev || [])];
+            setCachedGoals(updated);
+            return updated;
+          });
+        }
+        addPendingMutation({ id: mutationId, type: 'create_goal', tempId, title: cleanTitle, timestamp: Date.now() });
+        createGoal({ title: cleanTitle, description: t.description || null, target_date: t.target_date || null })
+          .then((real) => {
+            removePendingMutation(mutationId);
+            if (setGoalsData && real) {
+              setGoalsData((prev) => {
+                const updated = (prev || []).map((g) =>
+                  g.id === tempId ? { ...real, is_optimistic: false } : g
+                );
+                setCachedGoals(updated);
+                return updated;
+              });
+            }
+          })
+          .catch(() => removePendingMutation(mutationId));
+      } else {
+        const prioInt = t.priority === 'high' || t.priority === 1 || t.priority === '1' ? 1 : 0;
+        const sched = t.scheduled_date || todayStr;
+        if (setDashboardData) {
+          setDashboardData((prev) => {
+            if (!prev) return prev;
+            const optTask = {
+              id: tempId,
+              title: cleanTitle,
+              category: 'one_time',
+              priority: prioInt,
+              is_completed: false,
+              scheduled_date: sched,
+              created_at: new Date().toISOString(),
+              is_optimistic: true,
+            };
+            const updated = {
+              ...prev,
+              today_tasks: [optTask, ...(prev.today_tasks || [])],
+              total_count: (prev.total_count || 0) + 1,
+            };
+            setCachedDashboard(updated);
+            return updated;
+          });
+        }
+        addPendingMutation({ id: mutationId, type: 'create_task', tempId, title: cleanTitle, timestamp: Date.now() });
+        createTask({ title: cleanTitle, scheduled_date: sched, priority: prioInt })
+          .then((real) => {
+            removePendingMutation(mutationId);
+            if (setDashboardData && real) {
+              setDashboardData((prev) => {
+                if (!prev) return prev;
+                const updated = {
+                  ...prev,
+                  today_tasks: (prev.today_tasks || []).map((tk) =>
+                    tk.id === tempId ? { ...real, is_optimistic: false } : tk
+                  ),
+                };
+                setCachedDashboard(updated);
+                return updated;
+              });
+            }
+          })
+          .catch(() => removePendingMutation(mutationId));
       }
-      hapticFeedback('success');
-      onTaskCreated();
-      onClose();
-    } catch (err) {
-      console.error('Failed to save extracted tasks:', err);
-      setErrorMsg('Ошибка сохранения распознанных задач.');
-    } finally {
-      setIsProcessing(false);
-    }
+    });
   };
 
   const formatTimer = (s) => {

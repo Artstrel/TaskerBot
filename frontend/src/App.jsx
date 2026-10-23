@@ -209,6 +209,7 @@ export default function App() {
         {activeTab === 'today' && (
           <TodayTab
             dashboardData={dashboardData}
+            setDashboardData={setDashboardData}
             onRefresh={() => loadData(false)}
             onTaskCompleted={handleTaskCelebration}
             warmupTimerElapsed={warmupTimerElapsed}
@@ -217,6 +218,9 @@ export default function App() {
         {activeTab === 'goals' && (
           <GoalsTab
             goalsData={goalsData}
+            setGoalsData={setGoalsData}
+            dashboardData={dashboardData}
+            setDashboardData={setDashboardData}
             onRefresh={loadData}
           />
         )}
@@ -277,6 +281,8 @@ export default function App() {
         <QuickAddModal
           onClose={() => setIsQuickAddOpen(false)}
           onTaskCreated={loadData}
+          setDashboardData={setDashboardData}
+          setGoalsData={setGoalsData}
         />
       )}
       </div>

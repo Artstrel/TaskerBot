@@ -16,6 +16,8 @@ import {
   setGeminiKey,
   getGroqKey,
   setGroqKey,
+  getOpenRouterKey,
+  setOpenRouterKey,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -26,6 +28,7 @@ export default function SettingsTab({ onRefresh }) {
   const [backendInput, setBackendInput] = useState(getCustomBackendUrl());
   const [geminiKeyInput, setGeminiKeyInput] = useState(getGeminiKey());
   const [groqKeyInput, setGroqKeyInput] = useState(getGroqKey());
+  const [openRouterKeyInput, setOpenRouterKeyInput] = useState(getOpenRouterKey());
 
   const loadSettings = useCallback(async () => {
     try {
@@ -66,6 +69,7 @@ export default function SettingsTab({ onRefresh }) {
     hapticFeedback('medium');
     setGeminiKey(geminiKeyInput);
     setGroqKey(groqKeyInput);
+    setOpenRouterKey(openRouterKeyInput);
     triggerSaved();
     if (onRefresh) onRefresh();
   };
@@ -348,19 +352,31 @@ export default function SettingsTab({ onRefresh }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {[
             {
-              id: 'gemini',
-              name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)',
+              id: 'auto',
+              name: 'Auto-Fast Cascade (Groq + OpenRouter + Gemini)',
               badge: 'Рекомендуется',
-              desc: 'Флагманские мультимодальные модели Google: точный разбор голоса и текста, декомпозиция дат и привычек.',
+              desc: 'Сверхбыстрый интеллектуальный каскад: сначала Groq (~0.2с) и бесплатные модели OpenRouter, при сбое — Google Gemini.',
             },
             {
               id: 'groq',
-              name: 'Groq (Whisper + Gemini)',
-              badge: 'Молниеносно ~0.3с',
-              desc: 'Молниеносная транскрипция аудио через Whisper + интеллектуальный разбор задач через Gemini.',
+              name: 'Groq LPU (Llama & Whisper)',
+              badge: 'Молниеносно ~0.2с',
+              desc: 'Молниеносная генерация и транскрипция аудио на специализированных чипах Groq LPU.',
+            },
+            {
+              id: 'openrouter',
+              name: 'OpenRouter Free Models',
+              badge: 'Бесплатные модели',
+              desc: 'Легковесные модели (Gemma 4, Liquid 2.6B, Nemotron) через единый API OpenRouter.',
+            },
+            {
+              id: 'gemini',
+              name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)',
+              badge: 'Мультимодальный',
+              desc: 'Официальные модели Google: точный разбор голоса и сложных задач, декомпозиция дат.',
             },
           ].map((prov) => {
-            const isSelected = (settings.ai_provider || 'gemini') === prov.id;
+            const isSelected = (settings.ai_provider || 'auto') === prov.id;
             return (
               <div
                 key={prov.id}
@@ -423,10 +439,34 @@ export default function SettingsTab({ onRefresh }) {
       </div>
       <div className="settings-group" style={{ padding: '14px 16px' }}>
         <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
-          Позволяют нейросети (Google Gemini или Groq) расшифровывать голос и разделять его на несколько задач прямо в браузере без запуска бэкенда. Ключи сохраняются локально в вашем браузере.
+          Позволяют нейросети расшифровывать голос и задачи прямо в браузере без запуска бэкенда. Ключи сохраняются локально в вашем браузере.
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Key size={12} /> OpenRouter API Key (Бесплатные модели)
+            </div>
+            <input
+              type="password"
+              placeholder="Вставьте ваш OpenRouter API Key (sk-or-v1-...)"
+              value={openRouterKeyInput}
+              onChange={(e) => setOpenRouterKeyInput(e.target.value)}
+              style={{
+                width: '100%',
+                fontSize: '12px',
+                padding: '8px 10px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                fontFamily: 'monospace',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
           <div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Key size={12} /> Google Gemini API Key
