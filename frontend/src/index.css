@@ -45,8 +45,45 @@
   --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.35);
   --shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.8);
 
+  /* Telegram Safe Areas & Adaptive Insets */
+  --safe-top: max(
+    var(--tg-content-safe-area-inset-top, 0px),
+    var(--tg-safe-area-inset-top, 0px),
+    var(--tg-safe-top, 0px),
+    env(safe-area-inset-top, 0px)
+  );
+  --safe-bottom: max(
+    var(--tg-content-safe-area-inset-bottom, 0px),
+    var(--tg-safe-area-inset-bottom, 0px),
+    var(--tg-safe-bottom, 0px),
+    env(safe-area-inset-bottom, 0px)
+  );
+  --safe-left: max(
+    var(--tg-content-safe-area-inset-left, 0px),
+    var(--tg-safe-area-inset-left, 0px),
+    var(--tg-safe-left, 0px),
+    env(safe-area-inset-left, 0px)
+  );
+  --safe-right: max(
+    var(--tg-content-safe-area-inset-right, 0px),
+    var(--tg-safe-area-inset-right, 0px),
+    var(--tg-safe-right, 0px),
+    env(safe-area-inset-right, 0px)
+  );
+
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
+}
+
+body.is-tg-fullscreen,
+html.is-tg-fullscreen {
+  --safe-top: max(
+    var(--tg-content-safe-area-inset-top, 0px),
+    var(--tg-safe-area-inset-top, 0px),
+    var(--tg-safe-top, 0px),
+    env(safe-area-inset-top, 0px),
+    50px
+  );
 }
 
 * {
@@ -74,17 +111,52 @@ h1, h2, h3, h4, .brand-font {
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 4px;
 }
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
 
-/* Main Layout Container */
+/* Responsive App Shell & Main Layout */
+.app-shell {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background-color: var(--bg-app);
+  position: relative;
+}
+
+.app-main-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+  padding-bottom: calc(116px + var(--safe-bottom));
+}
+
+.main-content-viewport {
+  flex: 1;
+  width: 100%;
+}
+
+.main-content-container {
+  width: 100%;
+}
+
+/* Legacy container fallback */
 .app-container {
   max-width: 540px;
   margin: 0 auto;
@@ -93,22 +165,28 @@ h1, h2, h3, h4, .brand-font {
   display: flex;
   flex-direction: column;
   position: relative;
-  padding-bottom: calc(116px + env(safe-area-inset-bottom, 0px)); /* space for bottom dock & raised FAB */
+  padding-bottom: calc(116px + var(--safe-bottom));
 }
 
-/* Minimalist App Header */
+/* Minimalist App Header with Dynamic Telegram Safe Areas */
 .app-header {
   position: sticky;
   top: 0;
   z-index: 40;
-  background-color: rgba(13, 13, 13, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background-color: rgba(13, 13, 13, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-subtle);
-  padding: 12px 18px;
+  padding: calc(12px + var(--safe-top)) calc(18px + var(--safe-right)) 12px calc(18px + var(--safe-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition: padding 0.2s ease;
+}
+
+body.is-tg-fullscreen .app-header {
+  padding-left: max(calc(18px + var(--safe-left)), 56px);
+  padding-right: max(calc(18px + var(--safe-right)), 56px);
 }
 
 .header-companion-group {
@@ -189,7 +267,7 @@ h1, h2, h3, h4, .brand-font {
 .app-fab {
   position: fixed;
   right: 20px;
-  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(96px + var(--safe-bottom));
   z-index: 45;
   width: 52px;
   height: 52px;
@@ -216,12 +294,6 @@ h1, h2, h3, h4, .brand-font {
   transform: scale(0.92);
 }
 
-@media (min-width: 560px) {
-  .app-fab {
-    right: calc(50% - 270px + 20px);
-  }
-}
-
 /* Bottom Navigation Dock */
 .bottom-dock {
   position: fixed;
@@ -231,7 +303,7 @@ h1, h2, h3, h4, .brand-font {
   z-index: 50;
   display: flex;
   justify-content: center;
-  padding: 0 16px calc(14px + env(safe-area-inset-bottom, 0px)) 16px;
+  padding: 0 16px calc(14px + var(--safe-bottom)) 16px;
   pointer-events: none;
 }
 
@@ -1329,4 +1401,431 @@ h1, h2, h3, h4, .brand-font {
 .quickadd-num-input:focus {
   border-color: var(--border-focus);
 }
+
+/* ==========================================================================
+   Responsive Desktop Navigation, Layout Grid & Media Queries
+   ========================================================================== */
+
+/* Mobile Default Visibility */
+@media (max-width: 767px) {
+  .desktop-sidebar {
+    display: none !important;
+  }
+  .desktop-only-item {
+    display: none !important;
+  }
+  .mobile-only-item {
+    display: flex;
+  }
+  .mobile-only-fab {
+    display: flex;
+  }
+  .mobile-only-dock {
+    display: flex;
+  }
+  .app-main-wrapper {
+    max-width: 560px;
+  }
+}
+
+/* Desktop Sidebar Styles (>= 768px) */
+.desktop-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 260px;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: #111111;
+  border-right: 1px solid var(--border-subtle);
+  padding: 20px 16px;
+  overflow-y: auto;
+  z-index: 35;
+}
+
+.sidebar-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 18px 4px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
+}
+
+.sidebar-mascot-box {
+  padding: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s;
+}
+
+.sidebar-mascot-box:hover {
+  transform: scale(1.05);
+  border-color: var(--border-hover);
+}
+
+.sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-brand-title {
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.sidebar-brand-user {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}
+
+.sidebar-quick-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition: all 0.15s ease;
+}
+
+.sidebar-quick-add-btn:hover {
+  background: #f4f4f5;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.sidebar-quick-add-btn:active {
+  transform: scale(0.98);
+}
+
+.sidebar-kbd-hint {
+  margin-left: auto;
+  font-family: monospace;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.1);
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  text-align: left;
+}
+
+.sidebar-nav-item:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+}
+
+.sidebar-nav-item.active {
+  background: var(--bg-surface);
+  color: #ffffff;
+  border-color: var(--border-subtle);
+  font-weight: 600;
+}
+
+.sidebar-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: #ffffff;
+}
+
+.sidebar-footer {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-date-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.sidebar-sync-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-status-ok {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sidebar-status-ok::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+/* ==========================================================================
+   Tab Responsive Grids
+   ========================================================================== */
+
+/* TodayTab Layout */
+.today-desktop-grid {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.today-col-left,
+.today-col-right {
+  display: contents;
+}
+
+.day-status-card {
+  order: 1;
+}
+
+.today-quick-add-wrap {
+  order: 2;
+  margin: 0 16px 14px 16px;
+}
+
+.today-tab-container .empty-state-mascot-card {
+  order: 3;
+}
+
+.today-overdue-section {
+  order: 4;
+}
+
+.today-routines-section {
+  order: 5;
+}
+
+.today-tasks-section {
+  order: 6;
+}
+
+/* GroceriesTab Layout */
+.groceries-desktop-grid {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* GoalsTab Layout */
+.goals-grid-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* SettingsTab Layout */
+.settings-desktop-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   Desktop Responsive Breakpoints (>= 768px and >= 1100px)
+   ========================================================================== */
+
+@media (min-width: 768px) {
+  .mobile-only-item,
+  .mobile-only-fab,
+  .mobile-only-dock {
+    display: none !important;
+  }
+  .desktop-only-item {
+    display: inline-flex;
+  }
+
+  .app-shell {
+    flex-direction: row;
+    min-height: 100vh;
+  }
+
+  .desktop-sidebar {
+    display: flex;
+  }
+
+  .app-main-wrapper {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    padding-bottom: 48px;
+  }
+
+  .app-header {
+    padding: 16px 36px;
+  }
+
+  .main-content-container {
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px 36px 64px 36px;
+  }
+
+  /* TodayTab 2-Column Grid on Desktop */
+  .today-desktop-grid {
+    display: grid;
+    grid-template-columns: 360px 1fr;
+    gap: 28px;
+    align-items: start;
+  }
+
+  .today-col-left {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+    position: sticky;
+    top: 76px;
+  }
+
+  .today-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+
+  .today-quick-add-wrap {
+    margin: 0;
+  }
+
+  .today-desktop-grid .linear-section {
+    margin: 0;
+  }
+
+  .today-desktop-grid .day-status-card {
+    margin: 0;
+  }
+
+  /* GroceriesTab 2-Column Grid on Desktop */
+  .groceries-desktop-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .groceries-desktop-grid .linear-section {
+    margin: 0;
+  }
+
+  /* GoalsTab Multi-Column Grid on Desktop */
+  .goals-grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+
+  /* SettingsTab Multi-Column Grid on Desktop */
+  .settings-desktop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+
+  .settings-desktop-grid .settings-group {
+    margin-bottom: 0 !important;
+  }
+
+  /* QuickAddModal Desktop Centered Dialog */
+  .sheet-backdrop {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .bottom-sheet-content {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    max-width: 600px;
+    max-height: 85vh;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .sheet-handle-bar {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .today-desktop-grid {
+    grid-template-columns: 390px 1fr;
+    gap: 32px;
+  }
+
+  .main-content-container {
+    padding: 28px 44px 64px 44px;
+  }
+}
+
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
 

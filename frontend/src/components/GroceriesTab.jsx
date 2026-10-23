@@ -557,6 +557,7 @@ export default function GroceriesTab({
         </div>
       )}
 
+      <div className="groceries-desktop-grid">
       {/* SECTION 1: Active Grocery Items (Нужно купить) */}
       {activeItems.length > 0 && (
         <section className="linear-section">
@@ -726,6 +727,7 @@ export default function GroceriesTab({
           )}
         </section>
       )}
+      </div>
     </div>
   );
 }

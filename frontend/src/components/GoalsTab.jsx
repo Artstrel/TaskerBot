@@ -548,7 +548,7 @@ export default function GoalsTab({
           </div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="goals-grid-container">
           {goalsData.map((goal) => {
             const isExpanded = expandedGoalId === goal.id;
             const deadlineText = goal.target_date

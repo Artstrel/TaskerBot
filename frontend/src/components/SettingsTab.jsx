@@ -185,7 +185,7 @@ export default function SettingsTab({ onRefresh }) {
         </div>
       </div>
 
-      {/* SECTION: Backend Server / Demo Mode */}
+      <div className="settings-desktop-grid">
       <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px' }}>
         Сервер бэкенда (API)
       </div>
@@ -530,6 +530,7 @@ export default function SettingsTab({ onRefresh }) {
             Сохранить ключи API
           </button>
         </div>
+      </div>
       </div>
     </div>
   );

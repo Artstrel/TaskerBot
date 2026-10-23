@@ -89,9 +89,40 @@ export default function App() {
       tg.expand();
       try {
         tg.enableClosingConfirmation();
-      } catch (e) {
+      } catch (_) {
         // Not all clients support
       }
+
+      const updateTelegramMetrics = () => {
+        try {
+          const isFullscreen = Boolean(tg.isFullscreen);
+          if (isFullscreen) {
+            document.documentElement.classList.add('is-tg-fullscreen');
+            document.body.classList.add('is-tg-fullscreen');
+          } else {
+            document.documentElement.classList.remove('is-tg-fullscreen');
+            document.body.classList.remove('is-tg-fullscreen');
+          }
+
+          const safeTop = tg.contentSafeAreaInset?.top ?? tg.safeAreaInset?.top ?? 0;
+          const safeBottom = tg.contentSafeAreaInset?.bottom ?? tg.safeAreaInset?.bottom ?? 0;
+          const safeLeft = tg.contentSafeAreaInset?.left ?? tg.safeAreaInset?.left ?? 0;
+          const safeRight = tg.contentSafeAreaInset?.right ?? tg.safeAreaInset?.right ?? 0;
+
+          document.documentElement.style.setProperty('--tg-safe-top', `${safeTop}px`);
+          document.documentElement.style.setProperty('--tg-safe-bottom', `${safeBottom}px`);
+          document.documentElement.style.setProperty('--tg-safe-left', `${safeLeft}px`);
+          document.documentElement.style.setProperty('--tg-safe-right', `${safeRight}px`);
+        } catch (_) {}
+      };
+
+      updateTelegramMetrics();
+      try {
+        tg.onEvent('safeAreaChanged', updateTelegramMetrics);
+        tg.onEvent('contentSafeAreaChanged', updateTelegramMetrics);
+        tg.onEvent('fullscreenChanged', updateTelegramMetrics);
+        tg.onEvent('viewportChanged', updateTelegramMetrics);
+      } catch (_) {}
     }
 
     // Auto-sync timezone
@@ -100,6 +131,25 @@ export default function App() {
     // Initial background data load
     loadData();
   }, []);
+
+  // Global desktop keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['c', 'n', 'с', 'т'].includes(e.key.toLowerCase())) {
+        const target = e.target;
+        const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+        if (!isInput && !isQuickAddOpen) {
+          e.preventDefault();
+          setQuickAddOptions({
+            initialCategory: activeTab === 'groceries' ? 'grocery' : activeTab === 'goals' ? 'goal' : 'one_time',
+          });
+          setIsQuickAddOpen(true);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isQuickAddOpen, activeTab]);
 
   const loadData = async (forceFullLoading = false) => {
     if (forceFullLoading || !dashboardData) {
@@ -173,159 +223,280 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="app-container">
-      {/* Minimalist Top Sticky Header */}
-      <header className="app-header">
-        <div className="header-companion-group">
-          <div className="header-mascot-wrapper">
-            <Mascot
-              state={mascotMood}
-              size={34}
-              interactive={true}
-              onClick={() => {
-                setMascotMood((prev) => (prev === 'idle' ? 'happy' : 'idle'));
-              }}
-            />
-          </div>
-          <div className="header-titles">
-            <div className="header-title-main">
-              {currentUser.first_name || 'TaskerBot'}
+      <div className="app-shell">
+        {/* Desktop Sidebar (hidden on mobile, visible >= 768px) */}
+        <aside className="desktop-sidebar">
+          <div className="sidebar-brand-group">
+            <div className="sidebar-mascot-box">
+              <Mascot
+                state={mascotMood}
+                size={38}
+                interactive={true}
+                onClick={() => {
+                  setMascotMood((prev) => (prev === 'idle' ? 'happy' : 'idle'));
+                }}
+              />
             </div>
-            <div className="header-subtitle">
-              {todayFormatted}
-              {activeTab === 'groceries'
-                ? ' • Список продуктов'
-                : activeTab === 'goals'
-                ? ' • Проекты & Цели'
-                : activeTab === 'settings'
-                ? ' • Параметры'
-                : ''}
+            <div className="sidebar-brand-text">
+              <div className="sidebar-brand-title">TaskerBot</div>
+              <div className="sidebar-brand-user">
+                {currentUser.first_name || 'Личный помощник'}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="header-actions">
-          {isSyncing && (
-            <span className="sync-badge" title="Синхронизация с сервером...">
-              <span className="sync-dot" />
-              Синхронизация
-            </span>
-          )}
+          {/* Sidebar Quick Action Button */}
           <button
-            className="header-icon-btn"
+            className="sidebar-quick-add-btn"
             onClick={() => {
-              hapticFeedback('light');
-              loadData(true);
-            }}
-            title="Обновить данные"
-          >
-            <RotateCw size={15} className={isSyncing ? 'spin-icon' : ''} />
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main style={{ flex: 1 }}>
-        {activeTab === 'today' && (
-          <TodayTab
-            dashboardData={dashboardData}
-            setDashboardData={setDashboardData}
-            onRefresh={() => loadData(false)}
-            onTaskCompleted={handleTaskCelebration}
-            warmupTimerElapsed={warmupTimerElapsed}
-          />
-        )}
-        {activeTab === 'groceries' && (
-          <GroceriesTab
-            groceriesData={groceriesData}
-            setGroceriesData={setGroceriesData}
-            onRefresh={loadData}
-            onOpenQuickAdd={(opts) => {
-              setQuickAddOptions(opts);
+              hapticFeedback('medium');
+              setQuickAddOptions({
+                initialCategory: activeTab === 'groceries' ? 'grocery' : activeTab === 'goals' ? 'goal' : 'one_time',
+              });
               setIsQuickAddOpen(true);
             }}
-          />
-        )}
-        {activeTab === 'goals' && (
-          <GoalsTab
-            goalsData={goalsData}
-            setGoalsData={setGoalsData}
-            dashboardData={dashboardData}
-            setDashboardData={setDashboardData}
-            onRefresh={loadData}
-            onOpenQuickAdd={(opts) => {
-              setQuickAddOptions(opts);
-              setIsQuickAddOpen(true);
-            }}
-          />
-        )}
-        {activeTab === 'settings' && (
-          <SettingsTab
-            onRefresh={loadData}
-          />
-        )}
-      </main>
-
-      {/* Floating Action Button (FAB) for Quick Add */}
-      {(activeTab === 'today' || activeTab === 'groceries' || activeTab === 'goals') && (
-        <button
-          className="app-fab"
-          onClick={() => {
-            hapticFeedback('medium');
-            setQuickAddOptions({
-              initialCategory: activeTab === 'groceries' ? 'grocery' : activeTab === 'goals' ? 'goal' : 'one_time',
-            });
-            setIsQuickAddOpen(true);
-          }}
-          title={activeTab === 'groceries' ? "Добавить продукт" : activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
-          aria-label={activeTab === 'groceries' ? "Добавить продукт" : activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
-        >
-          <Plus size={24} strokeWidth={2.4} />
-        </button>
-      )}
-
-      {/* Bottom Floating Navigation Dock */}
-      <nav className="bottom-dock">
-        <div className="dock-card">
-          <button
-            className={`dock-nav-item ${activeTab === 'today' ? 'active' : ''}`}
-            onClick={() => handleTabSwitch('today')}
+            title="Создать задачу или цель (Клавиша C или N)"
           >
-            <Calendar size={18} />
-            <span>Сегодня</span>
-            {overdueCount > 0 && <span className="dock-badge-dot" />}
+            <Plus size={18} strokeWidth={2.4} />
+            <span>Добавить</span>
+            <kbd className="sidebar-kbd-hint">C</kbd>
           </button>
 
-          <button
-            className={`dock-nav-item ${activeTab === 'groceries' ? 'active' : ''}`}
-            onClick={() => handleTabSwitch('groceries')}
-          >
-            <ShoppingCart size={18} />
-            <span>Продукты</span>
-            {unboughtGroceriesCount > 0 && (
-              <span className="dock-badge-num">
-                {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
-              </span>
-            )}
-          </button>
+          {/* Desktop Navigation Menu */}
+          <nav className="sidebar-nav">
+            <button
+              className={`sidebar-nav-item ${activeTab === 'today' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('today')}
+            >
+              <Calendar size={18} />
+              <span>Сегодня</span>
+              {overdueCount > 0 && <span className="dock-badge-dot" />}
+            </button>
 
-          <button
-            className={`dock-nav-item ${activeTab === 'goals' ? 'active' : ''}`}
-            onClick={() => handleTabSwitch('goals')}
-          >
-            <Target size={18} />
-            <span>Цели</span>
-          </button>
+            <button
+              className={`sidebar-nav-item ${activeTab === 'groceries' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('groceries')}
+            >
+              <ShoppingCart size={18} />
+              <span>Продукты</span>
+              {unboughtGroceriesCount > 0 && (
+                <span className="dock-badge-num">
+                  {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
+                </span>
+              )}
+            </button>
 
-          <button
-            className={`dock-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => handleTabSwitch('settings')}
-          >
-            <Settings size={18} />
-            <span>Настройки</span>
-          </button>
+            <button
+              className={`sidebar-nav-item ${activeTab === 'goals' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('goals')}
+            >
+              <Target size={18} />
+              <span>Цели & Проекты</span>
+            </button>
+
+            <button
+              className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => handleTabSwitch('settings')}
+            >
+              <Settings size={18} />
+              <span>Настройки</span>
+            </button>
+          </nav>
+
+          {/* Sidebar Footer */}
+          <div className="sidebar-footer">
+            <div className="sidebar-date-label">{todayFormatted}</div>
+            <div className="sidebar-sync-row">
+              {isSyncing ? (
+                <span className="sync-badge">
+                  <span className="sync-dot" />
+                  Синхронизация...
+                </span>
+              ) : (
+                <span className="sidebar-status-ok">Онлайн</span>
+              )}
+              <button
+                className="header-icon-btn"
+                onClick={() => {
+                  hapticFeedback('light');
+                  loadData(true);
+                }}
+                title="Обновить данные"
+              >
+                <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Application Area */}
+        <div className="app-main-wrapper">
+          {/* Top Sticky Header */}
+          <header className="app-header">
+            <div className="header-companion-group">
+              <div className="header-mascot-wrapper mobile-only-item">
+                <Mascot
+                  state={mascotMood}
+                  size={34}
+                  interactive={true}
+                  onClick={() => {
+                    setMascotMood((prev) => (prev === 'idle' ? 'happy' : 'idle'));
+                  }}
+                />
+              </div>
+              <div className="header-titles">
+                <div className="header-title-main">
+                  <span className="mobile-only-item">{currentUser.first_name || 'TaskerBot'}</span>
+                  <span className="desktop-only-item">
+                    {activeTab === 'today'
+                      ? 'Сегодня'
+                      : activeTab === 'groceries'
+                      ? 'Список продуктов'
+                      : activeTab === 'goals'
+                      ? 'Проекты & Цели'
+                      : 'Настройки'}
+                  </span>
+                </div>
+                <div className="header-subtitle">
+                  {todayFormatted}
+                  <span className="mobile-only-item">
+                    {activeTab === 'groceries'
+                      ? ' • Продукты'
+                      : activeTab === 'goals'
+                      ? ' • Цели'
+                      : activeTab === 'settings'
+                      ? ' • Параметры'
+                      : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="header-actions">
+              {isSyncing && (
+                <span className="sync-badge" title="Синхронизация с сервером...">
+                  <span className="sync-dot" />
+                  <span className="sync-badge-text">Синхронизация</span>
+                </span>
+              )}
+              <button
+                className="header-icon-btn"
+                onClick={() => {
+                  hapticFeedback('light');
+                  loadData(true);
+                }}
+                title="Обновить данные"
+              >
+                <RotateCw size={15} className={isSyncing ? 'spin-icon' : ''} />
+              </button>
+            </div>
+          </header>
+
+          {/* Main Content Area */}
+          <main className="main-content-viewport">
+            <div className="main-content-container">
+              {activeTab === 'today' && (
+                <TodayTab
+                  dashboardData={dashboardData}
+                  setDashboardData={setDashboardData}
+                  onRefresh={() => loadData(false)}
+                  onTaskCompleted={handleTaskCelebration}
+                  warmupTimerElapsed={warmupTimerElapsed}
+                />
+              )}
+              {activeTab === 'groceries' && (
+                <GroceriesTab
+                  groceriesData={groceriesData}
+                  setGroceriesData={setGroceriesData}
+                  onRefresh={loadData}
+                  onOpenQuickAdd={(opts) => {
+                    setQuickAddOptions(opts);
+                    setIsQuickAddOpen(true);
+                  }}
+                />
+              )}
+              {activeTab === 'goals' && (
+                <GoalsTab
+                  goalsData={goalsData}
+                  setGoalsData={setGoalsData}
+                  dashboardData={dashboardData}
+                  setDashboardData={setDashboardData}
+                  onRefresh={loadData}
+                  onOpenQuickAdd={(opts) => {
+                    setQuickAddOptions(opts);
+                    setIsQuickAddOpen(true);
+                  }}
+                />
+              )}
+              {activeTab === 'settings' && (
+                <SettingsTab
+                  onRefresh={loadData}
+                />
+              )}
+            </div>
+          </main>
+
+          {/* Floating Action Button (FAB) for Mobile Quick Add */}
+          {(activeTab === 'today' || activeTab === 'groceries' || activeTab === 'goals') && (
+            <button
+              className="app-fab mobile-only-fab"
+              onClick={() => {
+                hapticFeedback('medium');
+                setQuickAddOptions({
+                  initialCategory: activeTab === 'groceries' ? 'grocery' : activeTab === 'goals' ? 'goal' : 'one_time',
+                });
+                setIsQuickAddOpen(true);
+              }}
+              title={activeTab === 'groceries' ? "Добавить продукт" : activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
+              aria-label={activeTab === 'groceries' ? "Добавить продукт" : activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
+            >
+              <Plus size={24} strokeWidth={2.4} />
+            </button>
+          )}
+
+          {/* Bottom Floating Navigation Dock for Mobile */}
+          <nav className="bottom-dock mobile-only-dock">
+            <div className="dock-card">
+              <button
+                className={`dock-nav-item ${activeTab === 'today' ? 'active' : ''}`}
+                onClick={() => handleTabSwitch('today')}
+              >
+                <Calendar size={18} />
+                <span>Сегодня</span>
+                {overdueCount > 0 && <span className="dock-badge-dot" />}
+              </button>
+
+              <button
+                className={`dock-nav-item ${activeTab === 'groceries' ? 'active' : ''}`}
+                onClick={() => handleTabSwitch('groceries')}
+              >
+                <ShoppingCart size={18} />
+                <span>Продукты</span>
+                {unboughtGroceriesCount > 0 && (
+                  <span className="dock-badge-num">
+                    {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                className={`dock-nav-item ${activeTab === 'goals' ? 'active' : ''}`}
+                onClick={() => handleTabSwitch('goals')}
+              >
+                <Target size={18} />
+                <span>Цели</span>
+              </button>
+
+              <button
+                className={`dock-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                onClick={() => handleTabSwitch('settings')}
+              >
+                <Settings size={18} />
+                <span>Настройки</span>
+              </button>
+            </div>
+          </nav>
         </div>
-      </nav>
 
       {/* Quick Add Bottom Sheet Modal */}
       {isQuickAddOpen && (
