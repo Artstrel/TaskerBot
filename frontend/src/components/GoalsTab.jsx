@@ -370,10 +370,11 @@ export default function GoalsTab({
 
   return (
     <div className="linear-section" style={{ paddingBottom: '30px' }}>
+      <h1 className="mobile-large-title mobile-only-item" style={{ margin: '0 0 10px 0' }}>Проекты & Цели</h1>
       {/* Header bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <h2 className="desktop-only-item" style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
             Проекты & Цели
           </h2>
           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>

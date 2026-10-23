@@ -423,7 +423,9 @@ export default function GroceriesTab({
   };
 
   return (
-    <div className="tab-scroll-container">
+    <div className="tab-scroll-container groceries-tab-container">
+      <h1 className="mobile-large-title mobile-only-item">Список продуктов</h1>
+
       {/* Progress & Actions Header Card */}
       <div className="day-status-card">
         <div className="day-progress-bar-wrap">
@@ -480,7 +482,7 @@ export default function GroceriesTab({
       </div>
 
       {/* Top Quick Add Bar with Direct Voice Button */}
-      <div style={{ margin: '0 16px 14px 16px' }}>
+      <div className="groceries-quick-add-wrap">
         <form onSubmit={handleQuickSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <input
             type="text"
@@ -655,20 +657,20 @@ export default function GroceriesTab({
                 )}
 
                 {/* Right Actions */}
-                <div className="task-actions-row" style={{ marginTop: '2px' }}>
+                <div className="item-action-btns">
                   <button
-                    className="icon-action-btn"
+                    className="item-mini-btn"
                     onClick={() => handleStartEdit(item)}
-                    title="Редактировать продукт"
+                    title="Редактировать"
                   >
                     <Pencil size={13} />
                   </button>
                   <button
-                    className="icon-action-btn delete-btn"
+                    className="item-mini-btn btn-danger"
                     onClick={() => handleDelete(item.id)}
-                    title="Удалить из списка"
+                    title="Удалить"
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </div>
@@ -731,13 +733,13 @@ export default function GroceriesTab({
                     </div>
                   </div>
 
-                  <div className="task-actions-row" style={{ marginTop: '2px' }}>
+                  <div className="item-action-btns">
                     <button
-                      className="icon-action-btn delete-btn"
+                      className="item-mini-btn btn-danger"
                       onClick={() => handleDelete(item.id)}
                       title="Удалить"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>

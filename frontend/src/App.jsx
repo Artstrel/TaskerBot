@@ -372,7 +372,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="header-actions desktop-only-item">
+            <div className="header-actions">
               {isSyncing && (
                 <span className="sync-badge" title="Синхронизация с сервером...">
                   <span className="sync-dot" />

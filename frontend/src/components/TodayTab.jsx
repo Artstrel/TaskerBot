@@ -979,6 +979,7 @@ export default function TodayTab({
 
   return (
     <div className="today-tab-container">
+      <h1 className="mobile-large-title mobile-only-item">Сегодня</h1>
       <div className="today-desktop-grid">
         {/* LEFT COLUMN: Status & Habits */}
         <div className="today-col-left">
