@@ -372,7 +372,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="header-actions">
+            <div className="header-actions desktop-only-item">
               {isSyncing && (
                 <span className="sync-badge" title="Синхронизация с сервером...">
                   <span className="sync-dot" />
@@ -400,6 +400,8 @@ export default function App() {
                   dashboardData={dashboardData}
                   setDashboardData={setDashboardData}
                   onRefresh={() => loadData(false)}
+                  onForceRefresh={() => loadData(true)}
+                  isSyncing={isSyncing}
                   onTaskCompleted={handleTaskCelebration}
                   warmupTimerElapsed={warmupTimerElapsed}
                 />
@@ -409,6 +411,8 @@ export default function App() {
                   groceriesData={groceriesData}
                   setGroceriesData={setGroceriesData}
                   onRefresh={loadData}
+                  onForceRefresh={() => loadData(true)}
+                  isSyncing={isSyncing}
                   onOpenQuickAdd={(opts) => {
                     setQuickAddOptions(opts);
                     setIsQuickAddOpen(true);
@@ -422,6 +426,8 @@ export default function App() {
                   dashboardData={dashboardData}
                   setDashboardData={setDashboardData}
                   onRefresh={loadData}
+                  onForceRefresh={() => loadData(true)}
+                  isSyncing={isSyncing}
                   onOpenQuickAdd={(opts) => {
                     setQuickAddOptions(opts);
                     setIsQuickAddOpen(true);
@@ -431,6 +437,8 @@ export default function App() {
               {activeTab === 'settings' && (
                 <SettingsTab
                   onRefresh={loadData}
+                  onForceRefresh={() => loadData(true)}
+                  isSyncing={isSyncing}
                 />
               )}
             </div>

@@ -185,8 +185,8 @@ h1, h2, h3, h4, .brand-font {
 }
 
 body.is-tg-fullscreen .app-header {
-  padding-left: max(calc(18px + var(--safe-left)), 56px);
-  padding-right: max(calc(18px + var(--safe-right)), 56px);
+  padding-left: max(calc(18px + var(--safe-left)), 92px);
+  padding-right: max(calc(18px + var(--safe-right)), 92px);
 }
 
 .header-companion-group {
@@ -203,12 +203,12 @@ body.is-tg-fullscreen .app-header {
   padding: 3px;
   border-radius: var(--radius-md);
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  transition: border-color 0.2s;
+  border: none;
+  transition: opacity 0.2s;
 }
 
 .header-mascot-wrapper:hover {
-  border-color: var(--border-hover);
+  opacity: 0.9;
 }
 
 .header-titles {
@@ -241,7 +241,7 @@ body.is-tg-fullscreen .app-header {
 
 .header-icon-btn {
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: none;
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
   width: 34px;
@@ -256,11 +256,35 @@ body.is-tg-fullscreen .app-header {
 .header-icon-btn:hover {
   background: var(--bg-card);
   color: var(--text-primary);
-  border-color: var(--border-hover);
 }
 
 .header-icon-btn:active {
   transform: scale(0.96);
+}
+
+/* Canvas Sync Button (Used in tab headers / content area on mobile) */
+.canvas-sync-btn {
+  background: var(--bg-surface);
+  border: none;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.canvas-sync-btn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.canvas-sync-btn:active {
+  transform: scale(0.94);
 }
 
 /* Floating Action Button (FAB) */
@@ -314,7 +338,7 @@ body.is-tg-fullscreen .app-header {
   background: rgba(22, 22, 22, 0.94);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: 24px;
   box-shadow: var(--shadow-dock);
   padding: 6px 8px;
@@ -415,25 +439,23 @@ body.is-tg-fullscreen .app-header {
   padding: 2px 7px;
   border-radius: var(--radius-full);
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: none;
   color: var(--text-secondary);
 }
 
 .linear-count-badge.badge-danger {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
 
 .linear-count-badge.badge-streak {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.10);
   color: #e4e4e7;
 }
 
 .linear-list {
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-md);
   overflow: hidden;
   margin-top: 6px;
@@ -536,19 +558,17 @@ body.is-tg-fullscreen .app-header {
   border-radius: 6px;
   background: var(--bg-card);
   color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
+  border: none;
 }
 
 .item-tag.tag-priority-high {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
   font-weight: 600;
 }
 
 .item-tag.tag-priority-med {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.10);
   color: #e4e4e7;
 }
 
@@ -557,8 +577,7 @@ body.is-tg-fullscreen .app-header {
 }
 
 .item-tag.tag-overdue {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
   font-weight: 600;
 }
@@ -604,7 +623,7 @@ body.is-tg-fullscreen .app-header {
 .day-status-card {
   margin: 14px 16px 8px 16px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-md);
   padding: 14px 16px;
   display: flex;
@@ -650,20 +669,18 @@ body.is-tg-fullscreen .app-header {
   padding: 4px 9px;
   border-radius: var(--radius-sm);
   background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  border: none;
   color: var(--text-secondary);
   white-space: nowrap;
 }
 
 .time-left-chip.chip-warning {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.10);
   color: #e4e4e7;
 }
 
 .time-left-chip.chip-danger {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
   font-weight: 600;
 }
@@ -673,7 +690,7 @@ body.is-tg-fullscreen .app-header {
   margin: 28px 16px;
   padding: 36px 20px;
   background: var(--bg-surface);
-  border: 1px dashed var(--border-subtle);
+  border: none;
   border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
@@ -713,7 +730,7 @@ body.is-tg-fullscreen .app-header {
 
 .bottom-sheet-content {
   background: var(--bg-surface);
-  border-top: 1px solid var(--border-subtle);
+  border: none;
   border-top-left-radius: 24px;
   border-top-right-radius: 24px;
   box-shadow: var(--shadow-sheet);
@@ -780,17 +797,12 @@ body.is-tg-fullscreen .app-header {
 /* Quick Add Unified Input Box */
 .unified-input-box {
   background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  transition: border-color 0.2s;
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.unified-input-box:focus-within {
-  border-color: var(--border-focus);
 }
 
 .unified-textarea {
@@ -819,7 +831,7 @@ body.is-tg-fullscreen .app-header {
 
 .voice-recording-btn {
   background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  border: none;
   color: var(--text-secondary);
   border-radius: var(--radius-full);
   padding: 6px 14px;
@@ -834,7 +846,6 @@ body.is-tg-fullscreen .app-header {
 
 .voice-recording-btn.recording {
   background: rgba(255, 255, 255, 0.16);
-  border-color: #ffffff;
   color: #ffffff;
   animation: pulseRecording 1.4s infinite;
 }
@@ -874,7 +885,7 @@ body.is-tg-fullscreen .app-header {
 
 .filter-chip {
   background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  border: none;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 500;
@@ -888,20 +899,19 @@ body.is-tg-fullscreen .app-header {
 }
 
 .filter-chip:hover {
-  border-color: var(--border-hover);
+  background: var(--bg-card-hover);
   color: var(--text-primary);
 }
 
 .filter-chip.active {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
 }
 
 /* Settings Form Controls */
 .settings-group {
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-md);
   overflow: hidden;
   margin-bottom: 16px;
@@ -1006,7 +1016,7 @@ body.is-tg-fullscreen .app-header {
    ========================================================================== */
 .voice-recording-card {
   background: var(--bg-input);
-  border: 1px solid var(--border-hover);
+  border: none;
   border-radius: var(--radius-md);
   padding: 12px 14px;
   display: flex;
@@ -1131,7 +1141,7 @@ body.is-tg-fullscreen .app-header {
 
 .task-inline-input {
   background: var(--bg-card);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: none;
   border-radius: var(--radius-sm);
   color: var(--text-primary);
   font-size: 14px;
@@ -1139,7 +1149,7 @@ body.is-tg-fullscreen .app-header {
   width: 100%;
   outline: none;
   font-family: inherit;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .task-inline-toolbar {
@@ -1158,7 +1168,7 @@ body.is-tg-fullscreen .app-header {
 
 .mini-cat-chip {
   background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  border: none;
   color: var(--text-tertiary);
   font-size: 10px;
   padding: 3px 7px;
@@ -1172,11 +1182,11 @@ body.is-tg-fullscreen .app-header {
 
 .mini-cat-chip:hover {
   color: var(--text-primary);
+  background: var(--bg-card-hover);
 }
 
 .mini-cat-chip.active {
   background: var(--bg-card-hover);
-  border-color: #ffffff;
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -1195,8 +1205,8 @@ body.is-tg-fullscreen .app-header {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
   padding: 3px 8px;
   border-radius: var(--radius-full);
   font-size: 11px;
@@ -1260,7 +1270,7 @@ body.is-tg-fullscreen .app-header {
   display: inline-flex;
   align-items: center;
   background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-sm);
   padding: 2px;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -1381,14 +1391,14 @@ body.is-tg-fullscreen .app-header {
   gap: 8px;
   margin-top: 10px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-sm);
   padding: 8px 12px;
 }
 
 .quickadd-num-input {
   background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: 6px;
   color: var(--text-primary);
   font-size: 13px;
@@ -1399,7 +1409,7 @@ body.is-tg-fullscreen .app-header {
 }
 
 .quickadd-num-input:focus {
-  border-color: var(--border-focus);
+  box-shadow: 0 0 0 1px var(--border-focus);
 }
 
 /* ==========================================================================
@@ -1415,7 +1425,10 @@ body.is-tg-fullscreen .app-header {
     display: none !important;
   }
   .mobile-only-item {
-    display: flex;
+    display: inline-flex;
+  }
+  span.mobile-only-item {
+    display: inline;
   }
   .mobile-only-fab {
     display: flex;
@@ -1425,6 +1438,26 @@ body.is-tg-fullscreen .app-header {
   }
   .app-main-wrapper {
     max-width: 560px;
+  }
+  .app-header {
+    justify-content: center !important;
+    text-align: center;
+    padding: calc(10px + var(--safe-top)) 92px 10px 92px !important;
+  }
+  .header-companion-group {
+    justify-content: center;
+    margin: 0 auto;
+    gap: 8px;
+  }
+  .header-titles {
+    align-items: center;
+    text-align: center;
+  }
+  .header-title-main {
+    justify-content: center;
+  }
+  .header-subtitle {
+    text-align: center;
   }
 }
 
@@ -1456,18 +1489,17 @@ body.is-tg-fullscreen .app-header {
 .sidebar-mascot-box {
   padding: 4px;
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: none;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar-mascot-box:hover {
   transform: scale(1.05);
-  border-color: var(--border-hover);
 }
 
 .sidebar-brand-text {
@@ -1545,7 +1577,7 @@ body.is-tg-fullscreen .app-header {
   padding: 10px 14px;
   border-radius: var(--radius-md);
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
@@ -1558,13 +1590,11 @@ body.is-tg-fullscreen .app-header {
 .sidebar-nav-item:hover {
   background: var(--bg-surface);
   color: var(--text-primary);
-  border-color: var(--border-subtle);
 }
 
 .sidebar-nav-item.active {
   background: var(--bg-surface);
   color: #ffffff;
-  border-color: var(--border-subtle);
   font-weight: 600;
 }
 
@@ -1794,10 +1824,10 @@ body.is-tg-fullscreen .app-header {
 
   .bottom-sheet-content {
     border-radius: var(--radius-lg);
-    border: 1px solid var(--border-subtle);
+    border: none;
     max-width: 600px;
     max-height: 85vh;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8);
     animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 

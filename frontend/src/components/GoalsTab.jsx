@@ -8,6 +8,7 @@ import {
   Clock,
   Sparkles,
   Mic,
+  RotateCw,
 } from 'lucide-react';
 import {
   createGoal,
@@ -29,6 +30,8 @@ export default function GoalsTab({
   dashboardData,
   setDashboardData,
   onRefresh,
+  onForceRefresh,
+  isSyncing,
   onOpenQuickAdd,
 }) {
   const [expandedGoalId, setExpandedGoalId] = useState(null);
@@ -378,26 +381,41 @@ export default function GoalsTab({
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            hapticFeedback('light');
-            setIsCreatingGoal((prev) => !prev);
-          }}
-          className="filter-chip"
-          style={{ padding: '6px 10px', fontSize: '12px' }}
-        >
-          <Plus size={14} />
-          <span>Вручную</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onForceRefresh && (
+            <button
+              type="button"
+              className="canvas-sync-btn mobile-only-item"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить цели"
+            >
+              <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+            </button>
+          )}
+          <button
+            onClick={() => {
+              hapticFeedback('light');
+              setIsCreatingGoal((prev) => !prev);
+            }}
+            className="filter-chip"
+            style={{ padding: '6px 10px', fontSize: '12px' }}
+          >
+            <Plus size={14} />
+            <span>Вручную</span>
+          </button>
+        </div>
       </div>
 
       {/* AI Smart Goal Input Card */}
       <div
         style={{
           background: 'var(--bg-surface)',
-          border: '1px solid var(--border-subtle)',
+          border: 'none',
           borderRadius: 'var(--radius-md)',
-          padding: '10px 12px',
+          padding: '12px 14px',
           marginBottom: '16px',
         }}
       >
@@ -417,7 +435,7 @@ export default function GoalsTab({
             style={{
               flex: 1,
               background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
+              border: 'none',
               borderRadius: 'var(--radius-sm)',
               padding: '8px 12px',
               fontSize: '13px',
@@ -456,7 +474,7 @@ export default function GoalsTab({
           onSubmit={handleCreateGoal}
           style={{
             background: 'var(--bg-surface)',
-            border: '1px solid var(--border-subtle)',
+            border: 'none',
             borderRadius: 'var(--radius-md)',
             padding: '14px 16px',
             marginBottom: '16px',
@@ -476,7 +494,7 @@ export default function GoalsTab({
             style={{
               width: '100%',
               background: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle)',
+              border: 'none',
               borderRadius: 'var(--radius-sm)',
               padding: '8px 12px',
               fontSize: '13px',
@@ -496,7 +514,7 @@ export default function GoalsTab({
             style={{
               width: '100%',
               background: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle)',
+              border: 'none',
               borderRadius: 'var(--radius-sm)',
               padding: '8px 12px',
               fontSize: '13px',
@@ -513,7 +531,7 @@ export default function GoalsTab({
               onChange={(e) => setNewGoalDate(e.target.value)}
               style={{
                 background: 'var(--bg-input)',
-                border: '1px solid var(--border-subtle)',
+                border: 'none',
                 borderRadius: 'var(--radius-sm)',
                 padding: '5px 10px',
                 fontSize: '12px',
@@ -560,10 +578,10 @@ export default function GoalsTab({
                 key={goal.id}
                 style={{
                   background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
+                  border: 'none',
                   borderRadius: 'var(--radius-md)',
                   overflow: 'hidden',
-                  transition: 'border-color 0.2s',
+                  transition: 'background-color 0.2s',
                 }}
               >
                 {/* Goal summary card header */}
@@ -748,7 +766,7 @@ export default function GoalsTab({
                         style={{
                           flex: 1,
                           background: 'var(--bg-surface)',
-                          border: '1px solid var(--border-subtle)',
+                          border: 'none',
                           borderRadius: 'var(--radius-sm)',
                           padding: '7px 10px',
                           fontSize: '12px',

@@ -11,6 +11,7 @@ import {
   Mic,
   ShoppingCart,
   CheckCheck,
+  RotateCw,
 } from 'lucide-react';
 import {
   createGroceryItem,
@@ -28,6 +29,8 @@ export default function GroceriesTab({
   groceriesData,
   setGroceriesData,
   onRefresh,
+  onForceRefresh,
+  isSyncing,
   onOpenQuickAdd,
 }) {
   const [quickTitle, setQuickTitle] = useState('');
@@ -434,30 +437,46 @@ export default function GroceriesTab({
           </div>
         </div>
 
-        {completedCount > 0 && (
-          <button
-            type="button"
-            className="header-icon-btn"
-            onClick={handleClearCompleted}
-            title="Очистить купленные товары"
-            style={{
-              padding: '6px 10px',
-              fontSize: '11px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Trash2 size={13} />
-            <span>Очистить купленное</span>
-          </button>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onForceRefresh && (
+            <button
+              type="button"
+              className="canvas-sync-btn mobile-only-item"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить список продуктов"
+            >
+              <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+            </button>
+          )}
+
+          {completedCount > 0 && (
+            <button
+              type="button"
+              className="header-icon-btn"
+              onClick={handleClearCompleted}
+              title="Очистить купленные товары"
+              style={{
+                padding: '6px 10px',
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'var(--bg-surface)',
+                border: 'none',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Trash2 size={13} />
+              <span>Очистить купленное</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Top Quick Add Bar with Direct Voice Button */}
@@ -472,7 +491,7 @@ export default function GroceriesTab({
             style={{
               flex: 1,
               background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
+              border: 'none',
               borderRadius: 'var(--radius-sm)',
               padding: '8px 12px',
               fontSize: '13px',
@@ -497,7 +516,7 @@ export default function GroceriesTab({
             title="Надиктовать список продуктов голосом"
             style={{
               background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
+              border: 'none',
               borderRadius: 'var(--radius-sm)',
               color: 'var(--accent-primary, #60a5fa)',
               padding: '0 11px',
@@ -518,7 +537,7 @@ export default function GroceriesTab({
             title="Добавить в список"
             style={{
               background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
+              border: 'none',
               borderRadius: 'var(--radius-sm)',
               color: quickTitle.trim() ? 'var(--text-primary)' : 'var(--text-tertiary)',
               padding: '0 12px',

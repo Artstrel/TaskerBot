@@ -14,6 +14,7 @@ import {
   Trophy,
   Pencil,
   X,
+  RotateCw,
 } from 'lucide-react';
 import {
   toggleTask,
@@ -38,6 +39,8 @@ export default function TodayTab({
   dashboardData,
   setDashboardData,
   onRefresh,
+  onForceRefresh,
+  isSyncing,
   onTaskCompleted,
   warmupTimerElapsed,
 }) {
@@ -991,7 +994,22 @@ export default function TodayTab({
                 <div className="progress-fill" style={{ width: `${progressPct}%` }} />
               </div>
             </div>
-            <div>{renderTimeChip()}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {renderTimeChip()}
+              {onForceRefresh && (
+                <button
+                  type="button"
+                  className="canvas-sync-btn mobile-only-item"
+                  onClick={() => {
+                    hapticFeedback('light');
+                    onForceRefresh();
+                  }}
+                  title="Обновить и синхронизировать данные"
+                >
+                  <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* SECTION 2: Daily Routines / Habits */}
@@ -1126,7 +1144,7 @@ export default function TodayTab({
                 style={{
                   flex: 1,
                   background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
+                  border: 'none',
                   borderRadius: 'var(--radius-sm)',
                   padding: '8px 12px',
                   fontSize: '13px',
@@ -1140,7 +1158,7 @@ export default function TodayTab({
                 disabled={!quickTitle.trim() || isSubmittingQuick}
                 style={{
                   background: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
+                  border: 'none',
                   borderRadius: 'var(--radius-sm)',
                   color: quickTitle.trim() ? 'var(--text-primary)' : 'var(--text-tertiary)',
                   padding: '0 12px',

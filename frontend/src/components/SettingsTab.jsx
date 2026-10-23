@@ -4,6 +4,7 @@ import {
   Check,
   Server,
   Key,
+  RotateCw,
 } from 'lucide-react';
 import {
   fetchUserSettings,
@@ -21,7 +22,7 @@ import {
 } from '../api';
 import Mascot from './Mascot';
 
-export default function SettingsTab({ onRefresh }) {
+export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   const [settings, setSettings] = useState(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [customBackend, setCustomBackend] = useState(getCustomBackendUrl());
@@ -136,29 +137,45 @@ export default function SettingsTab({ onRefresh }) {
           </div>
         </div>
 
-        {savedSuccess && (
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--accent-success)',
-              background: 'var(--accent-success-dim)',
-              padding: '3px 8px',
-              borderRadius: 'var(--radius-full)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <Check size={12} /> Сохранено
-          </span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onForceRefresh && (
+            <button
+              type="button"
+              className="canvas-sync-btn mobile-only-item"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить настройки"
+            >
+              <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+            </button>
+          )}
+
+          {savedSuccess && (
+            <span
+              style={{
+                fontSize: '11px',
+                color: 'var(--accent-success)',
+                background: 'var(--accent-success-dim)',
+                padding: '3px 8px',
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Check size={12} /> Сохранено
+            </span>
+          )}
+        </div>
       </div>
 
       {/* User profile row */}
       <div
         style={{
           background: 'var(--bg-surface)',
-          border: '1px solid var(--border-subtle)',
+          border: 'none',
           borderRadius: 'var(--radius-md)',
           padding: '12px 14px',
           display: 'flex',
@@ -230,7 +247,7 @@ export default function SettingsTab({ onRefresh }) {
               fontSize: '12px',
               padding: '8px 10px',
               background: 'var(--bg-card)',
-              border: '1px solid var(--border-subtle)',
+              border: 'none',
               borderRadius: 'var(--radius-sm)',
               color: 'var(--text-primary)',
               outline: 'none',
@@ -385,7 +402,7 @@ export default function SettingsTab({ onRefresh }) {
                   padding: '11px 13px',
                   borderRadius: 'var(--radius-sm)',
                   background: isSelected ? 'var(--bg-elevated)' : 'transparent',
-                  border: isSelected ? '1px solid var(--border-focus)' : '1px solid var(--border-subtle)',
+                  border: 'none',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -457,7 +474,7 @@ export default function SettingsTab({ onRefresh }) {
                 fontSize: '12px',
                 padding: '8px 10px',
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
+                border: 'none',
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--text-primary)',
                 outline: 'none',
@@ -481,7 +498,7 @@ export default function SettingsTab({ onRefresh }) {
                 fontSize: '12px',
                 padding: '8px 10px',
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
+                border: 'none',
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--text-primary)',
                 outline: 'none',
@@ -505,7 +522,7 @@ export default function SettingsTab({ onRefresh }) {
                 fontSize: '12px',
                 padding: '8px 10px',
                 background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
+                border: 'none',
                 borderRadius: 'var(--radius-sm)',
                 color: 'var(--text-primary)',
                 outline: 'none',
