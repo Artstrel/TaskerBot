@@ -108,8 +108,10 @@ def get_user_effective_date_and_urgency(
 ) -> Tuple[date, float, str]:
     """
     Calculates the effective date and hours remaining until day_end_time.
-    If day_end_time is 02:00 and now is 01:30, the effective date is yesterday,
-    and 0.5 hours remain until day_end_time.
+    Supports:
+    - 00:00 (Standard midnight boundary)
+    - 01:00 - 11:59 (Post-midnight bedtime: 00:30 is still previous day's productive day)
+    - 12:00 - 23:59 (Evening bedtime: 22:00 cutoff on the same calendar day)
     """
     try:
         parts = day_end_time_str.split(":")
@@ -119,7 +121,6 @@ def get_user_effective_date_and_urgency(
         end_hour, end_minute = 0, 0
 
     local_date = now.date()
-    local_time = now.time()
 
     if end_hour == 0 and end_minute == 0:
         # Standard midnight boundary
@@ -128,17 +129,32 @@ def get_user_effective_date_and_urgency(
             local_date.year, local_date.month, local_date.day, 23, 59, 59, tzinfo=now.tzinfo
         )
         seconds_left = max(0.0, (next_deadline - now).total_seconds())
-    else:
-        # Custom bedtime cutoff (e.g. 02:00)
+    elif end_hour < 12:
+        # Post-midnight bedtime (e.g. 01:00, 02:00, 04:00)
         target_cutoff_today = datetime(
             local_date.year, local_date.month, local_date.day, end_hour, end_minute, tzinfo=now.tzinfo
         )
         if now < target_cutoff_today:
-            # Still in "yesterday's" productive day!
+            # Still in previous calendar day's productive cycle before going to bed
             effective_date = local_date - timedelta(days=1)
             seconds_left = max(0.0, (target_cutoff_today - now).total_seconds())
         else:
+            # Daytime / evening: productive day is today, cutoff is tomorrow morning
             effective_date = local_date
+            next_deadline = target_cutoff_today + timedelta(days=1)
+            seconds_left = max(0.0, (next_deadline - now).total_seconds())
+    else:
+        # Evening bedtime (e.g. 21:00, 22:00, 23:00)
+        target_cutoff_today = datetime(
+            local_date.year, local_date.month, local_date.day, end_hour, end_minute, tzinfo=now.tzinfo
+        )
+        if now < target_cutoff_today:
+            # Before bedtime: productive day is today, deadline is tonight
+            effective_date = local_date
+            seconds_left = max(0.0, (target_cutoff_today - now).total_seconds())
+        else:
+            # After bedtime: day has ended, advancing into tomorrow
+            effective_date = local_date + timedelta(days=1)
             next_deadline = target_cutoff_today + timedelta(days=1)
             seconds_left = max(0.0, (next_deadline - now).total_seconds())
 

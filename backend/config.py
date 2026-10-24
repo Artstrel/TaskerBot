@@ -15,10 +15,20 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = ""
     DEFAULT_AI_PROVIDER: str = "auto"
     DATABASE_URL: str = f"sqlite+aiosqlite:///{DATA_DIR}/taskerbot.db"
-    WEBAPP_URL: str = ""  # If running behind https domain/tunnel, e.g. https://xyz.ngrok-free.app
+    WEBAPP_URL: str = "https://taskerbot-plp5.onrender.com"  # Telegram WebApp HTTPS URL
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
+
+    @field_validator("WEBAPP_URL", mode="before")
+    @classmethod
+    def assemble_webapp_url(cls, v: str) -> str:
+        if v and v.strip():
+            return v.strip().rstrip("/")
+        render_url = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+        if render_url:
+            return render_url
+        return "https://taskerbot-plp5.onrender.com"
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

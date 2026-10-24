@@ -18,6 +18,6 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: WEBAPP_URL
-        sync: false
+        value: https://taskerbot-plp5.onrender.com
       - key: PORT
         value: 8000

@@ -57,8 +57,10 @@ def get_groceries_keyboard(active_items: list, webapp_url: Optional[str] = None)
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-def get_webapp_inline_keyboard(webapp_url: Optional[str] = None) -> InlineKeyboardMarkup:
-    url = webapp_url or settings.WEBAPP_URL or "http://localhost:8000"
+def get_webapp_inline_keyboard(webapp_url: Optional[str] = None) -> Optional[InlineKeyboardMarkup]:
+    url = (webapp_url or settings.WEBAPP_URL or "").strip()
+    if not url.startswith("https://"):
+        return None
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
