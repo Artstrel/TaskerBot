@@ -127,6 +127,8 @@ async def add_routine(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
+    now = get_user_now(user.timezone)
+    effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
     routine = await create_routine(
         session,
         user.telegram_id,
@@ -135,9 +137,11 @@ async def add_routine(
         target_value=routine_in.target_value,
         step=routine_in.step,
         unit=routine_in.unit,
+        frequency_type=routine_in.frequency_type or "daily",
+        interval_days=routine_in.interval_days or 1,
+        days_of_week=routine_in.days_of_week,
+        start_date=routine_in.start_date or effective_date,
     )
-    now = get_user_now(user.timezone)
-    effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
     res = await get_user_routines_with_status(session, user.telegram_id, effective_date)
     matching = next((r for r in res if r.id == routine.id), None)
     if matching:
@@ -154,6 +158,10 @@ async def add_routine(
         current_value=0.0,
         step=routine.step or 1.0,
         unit=routine.unit,
+        frequency_type=routine.frequency_type,
+        interval_days=routine.interval_days,
+        days_of_week=routine_in.days_of_week,
+        start_date=routine.start_date,
     )
 
 

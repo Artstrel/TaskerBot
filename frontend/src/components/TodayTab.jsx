@@ -782,7 +782,7 @@ export default function TodayTab({
       id: tempId,
       title,
       category: 'one_time',
-      priority: 'medium',
+      priority: 0,
       is_completed: false,
       scheduled_date: todayStr,
       created_at: new Date().toISOString(),
@@ -1131,6 +1131,22 @@ export default function TodayTab({
                                   <Trophy size={10} /> рекорд {routine.best_streak}
                                 </span>
                               )}
+                              {routine.frequency_type === 'interval' && routine.interval_days > 1 && (
+                                <span className="item-tag" title="Интервал повторения">
+                                  <RotateCw size={10} /> раз в {routine.interval_days} дн.
+                                </span>
+                              )}
+                              {routine.frequency_type === 'weekly' && routine.days_of_week && routine.days_of_week.length > 0 && (
+                                <span className="item-tag" title="Дни недели">
+                                  <RotateCw size={10} /> {
+                                    routine.days_of_week.length === 5 && [0,1,2,3,4].every(d => routine.days_of_week.includes(d))
+                                      ? 'Будни'
+                                      : routine.days_of_week.length === 2 && [5,6].every(d => routine.days_of_week.includes(d))
+                                      ? 'Выходные'
+                                      : routine.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
+                                  }
+                                </span>
+                              )}
                             </div>
                             {renderNumericStepper(routine, 'routine')}
                           </div>
@@ -1283,9 +1299,6 @@ export default function TodayTab({
                               <span className="item-tag tag-overdue">
                                 {task.overdue_days > 0 ? `+${task.overdue_days} дн.` : 'со вчера'}
                               </span>
-                              {(task.priority === 1 || task.priority === 'high') && (
-                                <span className="item-tag tag-priority-high">Высокий</span>
-                              )}
                               {task.goal_title && (
                                 <span className="item-tag">
                                   <Target size={10} />
@@ -1404,9 +1417,6 @@ export default function TodayTab({
                               {task.title}
                             </div>
                             <div className="item-meta-row">
-                              {(task.priority === 1 || task.priority === 'high') && (
-                                <span className="item-tag tag-priority-high">Высокий</span>
-                              )}
                               {task.scheduled_time && (
                                 <span className="item-tag tag-due">
                                   <Clock size={10} />

@@ -68,6 +68,10 @@ class RoutineTask(Base):
     target_value: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     step: Mapped[Optional[float]] = mapped_column(Float, nullable=True, default=1.0)
     unit: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    frequency_type: Mapped[str] = mapped_column(String(32), default="daily")
+    interval_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
+    days_of_week: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    start_date: Mapped[Optional[dt_date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
 
     # Relationships

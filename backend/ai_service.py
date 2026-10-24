@@ -54,7 +54,11 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 Твоя задача — внимательно проанализировать текст или аудиосообщение пользователя и извлечь ВСЕ упомянутые задачи.
 
 Правила классификации категорий:
-1. "routine": регулярные ежедневные привычки и действия (маркеры: "каждый день", "ежедневно", "по утрам", "каждый вечер", "пить воду", "делать зарядку", "отжиматься каждый день").
+1. "routine": регулярные или повторяющиеся привычки и действия (маркеры: "каждый день", "ежедневно", "по утрам", "каждый вечер", "пить воду", "делать зарядку", "отжиматься каждый день", "раз в 3 дня", "каждые 2 дня", "через день", "по вторникам и четвергам", "по выходным", "по будням").
+   - Для категории "routine" ОБЯЗАТЕЛЬНО определи расписание:
+     * "frequency_type": "daily" (каждый день), "interval" (каждые N дней) или "weekly" (по дням недели).
+     * "interval_days": число дней при frequency_type="interval" (например: 2 для "через день", 3 для "раз в 3 дня", 7 для "раз в неделю"). Для daily равно 1.
+     * "days_of_week": массив индексов дней недели при frequency_type="weekly": 0=Пн, 1=Вт, 2=Ср, 3=Чт, 4=Пт, 5=Сб, 6=Вс (например: для "по выходным" -> [5, 6], для "по будням" -> [0, 1, 2, 3, 4], для "по вторникам и четвергам" -> [1, 3]). Если frequency_type не "weekly", установи null.
 2. "one_time": разовые задачи на конкретный день (маркеры: "сегодня", "завтра", "позвонить врачу", "заехать в автосервис").
 3. "goal": глобальные крупные цели, проекты или майлстоуны (маркеры: "цель", "хочу запустить проект", "сделать ремонт", "выучить английский", "похудеть").
 4. "subtask": конкретный шаг для достижения цели (если пользователь говорит "к цели X сделать Y", "для ремонта заказать краску", либо если задача логически относится к одной из существующих целей, либо если диктуется новая цель и шаги к ней).
@@ -95,6 +99,9 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 - "target_value": число (float) или null
 - "step": шаг (float) или null
 - "unit": строка единицы измерения ("л", "шт", "раз", "кг" и т.п.) или null
+- "frequency_type": "daily" | "interval" | "weekly" или null (для routine)
+- "interval_days": число (int) или null (для routine)
+- "days_of_week": массив чисел [0, 1, ...] или null (для routine)
 """
 
 
@@ -160,6 +167,23 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
             unit_val = t.get("unit")
             unit_val = str(unit_val).strip() if unit_val else None
 
+            freq_type = t.get("frequency_type")
+            interval_d = t.get("interval_days")
+            d_of_w = t.get("days_of_week")
+            if cat == "routine":
+                if not freq_type:
+                    freq_type = "daily"
+                if freq_type == "interval":
+                    try:
+                        interval_d = int(interval_d) if interval_d else 1
+                    except (ValueError, TypeError):
+                        interval_d = 1
+                if freq_type == "weekly" and isinstance(d_of_w, list):
+                    try:
+                        d_of_w = [int(x) for x in d_of_w]
+                    except (ValueError, TypeError):
+                        d_of_w = None
+
             normalized_tasks.append(
                 ExtractedTask(
                     category=cat,
@@ -171,6 +195,9 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                     target_value=target_val,
                     step=step_val,
                     unit=unit_val,
+                    frequency_type=freq_type,
+                    interval_days=interval_d,
+                    days_of_week=d_of_w,
                 )
             )
     return normalized_tasks
@@ -216,8 +243,14 @@ def _parse_json_tasks(raw: str) -> Optional[ExtractedTaskList]:
 def _fallback_parse(
     text: str, current_date: date, existing_goals: Optional[List[str]] = None
 ) -> ExtractedTaskList:
-    """Fallback keyword and regex parser when AI keys are missing or offline."""
-    lines = [l.strip() for l in re.split(r"[\n;,]+|\s+и\s+", text) if l.strip()]
+    # Protect phrases like "по вторникам и четвергам" from splitting by " и "
+    protected_text = re.sub(
+        r"(понедельник\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*)\s+и\s+(понедельник\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*)",
+        r"\1 &&& \2",
+        text,
+        flags=re.IGNORECASE,
+    )
+    lines = [l.replace("&&&", "и").strip() for l in re.split(r"[\n;,]+|\s+и\s+", protected_text) if l.strip()]
     tasks: List[ExtractedTask] = []
     current_goal: Optional[str] = None
 
@@ -264,13 +297,59 @@ def _fallback_parse(
                 target_val = None
 
         # Routine check
-        if any(w in lower for w in ["каждый день", "ежедневно", "утром", "вечером", "привычк"]):
+        is_routine_match = False
+        freq_type = "daily"
+        interval_d = 1
+        d_of_w = None
+
+        if "через день" in lower:
+            is_routine_match = True
+            freq_type = "interval"
+            interval_d = 2
+        else:
+            m_interval = re.search(r"(?:раз в|каждые)\s+(\d+)\s*(?:дня|дней|день)", lower)
+            if m_interval:
+                is_routine_match = True
+                freq_type = "interval"
+                interval_d = int(m_interval.group(1))
+
+        if not is_routine_match:
+            days_map = {
+                "понедельник": 0, "вторник": 1, "сред": 2, "четверг": 3,
+                "пятниц": 4, "суббот": 5, "воскресень": 6
+            }
+            matched_days = []
+            for d_name, d_idx in days_map.items():
+                if d_name in lower:
+                    matched_days.append(d_idx)
+            if "по будням" in lower:
+                matched_days = [0, 1, 2, 3, 4]
+            elif "по выходным" in lower:
+                matched_days = [5, 6]
+
+            if matched_days:
+                is_routine_match = True
+                freq_type = "weekly"
+                d_of_w = sorted(list(set(matched_days)))
+
+        if not is_routine_match and any(w in lower for w in ["каждый день", "ежедневно", "утром", "вечером", "привычк"]):
+            is_routine_match = True
+            freq_type = "daily"
+
+        if is_routine_match:
             title = re.sub(
-                r"\b(каждый день|ежедневно|утром|вечером|надо|нужно|привычка)\b",
+                r"\b(каждый день|ежедневно|утром|вечером|надо|нужно|привычка|через день|по выходным|по будням|раз в \d+ дня|раз в \d+ дней|раз в \d+ день|каждые \d+ дня|каждые \d+ дней)\b",
                 "",
                 line,
                 flags=re.IGNORECASE,
             ).strip()
+            if freq_type == "weekly":
+                title = re.sub(
+                    r"\b(?:по|и)?\s*(?:понедельник\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*)\b",
+                    "",
+                    title,
+                    flags=re.IGNORECASE,
+                ).strip()
             tasks.append(
                 ExtractedTask(
                     category="routine",
@@ -278,6 +357,9 @@ def _fallback_parse(
                     target_value=target_val,
                     step=step_val,
                     unit=unit_val,
+                    frequency_type=freq_type,
+                    interval_days=interval_d,
+                    days_of_week=d_of_w,
                 )
             )
         # Goal check

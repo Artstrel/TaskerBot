@@ -46,6 +46,15 @@ class ExtractedTask(BaseModel):
     unit: Optional[str] = Field(
         None, description="Unit of measurement (e.g. 'л', 'мл', 'шт', 'раз', 'кг', 'км', 'стр')"
     )
+    frequency_type: Optional[str] = Field(
+        None, description="'daily', 'interval' or 'weekly' if category is routine"
+    )
+    interval_days: Optional[int] = Field(
+        None, description="Interval in days for routine (e.g. 3 for every 3 days)"
+    )
+    days_of_week: Optional[List[int]] = Field(
+        None, description="Days of week for routine: 0=Mon, 1=Tue, ..., 6=Sun"
+    )
 
     @field_validator("title", mode="before")
     @classmethod
@@ -128,6 +137,10 @@ class RoutineTaskCreate(BaseModel):
     target_value: Optional[float] = None
     step: Optional[float] = 1.0
     unit: Optional[str] = None
+    frequency_type: Optional[str] = "daily"
+    interval_days: Optional[int] = 1
+    days_of_week: Optional[List[int]] = None
+    start_date: Optional[date] = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -135,6 +148,19 @@ class RoutineTaskCreate(BaseModel):
         if isinstance(v, str):
             return capitalize_first(v)
         return v
+
+    @field_validator("days_of_week", mode="before")
+    @classmethod
+    def parse_days_of_week(cls, v: Any) -> Optional[List[int]]:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        if isinstance(v, str):
+            if not v.strip():
+                return None
+            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+        return None
 
 
 class RoutineTaskUpdate(BaseModel):
@@ -144,6 +170,10 @@ class RoutineTaskUpdate(BaseModel):
     target_value: Optional[float] = None
     step: Optional[float] = None
     unit: Optional[str] = None
+    frequency_type: Optional[str] = None
+    interval_days: Optional[int] = None
+    days_of_week: Optional[List[int]] = None
+    start_date: Optional[date] = None
 
     @field_validator("title", mode="before")
     @classmethod
@@ -151,6 +181,19 @@ class RoutineTaskUpdate(BaseModel):
         if isinstance(v, str):
             return capitalize_first(v)
         return v
+
+    @field_validator("days_of_week", mode="before")
+    @classmethod
+    def parse_days_of_week(cls, v: Any) -> Optional[List[int]]:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        if isinstance(v, str):
+            if not v.strip():
+                return None
+            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+        return None
 
 
 class RoutineWithStatus(BaseModel):
@@ -166,6 +209,23 @@ class RoutineWithStatus(BaseModel):
     current_value: float = 0.0
     step: Optional[float] = 1.0
     unit: Optional[str] = None
+    frequency_type: Optional[str] = "daily"
+    interval_days: Optional[int] = 1
+    days_of_week: Optional[List[int]] = None
+    start_date: Optional[date] = None
+
+    @field_validator("days_of_week", mode="before")
+    @classmethod
+    def parse_days_of_week(cls, v: Any) -> Optional[List[int]]:
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        if isinstance(v, str):
+            if not v.strip():
+                return None
+            return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+        return None
 
     class Config:
         from_attributes = True

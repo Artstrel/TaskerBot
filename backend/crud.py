@@ -1,5 +1,5 @@
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 import zoneinfo
 from sqlalchemy import select, update, delete, and_, func, desc, Integer, case
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,35 @@ def _task_to_read(t: OneTimeTask, goal_title: Optional[str] = None) -> OneTimeTa
     )
 
 
+def is_routine_scheduled_for_date(routine: RoutineTask, target_date: date) -> bool:
+    freq = getattr(routine, "frequency_type", "daily") or "daily"
+    if freq == "daily":
+        return True
+    elif freq == "interval":
+        interval = getattr(routine, "interval_days", 1) or 1
+        if interval <= 1:
+            return True
+        anchor = getattr(routine, "start_date", None)
+        if not anchor:
+            anchor = routine.created_at.date() if routine.created_at else target_date
+        delta = (target_date - anchor).days
+        return delta >= 0 and (delta % interval == 0)
+    elif freq == "weekly":
+        raw_days = getattr(routine, "days_of_week", None)
+        if not raw_days:
+            return True
+        if isinstance(raw_days, str):
+            days = [int(x.strip()) for x in raw_days.split(",") if x.strip().isdigit()]
+        elif isinstance(raw_days, (list, set)):
+            days = [int(x) for x in raw_days]
+        else:
+            days = []
+        if not days:
+            return True
+        return target_date.weekday() in days
+    return True
+
+
 def _routine_to_status(r: RoutineTask, log: Optional[RoutineLog] = None) -> RoutineWithStatus:
     is_completed = log.is_completed if log else False
     completed_at = log.completed_at if log else None
@@ -59,6 +88,10 @@ def _routine_to_status(r: RoutineTask, log: Optional[RoutineLog] = None) -> Rout
         current_value=current_value,
         step=r.step or 1.0,
         unit=r.unit,
+        frequency_type=getattr(r, "frequency_type", "daily") or "daily",
+        interval_days=getattr(r, "interval_days", 1) or 1,
+        days_of_week=getattr(r, "days_of_week", None),
+        start_date=getattr(r, "start_date", None),
     )
 
 
@@ -186,7 +219,18 @@ async def create_routine(
     target_value: Optional[float] = None,
     step: Optional[float] = 1.0,
     unit: Optional[str] = None,
+    frequency_type: str = "daily",
+    interval_days: Optional[int] = 1,
+    days_of_week: Optional[Union[str, List[int]]] = None,
+    start_date: Optional[date] = None,
 ) -> RoutineTask:
+    dow_str = None
+    if days_of_week is not None:
+        if isinstance(days_of_week, list):
+            dow_str = ",".join(str(d) for d in days_of_week)
+        else:
+            dow_str = str(days_of_week).strip()
+
     routine = RoutineTask(
         user_id=user_id,
         title=capitalize_first(title),
@@ -194,6 +238,10 @@ async def create_routine(
         target_value=target_value,
         step=step or 1.0,
         unit=unit.strip() if unit else None,
+        frequency_type=frequency_type or "daily",
+        interval_days=interval_days or 1,
+        days_of_week=dow_str,
+        start_date=start_date,
     )
     session.add(routine)
     await session.commit()
@@ -228,6 +276,17 @@ async def update_routine(
         routine.step = data.step
     if data.unit is not None:
         routine.unit = data.unit.strip() if data.unit else None
+    if data.frequency_type is not None:
+        routine.frequency_type = data.frequency_type
+    if data.interval_days is not None:
+        routine.interval_days = data.interval_days
+    if data.days_of_week is not None:
+        if isinstance(data.days_of_week, list):
+            routine.days_of_week = ",".join(str(d) for d in data.days_of_week)
+        else:
+            routine.days_of_week = str(data.days_of_week).strip()
+    if data.start_date is not None:
+        routine.start_date = data.start_date
 
     await session.commit()
     await session.refresh(routine)
@@ -269,7 +328,9 @@ async def get_user_routines_with_status(
     result = []
     for r in routines:
         log = logs_by_routine_id.get(r.id)
-        result.append(_routine_to_status(r, log))
+        # Routine appears if it is scheduled for target_date OR if it was already marked completed
+        if is_routine_scheduled_for_date(r, target_date) or (log and log.is_completed):
+            result.append(_routine_to_status(r, log))
     return result
 
 

@@ -13,6 +13,7 @@ from backend.crud import (
     get_user_effective_date_and_urgency,
     get_user_routines_with_status,
     get_day_tasks,
+    is_routine_scheduled_for_date,
 )
 from backend.bot.bot_instance import bot
 from backend.bot.keyboards import get_webapp_inline_keyboard
@@ -108,13 +109,14 @@ async def check_user_reminders_and_rollover():
                     user_routines = r_res.scalars().all()
 
                     for r in user_routines:
-                        log_stmt = select(RoutineLog).where(
-                            and_(RoutineLog.routine_id == r.id, RoutineLog.date == prev_date)
-                        )
-                        l_res = await session.execute(log_stmt)
-                        log = l_res.scalar_one_or_none()
-                        if not log or not log.is_completed:
-                            r.current_streak = 0
+                        if is_routine_scheduled_for_date(r, prev_date):
+                            log_stmt = select(RoutineLog).where(
+                                and_(RoutineLog.routine_id == r.id, RoutineLog.date == prev_date)
+                            )
+                            l_res = await session.execute(log_stmt)
+                            log = l_res.scalar_one_or_none()
+                            if not log or not log.is_completed:
+                                r.current_streak = 0
 
                     # Carry over uncompleted one-time tasks
                     overdue_update_stmt = (

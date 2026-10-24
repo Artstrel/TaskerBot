@@ -14,6 +14,7 @@ import {
   Trash2,
   Pencil,
   ShoppingCart,
+  RotateCw,
 } from 'lucide-react';
 import {
   fetchAIProviders,
@@ -55,8 +56,11 @@ export default function QuickAddModal({
   ); // 'one_time' | 'routine' | 'goal' | 'subtask'
   const [selectedGoalId, setSelectedGoalId] = useState(initialGoalId || null);
   const [selectedGoalTitle, setSelectedGoalTitle] = useState(initialGoalTitle || '');
-  const [dueDateOption, setDueDateOption] = useState('today'); // 'today' | 'tomorrow' | 'none'
-  const [priority, setPriority] = useState('medium'); // 'medium' | 'high'
+  const [dueDateOption, setDueDateOption] = useState('today'); // 'today' | 'tomorrow' | 'custom' | 'none'
+  const [customDueDate, setCustomDueDate] = useState('');
+  const [frequencyType, setFrequencyType] = useState('daily'); // 'daily' | 'interval' | 'weekly'
+  const [intervalDays, setIntervalDays] = useState(3);
+  const [daysOfWeek, setDaysOfWeek] = useState([0, 2, 4]);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -151,6 +155,9 @@ export default function QuickAddModal({
   // Compute scheduled_date based on chip
   const getSelectedDate = () => {
     if (dueDateOption === 'none') return null;
+    if (dueDateOption === 'custom') {
+      return customDueDate || new Date().toISOString().split('T')[0];
+    }
     const d = new Date();
     if (dueDateOption === 'tomorrow') {
       d.setDate(d.getDate() + 1);
@@ -416,7 +423,7 @@ export default function QuickAddModal({
 
     const tempId = `temp_${Date.now()}`;
     const selectedDate = getSelectedDate();
-    const prioInt = priority === 'high' ? 1 : 0;
+    const prioInt = 0;
     const mutationId = `create_${category}_${tempId}`;
 
     const parsedTarget = isNumeric && targetValue ? parseFloat(targetValue.replace(',', '.')) : null;
@@ -427,6 +434,10 @@ export default function QuickAddModal({
     onClose();
 
     if (category === 'routine') {
+      const routineFreq = frequencyType || 'daily';
+      const routineInterval = routineFreq === 'interval' ? (parseInt(intervalDays, 10) || 1) : 1;
+      const routineDays = routineFreq === 'weekly' ? daysOfWeek : null;
+
       if (setDashboardData) {
         setDashboardData((prev) => {
           if (!prev) return prev;
@@ -437,6 +448,9 @@ export default function QuickAddModal({
             current_value: 0.0,
             step: parsedStep,
             unit: cleanUnit,
+            frequency_type: routineFreq,
+            interval_days: routineInterval,
+            days_of_week: routineDays,
             is_completed_today: false,
             current_streak: 0,
             best_streak: 0,
@@ -459,6 +473,9 @@ export default function QuickAddModal({
         target_value: parsedTarget,
         step: parsedStep,
         unit: cleanUnit,
+        frequency_type: routineFreq,
+        interval_days: routineInterval,
+        days_of_week: routineDays,
       })
         .then((realRoutine) => {
           removePendingMutation(mutationId);
@@ -686,7 +703,7 @@ export default function QuickAddModal({
           removePendingMutation(mutationId);
         });
     } else {
-      if (setDashboardData) {
+      if (setDashboardData && (!selectedDate || selectedDate === todayStr)) {
         setDashboardData((prev) => {
           if (!prev) return prev;
           const optTask = {
@@ -874,6 +891,10 @@ export default function QuickAddModal({
       const mutationId = `create_ai_${tempId}`;
 
       if (t.category === 'routine') {
+        const routineFreq = t.frequency_type || 'daily';
+        const routineInterval = routineFreq === 'interval' ? (parseInt(t.interval_days, 10) || 1) : 1;
+        const routineDays = routineFreq === 'weekly' ? t.days_of_week : null;
+
         if (setDashboardData) {
           setDashboardData((prev) => {
             if (!prev) return prev;
@@ -884,6 +905,9 @@ export default function QuickAddModal({
               current_value: 0.0,
               step: t.step || 1.0,
               unit: t.unit || null,
+              frequency_type: routineFreq,
+              interval_days: routineInterval,
+              days_of_week: routineDays,
               is_completed_today: false,
               current_streak: 0,
               best_streak: 0,
@@ -905,6 +929,9 @@ export default function QuickAddModal({
           target_value: t.target_value || null,
           step: t.step || 1.0,
           unit: t.unit || null,
+          frequency_type: routineFreq,
+          interval_days: routineInterval,
+          days_of_week: routineDays,
         })
           .then((real) => {
             removePendingMutation(mutationId);
@@ -945,7 +972,7 @@ export default function QuickAddModal({
           if (gObj) targetGoalTitle = gObj.title;
         }
 
-        const prioInt = t.priority === 'high' || t.priority === 1 || t.priority === '1' ? 1 : 0;
+        const prioInt = 0;
         const sched = t.scheduled_date || todayStr;
 
         if (targetGoalId && setGoalsData) {
@@ -1103,7 +1130,7 @@ export default function QuickAddModal({
           })
           .catch(() => removePendingMutation(mutationId));
       } else {
-        const prioInt = t.priority === 'high' || t.priority === 1 || t.priority === '1' ? 1 : 0;
+        const prioInt = 0;
         const sched = t.scheduled_date || todayStr;
         if (setDashboardData) {
           setDashboardData((prev) => {
@@ -1431,6 +1458,22 @@ export default function QuickAddModal({
                                 <Clock size={10} /> {task.scheduled_date}
                               </span>
                             )}
+                            {task.category === 'routine' && task.frequency_type === 'interval' && task.interval_days > 1 && (
+                              <span className="item-tag">
+                                <RotateCw size={10} /> раз в {task.interval_days} дн.
+                              </span>
+                            )}
+                            {task.category === 'routine' && task.frequency_type === 'weekly' && task.days_of_week && task.days_of_week.length > 0 && (
+                              <span className="item-tag">
+                                <RotateCw size={10} /> {
+                                  task.days_of_week.length === 5 && [0,1,2,3,4].every(d => task.days_of_week.includes(d))
+                                    ? 'Будни'
+                                    : task.days_of_week.length === 2 && [5,6].every(d => task.days_of_week.includes(d))
+                                    ? 'Выходные'
+                                    : task.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
+                                }
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1678,13 +1721,13 @@ export default function QuickAddModal({
                 </div>
               )}
 
-              {/* Chips: Due Date & Priority (for one_time tasks) */}
+              {/* Chips: Due Date (for one_time tasks) */}
               {category === 'one_time' && (
                 <div style={{ marginTop: '10px' }}>
                   <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
-                    СРОК И ПРИОРИТЕТ
+                    СРОК ИСПОЛНЕНИЯ
                   </div>
-                  <div className="chips-row">
+                  <div className="chips-row" style={{ flexWrap: 'wrap', gap: '6px' }}>
                     <button
                       type="button"
                       className={`filter-chip ${dueDateOption === 'today' ? 'active' : ''}`}
@@ -1707,6 +1750,21 @@ export default function QuickAddModal({
                     </button>
                     <button
                       type="button"
+                      className={`filter-chip ${dueDateOption === 'custom' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setDueDateOption('custom');
+                        if (!customDueDate) {
+                          const d = new Date();
+                          d.setDate(d.getDate() + 2);
+                          setCustomDueDate(d.toISOString().split('T')[0]);
+                        }
+                      }}
+                    >
+                      📅 {dueDateOption === 'custom' && customDueDate ? customDueDate : 'Выбрать дату'}
+                    </button>
+                    <button
+                      type="button"
                       className={`filter-chip ${dueDateOption === 'none' ? 'active' : ''}`}
                       onClick={() => {
                         hapticFeedback('selection');
@@ -1715,18 +1773,134 @@ export default function QuickAddModal({
                     >
                       Без срока
                     </button>
+                  </div>
+
+                  {dueDateOption === 'custom' && (
+                    <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        type="date"
+                        className="quick-add-input"
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '13px',
+                          colorScheme: 'dark',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '8px',
+                          color: 'var(--text-primary)',
+                          outline: 'none',
+                        }}
+                        value={customDueDate || new Date().toISOString().split('T')[0]}
+                        min={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => {
+                          setCustomDueDate(e.target.value);
+                          setDueDateOption('custom');
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Recurrence Options for Routine */}
+              {category === 'routine' && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
+                    ПЕРИОДИЧНОСТЬ ПОВТОРЕНИЯ
+                  </div>
+                  <div className="chips-row" style={{ flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                     <button
                       type="button"
-                      className={`filter-chip ${priority === 'high' ? 'active' : ''}`}
+                      className={`filter-chip ${frequencyType === 'daily' ? 'active' : ''}`}
                       onClick={() => {
                         hapticFeedback('selection');
-                        setPriority((prev) => (prev === 'high' ? 'medium' : 'high'));
+                        setFrequencyType('daily');
                       }}
-                      style={{ marginLeft: 'auto' }}
                     >
-                      {priority === 'high' ? '🔥 Высокий' : 'Обычный'}
+                      Каждый день
+                    </button>
+                    <button
+                      type="button"
+                      className={`filter-chip ${frequencyType === 'interval' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setFrequencyType('interval');
+                      }}
+                    >
+                      Каждые N дней
+                    </button>
+                    <button
+                      type="button"
+                      className={`filter-chip ${frequencyType === 'weekly' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setFrequencyType('weekly');
+                      }}
+                    >
+                      По дням недели
                     </button>
                   </div>
+
+                  {frequencyType === 'interval' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', padding: '6px 10px', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Повторять раз в:</span>
+                      <input
+                        type="number"
+                        min="2"
+                        max="365"
+                        value={intervalDays}
+                        onChange={(e) => setIntervalDays(Math.max(2, parseInt(e.target.value, 10) || 2))}
+                        style={{
+                          width: '60px',
+                          padding: '4px 8px',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '6px',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px',
+                          textAlign: 'center',
+                        }}
+                      />
+                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>дн. (например: 2, 3, 7)</span>
+                    </div>
+                  )}
+
+                  {frequencyType === 'weekly' && (
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '6px', flexWrap: 'wrap' }}>
+                      {[
+                        { id: 0, label: 'Пн' },
+                        { id: 1, label: 'Вт' },
+                        { id: 2, label: 'Ср' },
+                        { id: 3, label: 'Чт' },
+                        { id: 4, label: 'Пт' },
+                        { id: 5, label: 'Сб' },
+                        { id: 6, label: 'Вс' },
+                      ].map((day) => {
+                        const isSelected = daysOfWeek.includes(day.id);
+                        return (
+                          <button
+                            key={day.id}
+                            type="button"
+                            className={`filter-chip ${isSelected ? 'active' : ''}`}
+                            style={{ minWidth: '38px', textAlign: 'center', padding: '6px 8px' }}
+                            onClick={() => {
+                              hapticFeedback('selection');
+                              setDaysOfWeek((prev) => {
+                                if (prev.includes(day.id)) {
+                                  if (prev.length === 1) return prev; // Keep at least one
+                                  return prev.filter((d) => d !== day.id);
+                                } else {
+                                  return [...prev, day.id].sort((a, b) => a - b);
+                                }
+                              });
+                            }}
+                          >
+                            {day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
