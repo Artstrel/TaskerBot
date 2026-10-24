@@ -635,8 +635,52 @@ body.is-tg-fullscreen .header-actions {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 8px;
-  margin-top: 20px;
-  padding-left: 4px;
+  margin-top: 16px;
+  padding-left: 2px;
+}
+
+.settings-accordion-section {
+  background: var(--bg-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  margin: 0 0 16px 0 !important;
+  transition: border-color 0.15s ease;
+}
+
+.settings-accordion-header {
+  padding: 14px 16px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.settings-accordion-header:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.settings-accordion-content {
+  padding: 4px 16px 16px 16px;
+  border-top: 1px solid var(--border-subtle);
+  animation: fadeIn 0.15s ease;
+}
+
+.settings-accordion-content .settings-group {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 16px;
+}
+
+.settings-accordion-content .settings-group:last-child {
+  margin-bottom: 0;
+}
+
+.settings-accordion-content .settings-section-title:first-child {
+  margin-top: 10px;
 }
 
 .linear-count-badge {

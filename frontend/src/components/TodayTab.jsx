@@ -15,6 +15,7 @@ import {
   Pencil,
   X,
   RotateCw,
+  Zap,
 } from 'lucide-react';
 import {
   toggleTask,
@@ -156,8 +157,9 @@ export default function TodayTab({
           Загрузка задач...
         </h3>
         {warmupTimerElapsed ? (
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '300px', margin: '8px auto 0', lineHeight: 1.45 }}>
-            ⚡️ Сервер просыпается после перерыва. Ваши задачи в полной безопасности в базе данных и загрузятся через несколько секунд!
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '300px', margin: '8px auto 0', lineHeight: 1.45, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+            <Zap size={14} style={{ color: 'var(--accent-warning, #f59e0b)', flexShrink: 0 }} />
+            <span>Сервер просыпается после перерыва. Ваши задачи в полной безопасности в базе данных и загрузятся через несколько секунд!</span>
           </p>
         ) : (
           <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '6px' }}>

@@ -1437,12 +1437,12 @@ export default function QuickAddModal({
                                   .filter((et) => et.category === 'goal' && et.id !== task.id && et.title)
                                   .map((eg) => (
                                     <option key={eg.id} value={`title:${eg.title}`}>
-                                      🎯 {eg.title} (новая цель)
+                                      {eg.title} (новая цель)
                                     </option>
                                   ))}
                                 {(goalsData || []).map((g) => (
                                   <option key={g.id} value={String(g.id)}>
-                                    🎯 {g.title}
+                                    {g.title}
                                   </option>
                                 ))}
                               </select>
@@ -1450,7 +1450,7 @@ export default function QuickAddModal({
 
                             {task.target_value && (
                               <span className="item-tag tag-due">
-                                🎯 {task.target_value} {task.unit || ''} (шаг {task.step || 1})
+                                <Target size={10} /> {task.target_value} {task.unit || ''} (шаг {task.step || 1})
                               </span>
                             )}
                             {task.scheduled_date && (
@@ -1714,7 +1714,7 @@ export default function QuickAddModal({
                   >
                     {goalsData.map((g) => (
                       <option key={g.id} value={g.id}>
-                        🎯 {g.title}
+                        {g.title}
                       </option>
                     ))}
                   </select>
@@ -1761,7 +1761,8 @@ export default function QuickAddModal({
                         }
                       }}
                     >
-                      📅 {dueDateOption === 'custom' && customDueDate ? customDueDate : 'Выбрать дату'}
+                      <Calendar size={12} />
+                      <span>{dueDateOption === 'custom' && customDueDate ? customDueDate : 'Выбрать дату'}</span>
                     </button>
                     <button
                       type="button"
@@ -1919,7 +1920,8 @@ export default function QuickAddModal({
                         setIsNumeric((prev) => !prev);
                       }}
                     >
-                      🎯 {isNumeric ? 'Количественная цель: Вкл' : '+ Задать количество'}
+                      <Target size={12} />
+                      <span>{isNumeric ? 'Количественная цель: Вкл' : '+ Задать количество'}</span>
                     </button>
                   </div>
 

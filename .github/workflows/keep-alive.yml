@@ -12,7 +12,7 @@ jobs:
     steps:
       - name: Ping TaskerBot Health Endpoint
         env:
-          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL || vars.RENDER_SERVICE_URL || secrets.WEBAPP_URL || 'https://taskerbot-plp5.onrender.com' }}
+          SERVICE_URL: 'https://taskerbot-plp5.onrender.com'
         run: |
           if [ -z "$SERVICE_URL" ]; then
             echo "❌ ERROR: RENDER_SERVICE_URL is not set!"

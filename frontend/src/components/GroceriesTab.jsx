@@ -570,7 +570,7 @@ export default function GroceriesTab({
           <Mascot state="happy" size={96} interactive={true} />
           <div className="empty-mascot-title">Список продуктов пуст</div>
           <div className="empty-mascot-desc">
-            Надиктуйте список через микрофон 🎙 или введите продукт сверху (например: <i>«Молоко 2 л»</i>).
+            Надиктуйте список через микрофон <Mic size={13} style={{ verticalAlign: 'middle', display: 'inline', margin: '0 2px' }} /> или введите продукт сверху (например: <i>«Молоко 2 л»</i>).
           </div>
         </div>
       )}

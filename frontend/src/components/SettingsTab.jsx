@@ -5,6 +5,10 @@ import {
   Server,
   Key,
   RotateCw,
+  Bell,
+  Cpu,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   fetchUserSettings,
@@ -30,6 +34,41 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   const [geminiKeyInput, setGeminiKeyInput] = useState(getGeminiKey());
   const [groqKeyInput, setGroqKeyInput] = useState(getGroqKey());
   const [openRouterKeyInput, setOpenRouterKeyInput] = useState(getOpenRouterKey());
+
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(() => {
+    const saved = localStorage.getItem('settings_notifications_open');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [isAiOpen, setIsAiOpen] = useState(() => {
+    const saved = localStorage.getItem('settings_ai_open');
+    return saved !== null ? saved === 'true' : false;
+  });
+
+  const toggleNotifications = () => {
+    hapticFeedback('selection');
+    setIsNotificationsOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('settings_notifications_open', String(next));
+      } catch (e) {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const toggleAi = () => {
+    hapticFeedback('selection');
+    setIsAiOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('settings_ai_open', String(next));
+      } catch (e) {
+        // ignore
+      }
+      return next;
+    });
+  };
 
   const loadSettings = useCallback(async () => {
     try {
@@ -252,383 +291,480 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       <div className="settings-desktop-grid">
-      <div className="settings-section-title">
-        Сервер бэкенда (API)
-      </div>
-      <div className="settings-group" style={{ padding: '14px 16px', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Server size={14} style={{ color: customBackend ? 'var(--accent-primary)' : 'var(--text-tertiary)' }} />
-            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              {customBackend ? 'Подключен внешний бэкенд' : 'Локальный режим (GitHub Pages Demo)'}
-            </span>
-          </div>
-          <span
-            style={{
-              fontSize: '10px',
-              padding: '2px 8px',
-              borderRadius: 'var(--radius-full)',
-              background: customBackend ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              color: customBackend ? 'var(--text-primary)' : 'var(--text-secondary)',
-              fontWeight: 500,
+        {/* ========================================================
+            ACCORDION 1: Уведомления и расписание (Open by default)
+            ======================================================== */}
+        <section className="linear-section settings-accordion-section">
+          <div
+            className="settings-accordion-header"
+            onClick={toggleNotifications}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleNotifications();
+              }
             }}
           >
-            {customBackend ? 'Live API' : 'Демо (LocalStorage)'}
-          </span>
-        </div>
-
-        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
-          {customBackend ? (
-            <>Запросы отправляются на <code style={{ color: 'var(--text-secondary)' }}>{customBackend}</code>. Задачи синхронизируются с ботом.</>
-          ) : (
-            'GitHub Pages — статический хостинг без Python и базы данных. В демо-режиме все задачи и цели сохраняются прямо в браузере. Чтобы подключить Telegram-бота, укажите URL запущенного бэкенда (Render / Railway / ngrok).'
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <input
-            type="url"
-            placeholder="https://taskerbot-api.onrender.com"
-            value={backendInput}
-            onChange={(e) => setBackendInput(e.target.value)}
-            style={{
-              flex: 1,
-              fontSize: '12px',
-              padding: '8px 10px',
-              background: 'var(--bg-card)',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              color: 'var(--text-primary)',
-              outline: 'none',
-              fontFamily: 'inherit',
-            }}
-          />
-          <button
-            type="button"
-            className="filter-chip active"
-            onClick={handleSaveBackend}
-            style={{ padding: '0 12px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
-          >
-            Сохранить
-          </button>
-          {customBackend && (
-            <button
-              type="button"
-              className="filter-chip"
-              onClick={handleResetBackend}
-              style={{ padding: '0 10px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
-              title="Сбросить на демо-режим"
-            >
-              Сброс
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* SECTION: Notifications */}
-      <div className="settings-section-title">
-        Уведомления в Telegram
-      </div>
-      <div className="settings-group">
-        {[
-          { key: 'reminder_6h_enabled', label: 'Напоминание за 6 ч. до конца дня' },
-          { key: 'reminder_3h_enabled', label: 'Напоминание за 3 ч. до конца дня' },
-          { key: 'reminder_1h_enabled', label: 'Срочное напоминание за 1 ч.' },
-          { key: 'morning_digest_enabled', label: 'Утренний дайджест задач' },
-          { key: 'evening_digest_enabled', label: 'Вечерний отчет и итоги дня (за 15м)' },
-        ].map((item) => {
-          const isEnabled = settings[item.key];
-          return (
-            <div key={item.key}>
-              <div
-                className="settings-row"
-                onClick={() => handleToggle(item.key)}
-                style={{ cursor: 'pointer' }}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Bell size={16} style={{ color: 'var(--text-primary)' }} />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Уведомления и расписание
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  color: 'var(--text-secondary)',
+                  fontWeight: 500,
+                }}
               >
-                <span className="settings-row-label">{item.label}</span>
-                <button
-                  type="button"
-                  className={`linear-toggle ${isEnabled ? 'active' : ''}`}
-                  aria-label={item.label}
-                >
-                  <div className="linear-toggle-knob" />
-                </button>
-              </div>
-              {item.key === 'morning_digest_enabled' && isEnabled && (
-                <div style={{ padding: '4px 16px 14px', borderTop: '1px solid var(--border-subtle)' }}>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                    Время отправки утреннего дайджеста:
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                    {['07:00', '08:00', '09:00', '10:00'].map((time) => {
-                      const isSelected = (settings.morning_digest_time || '09:00') === time;
-                      return (
-                        <button
-                          key={time}
-                          type="button"
-                          className={`filter-chip ${isSelected ? 'active' : ''}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleMorningTimeChange(time);
-                          }}
-                          style={{
-                            justifyContent: 'center',
-                            padding: '6px 2px',
-                            fontSize: '12px',
-                            borderRadius: 'var(--radius-sm)',
-                          }}
-                        >
-                          {time}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                {settings.timezone || 'Europe/Moscow'}
+              </span>
+              {isNotificationsOpen ? (
+                <ChevronUp size={16} style={{ color: 'var(--text-tertiary)' }} />
+              ) : (
+                <ChevronDown size={16} style={{ color: 'var(--text-tertiary)' }} />
               )}
             </div>
-          );
-        })}
-      </div>
-
-      {/* SECTION: Day end cutoff */}
-      <div className="settings-section-title">
-        Время сброса дня
-      </div>
-      <div className="settings-group" style={{ padding: '14px 16px' }}>
-        <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
-          В это время невыполненные задачи дня переходят в просроченные, а ежедневные привычки сбрасываются.
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-          {['00:00', '01:00', '02:00', '03:00'].map((time) => {
-            const isSelected = settings.day_end_time === time;
-            return (
-              <button
-                key={time}
-                type="button"
-                className={`filter-chip ${isSelected ? 'active' : ''}`}
-                onClick={() => handleDayEndChange(time)}
-                style={{
-                  justifyContent: 'center',
-                  padding: '8px 4px',
-                  borderRadius: 'var(--radius-sm)',
-                }}
-              >
-                {time}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* SECTION: Timezone */}
-      <div className="settings-section-title">
-        Часовой пояс
-      </div>
-      <div className="settings-group">
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">{settings.timezone || 'Europe/Moscow'}</div>
-            <div className="settings-row-desc">Используется для точных напоминаний</div>
           </div>
-          <button
-            type="button"
-            className="filter-chip"
-            onClick={handleAutoDetectTz}
-            style={{ fontSize: '11px', padding: '4px 10px' }}
-          >
-            <Globe size={12} />
-            <span>Определить</span>
-          </button>
-        </div>
-      </div>
 
-      {/* SECTION: AI Providers */}
-      <div className="settings-section-title">
-        AI Провайдер
-      </div>
-      <div className="settings-group" style={{ padding: '10px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {[
-            {
-              id: 'auto',
-              name: 'Auto-Fast Cascade (Groq + OpenRouter + Gemini)',
-              badge: 'Рекомендуется',
-              desc: 'Сверхбыстрый интеллектуальный каскад: сначала Groq (~0.2с) и бесплатные модели OpenRouter, при сбое — Google Gemini.',
-            },
-            {
-              id: 'groq',
-              name: 'Groq LPU (Llama & Whisper)',
-              badge: 'Молниеносно ~0.2с',
-              desc: 'Молниеносная генерация и транскрипция аудио на специализированных чипах Groq LPU.',
-            },
-            {
-              id: 'openrouter',
-              name: 'OpenRouter Free Models',
-              badge: 'Бесплатные модели',
-              desc: 'Легковесные модели (Gemma 4, Liquid 2.6B, Nemotron) через единый API OpenRouter.',
-            },
-            {
-              id: 'gemini',
-              name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)',
-              badge: 'Мультимодальный',
-              desc: 'Официальные модели Google: точный разбор голоса и сложных задач, декомпозиция дат.',
-            },
-          ].map((prov) => {
-            const isSelected = (settings.ai_provider || 'auto') === prov.id;
-            return (
-              <div
-                key={prov.id}
-                onClick={() => handleProviderSelect(prov.id)}
-                style={{
-                  padding: '11px 13px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: isSelected ? 'var(--bg-elevated)' : 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '10px',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                      {prov.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        padding: '1px 6px',
-                        borderRadius: '4px',
-                        background: 'rgba(255, 255, 255, 0.06)',
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      {prov.badge}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px', lineHeight: 1.3 }}>
-                    {prov.desc}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    border: isSelected ? '5px solid var(--accent-primary)' : '1.5px solid var(--text-muted)',
-                    background: isSelected ? '#ffffff' : 'transparent',
-                    flexShrink: 0,
-                  }}
-                />
+          {isNotificationsOpen && (
+            <div className="settings-accordion-content">
+              {/* SECTION: Notifications */}
+              <div className="settings-section-title">
+                Уведомления в Telegram
               </div>
-            );
-          })}
-        </div>
-      </div>
+              <div className="settings-group">
+                {[
+                  { key: 'reminder_6h_enabled', label: 'Напоминание за 6 ч. до конца дня' },
+                  { key: 'reminder_3h_enabled', label: 'Напоминание за 3 ч. до конца дня' },
+                  { key: 'reminder_1h_enabled', label: 'Срочное напоминание за 1 ч.' },
+                  { key: 'morning_digest_enabled', label: 'Утренний дайджест задач' },
+                  { key: 'evening_digest_enabled', label: 'Вечерний отчет и итоги дня (за 15м)' },
+                ].map((item) => {
+                  const isEnabled = settings[item.key];
+                  return (
+                    <div key={item.key}>
+                      <div
+                        className="settings-row"
+                        onClick={() => handleToggle(item.key)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <span className="settings-row-label">{item.label}</span>
+                        <button
+                          type="button"
+                          className={`linear-toggle ${isEnabled ? 'active' : ''}`}
+                          aria-label={item.label}
+                        >
+                          <div className="linear-toggle-knob" />
+                        </button>
+                      </div>
+                      {item.key === 'morning_digest_enabled' && isEnabled && (
+                        <div style={{ padding: '4px 16px 14px', borderTop: '1px solid var(--border-subtle)' }}>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                            Время отправки утреннего дайджеста:
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                            {['07:00', '08:00', '09:00', '10:00'].map((time) => {
+                              const isSelected = (settings.morning_digest_time || '09:00') === time;
+                              return (
+                                <button
+                                  key={time}
+                                  type="button"
+                                  className={`filter-chip ${isSelected ? 'active' : ''}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMorningTimeChange(time);
+                                  }}
+                                  style={{
+                                    justifyContent: 'center',
+                                    padding: '6px 2px',
+                                    fontSize: '12px',
+                                    borderRadius: 'var(--radius-sm)',
+                                  }}
+                                >
+                                  {time}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
-      {/* SECTION: Direct AI Keys (Browser / Offline Mode) */}
-      <div className="settings-section-title">
-        Ключи API для автономного режима (GitHub Pages)
-      </div>
-      <div className="settings-group" style={{ padding: '14px 16px' }}>
-        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
-          Позволяют нейросети расшифровывать голос и задачи прямо в браузере без запуска бэкенда. Ключи сохраняются локально в вашем браузере.
-        </div>
+              {/* SECTION: Day end cutoff */}
+              <div className="settings-section-title">
+                Время сброса дня
+              </div>
+              <div className="settings-group" style={{ padding: '14px 16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                  В это время невыполненные задачи дня переходят в просроченные, а ежедневные привычки сбрасываются.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                  {['00:00', '01:00', '02:00', '03:00'].map((time) => {
+                    const isSelected = settings.day_end_time === time;
+                    return (
+                      <button
+                        key={time}
+                        type="button"
+                        className={`filter-chip ${isSelected ? 'active' : ''}`}
+                        onClick={() => handleDayEndChange(time)}
+                        style={{
+                          justifyContent: 'center',
+                          padding: '8px 4px',
+                          borderRadius: 'var(--radius-sm)',
+                        }}
+                      >
+                        {time}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Key size={12} /> OpenRouter API Key (Бесплатные модели)
+              {/* SECTION: Timezone */}
+              <div className="settings-section-title">
+                Часовой пояс
+              </div>
+              <div className="settings-group">
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-label">{settings.timezone || 'Europe/Moscow'}</div>
+                    <div className="settings-row-desc">Используется для точных напоминаний</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="filter-chip"
+                    onClick={handleAutoDetectTz}
+                    style={{ fontSize: '11px', padding: '4px 10px' }}
+                  >
+                    <Globe size={12} />
+                    <span>Определить</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <input
-              type="password"
-              placeholder="Вставьте ваш OpenRouter API Key (sk-or-v1-...)"
-              value={openRouterKeyInput}
-              onChange={(e) => setOpenRouterKeyInput(e.target.value)}
-              style={{
-                width: '100%',
-                fontSize: '12px',
-                padding: '8px 10px',
-                background: 'var(--bg-card)',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                outline: 'none',
-                fontFamily: 'monospace',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
+          )}
+        </section>
 
-          <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Key size={12} /> Google Gemini API Key
-            </div>
-            <input
-              type="password"
-              placeholder="Вставьте ваш Google Gemini API Key"
-              value={geminiKeyInput}
-              onChange={(e) => setGeminiKeyInput(e.target.value)}
-              style={{
-                width: '100%',
-                fontSize: '12px',
-                padding: '8px 10px',
-                background: 'var(--bg-card)',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                outline: 'none',
-                fontFamily: 'monospace',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Key size={12} /> Groq API Key
-            </div>
-            <input
-              type="password"
-              placeholder="Вставьте ваш Groq API Key (gsk_...)"
-              value={groqKeyInput}
-              onChange={(e) => setGroqKeyInput(e.target.value)}
-              style={{
-                width: '100%',
-                fontSize: '12px',
-                padding: '8px 10px',
-                background: 'var(--bg-card)',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-primary)',
-                outline: 'none',
-                fontFamily: 'monospace',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          <button
-            type="button"
-            className="filter-chip active"
-            onClick={handleSaveAiKeys}
-            style={{
-              padding: '8px 16px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              alignSelf: 'flex-start',
-              marginTop: '4px',
+        {/* ========================================================
+            ACCORDION 2: ИИ и API подключение (Collapsed by default)
+            ======================================================== */}
+        <section className="linear-section settings-accordion-section">
+          <div
+            className="settings-accordion-header"
+            onClick={toggleAi}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleAi();
+              }
             }}
           >
-            Сохранить ключи API
-          </button>
-        </div>
-      </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Cpu size={16} style={{ color: 'var(--text-primary)' }} />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                ИИ и API подключение
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-full)',
+                  background: customBackend ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                  color: customBackend ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontWeight: 500,
+                }}
+              >
+                {customBackend ? 'Live API' : 'Демо'}
+              </span>
+              {isAiOpen ? (
+                <ChevronUp size={16} style={{ color: 'var(--text-tertiary)' }} />
+              ) : (
+                <ChevronDown size={16} style={{ color: 'var(--text-tertiary)' }} />
+              )}
+            </div>
+          </div>
+
+          {isAiOpen && (
+            <div className="settings-accordion-content">
+              {/* SECTION: Backend server */}
+              <div className="settings-section-title">
+                Сервер бэкенда (API)
+              </div>
+              <div className="settings-group" style={{ padding: '14px 16px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Server size={14} style={{ color: customBackend ? 'var(--accent-primary)' : 'var(--text-tertiary)' }} />
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {customBackend ? 'Подключен внешний бэкенд' : 'Локальный режим (GitHub Pages Demo)'}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      padding: '2px 8px',
+                      borderRadius: 'var(--radius-full)',
+                      background: customBackend ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                      color: customBackend ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {customBackend ? 'Live API' : 'Демо (LocalStorage)'}
+                  </span>
+                </div>
+
+                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
+                  {customBackend ? (
+                    <>Запросы отправляются на <code style={{ color: 'var(--text-secondary)' }}>{customBackend}</code>. Задачи синхронизируются с ботом.</>
+                  ) : (
+                    'GitHub Pages — статический хостинг без Python и базы данных. В демо-режиме все задачи и цели сохраняются прямо в браузере. Чтобы подключить Telegram-бота, укажите URL запущенного бэкенда (Render / Railway / ngrok).'
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="url"
+                    placeholder="https://taskerbot-api.onrender.com"
+                    value={backendInput}
+                    onChange={(e) => setBackendInput(e.target.value)}
+                    style={{
+                      flex: 1,
+                      fontSize: '12px',
+                      padding: '8px 10px',
+                      background: 'var(--bg-surface)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="filter-chip active"
+                    onClick={handleSaveBackend}
+                    style={{ padding: '0 12px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
+                  >
+                    Сохранить
+                  </button>
+                  {customBackend && (
+                    <button
+                      type="button"
+                      className="filter-chip"
+                      onClick={handleResetBackend}
+                      style={{ padding: '0 10px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
+                      title="Сбросить на демо-режим"
+                    >
+                      Сброс
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* SECTION: AI Providers */}
+              <div className="settings-section-title">
+                AI Провайдер
+              </div>
+              <div className="settings-group" style={{ padding: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[
+                    {
+                      id: 'auto',
+                      name: 'Auto-Fast Cascade (Groq + OpenRouter + Gemini)',
+                      badge: 'Рекомендуется',
+                      desc: 'Сверхбыстрый интеллектуальный каскад: сначала Groq (~0.2с) и бесплатные модели OpenRouter, при сбое — Google Gemini.',
+                    },
+                    {
+                      id: 'groq',
+                      name: 'Groq LPU (Llama & Whisper)',
+                      badge: 'Молниеносно ~0.2с',
+                      desc: 'Молниеносная генерация и транскрипция аудио на специализированных чипах Groq LPU.',
+                    },
+                    {
+                      id: 'openrouter',
+                      name: 'OpenRouter Free Models',
+                      badge: 'Бесплатные модели',
+                      desc: 'Легковесные модели (Gemma 4, Liquid 2.6B, Nemotron) через единый API OpenRouter.',
+                    },
+                    {
+                      id: 'gemini',
+                      name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)',
+                      badge: 'Мультимодальный',
+                      desc: 'Официальные модели Google: точный разбор голоса и сложных задач, декомпозиция дат.',
+                    },
+                  ].map((prov) => {
+                    const isSelected = (settings.ai_provider || 'auto') === prov.id;
+                    return (
+                      <div
+                        key={prov.id}
+                        onClick={() => handleProviderSelect(prov.id)}
+                        style={{
+                          padding: '11px 13px',
+                          borderRadius: 'var(--radius-sm)',
+                          background: isSelected ? 'var(--bg-elevated)' : 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '10px',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {prov.name}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                padding: '1px 6px',
+                                borderRadius: '4px',
+                                background: 'rgba(255, 255, 255, 0.06)',
+                                color: 'var(--text-secondary)',
+                              }}
+                            >
+                              {prov.badge}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px', lineHeight: 1.3 }}>
+                            {prov.desc}
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            border: isSelected ? '5px solid var(--accent-primary)' : '1.5px solid var(--text-muted)',
+                            background: isSelected ? '#ffffff' : 'transparent',
+                            flexShrink: 0,
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION: Direct AI Keys (Browser / Offline Mode) */}
+              <div className="settings-section-title">
+                Ключи API для автономного режима (GitHub Pages)
+              </div>
+              <div className="settings-group" style={{ padding: '14px 16px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginBottom: '12px', lineHeight: 1.4 }}>
+                  Позволяют нейросети расшифровывать голос и задачи прямо в браузере без запуска бэкенда. Ключи сохраняются локально в вашем браузере.
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Key size={12} /> OpenRouter API Key (Бесплатные модели)
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="Вставьте ваш OpenRouter API Key (sk-or-v1-...)"
+                      value={openRouterKeyInput}
+                      onChange={(e) => setOpenRouterKeyInput(e.target.value)}
+                      style={{
+                        width: '100%',
+                        fontSize: '12px',
+                        padding: '8px 10px',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--text-primary)',
+                        outline: 'none',
+                        fontFamily: 'monospace',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Key size={12} /> Google Gemini API Key
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="Вставьте ваш Google Gemini API Key"
+                      value={geminiKeyInput}
+                      onChange={(e) => setGeminiKeyInput(e.target.value)}
+                      style={{
+                        width: '100%',
+                        fontSize: '12px',
+                        padding: '8px 10px',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--text-primary)',
+                        outline: 'none',
+                        fontFamily: 'monospace',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Key size={12} /> Groq API Key
+                    </div>
+                    <input
+                      type="password"
+                      placeholder="Вставьте ваш Groq API Key (gsk_...)"
+                      value={groqKeyInput}
+                      onChange={(e) => setGroqKeyInput(e.target.value)}
+                      style={{
+                        width: '100%',
+                        fontSize: '12px',
+                        padding: '8px 10px',
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-subtle)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'var(--text-primary)',
+                        outline: 'none',
+                        fontFamily: 'monospace',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="filter-chip active"
+                    onClick={handleSaveAiKeys}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      alignSelf: 'flex-start',
+                      marginTop: '4px',
+                    }}
+                  >
+                    Сохранить ключи API
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
       </div>
       </div>
     </div>
