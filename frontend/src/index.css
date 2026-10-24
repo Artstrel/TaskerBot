@@ -196,9 +196,9 @@ html.is-ios .app-header {
 
 body.is-tg-fullscreen.is-ios .app-header,
 html.is-tg-fullscreen.is-ios .app-header {
-  padding-top: max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px), 8px) !important;
+  padding-top: max(var(--tg-raw-safe-top, 6px), env(safe-area-inset-top, 6px), 8px) !important;
   padding-bottom: 6px !important;
-  padding-left: max(calc(12px + var(--safe-left)), 76px) !important;
+  padding-left: max(calc(16px + var(--safe-left)), 76px) !important;
   padding-right: max(calc(12px + var(--safe-right)), 76px) !important;
   justify-content: center !important;
 }
