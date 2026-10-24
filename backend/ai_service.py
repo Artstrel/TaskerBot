@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 
 import httpx
 from backend.config import settings
-from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AIProvidersResponse
+from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AIProvidersResponse, capitalize_first
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +48,10 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 Формат ответа: строго JSON с полем "tasks".
 Каждый элемент в "tasks" должен содержать:
 - "category": "routine" | "one_time" | "goal" | "subtask" | "grocery"
-- "title": краткое и четкое название задачи или продукта
+- "title": краткое и четкое название задачи или продукта (ОБЯЗАТЕЛЬНО начинай с заглавной буквы, например: "Купить молоко", "Позвонить врачу", "Сделать зарядку")
 - "description": подробности или null
 - "scheduled_date": "YYYY-MM-DD" или null
-- "goal_title": название цели (если это subtask) или null
+- "goal_title": точное название цели из списка или новой цели (всегда с заглавной буквы) или null
 - "target_date": дедлайн цели "YYYY-MM-DD" (если это goal) или null
 - "target_value": число (float) или null
 - "step": шаг (float) или null
@@ -76,14 +76,15 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
     normalized_tasks = []
     for t in raw_tasks:
         if isinstance(t, str):
-            title = t.strip()
+            title = capitalize_first(t)
             if title:
                 normalized_tasks.append(ExtractedTask(category="one_time", title=title))
         elif isinstance(t, dict):
             cat = t.get("category", "one_time")
             if cat not in ["routine", "one_time", "goal", "subtask", "grocery"]:
                 cat = "one_time"
-            title = t.get("title") or t.get("name") or "Новая задача"
+            title = capitalize_first(t.get("title") or t.get("name") or "Новая задача")
+            goal_title = capitalize_first(t.get("goal_title")) if t.get("goal_title") else None
 
             target_val = t.get("target_value")
             try:
@@ -103,10 +104,10 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
             normalized_tasks.append(
                 ExtractedTask(
                     category=cat,
-                    title=str(title).strip(),
+                    title=title,
                     scheduled_date=t.get("scheduled_date"),
                     description=t.get("description"),
-                    goal_title=t.get("goal_title"),
+                    goal_title=goal_title,
                     target_date=t.get("target_date"),
                     target_value=target_val,
                     step=step_val,
@@ -214,7 +215,7 @@ def _fallback_parse(
             tasks.append(
                 ExtractedTask(
                     category="routine",
-                    title=title or line,
+                    title=capitalize_first(title or line),
                     target_value=target_val,
                     step=step_val,
                     unit=unit_val,
@@ -223,7 +224,7 @@ def _fallback_parse(
         # Goal check
         elif any(w in lower for w in ["цель:", "цель ", "проект:", "проект "]):
             title = re.sub(r"\b(цель|проект)\b:?", "", line, flags=re.IGNORECASE).strip()
-            current_goal = title or line
+            current_goal = capitalize_first(title or line)
             tasks.append(
                 ExtractedTask(
                     category="goal",
@@ -253,8 +254,8 @@ def _fallback_parse(
                 tasks.append(
                     ExtractedTask(
                         category="subtask",
-                        title=clean_subtask or line,
-                        goal_title=matched_goal,
+                        title=capitalize_first(clean_subtask or line),
+                        goal_title=capitalize_first(matched_goal),
                         target_value=target_val,
                         step=step_val,
                         unit=unit_val,
@@ -277,7 +278,7 @@ def _fallback_parse(
                 tasks.append(
                     ExtractedTask(
                         category="one_time",
-                        title=clean_title or line,
+                        title=capitalize_first(clean_title or line),
                         scheduled_date=sched_date,
                         target_value=target_val,
                         step=step_val,
@@ -286,7 +287,7 @@ def _fallback_parse(
                 )
 
     if not tasks and text.strip():
-        tasks.append(ExtractedTask(category="one_time", title=text.strip()))
+        tasks.append(ExtractedTask(category="one_time", title=capitalize_first(text.strip())))
 
     return ExtractedTaskList(tasks=tasks)
 
@@ -472,6 +473,7 @@ class AIService:
                             "content": (
                                 _format_system_prompt(current_date, existing_goals)
                                 + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
+                                + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы!"
                             ),
                         },
                         {"role": "user", "content": f"Текст сообщения пользователя:\n{text}"},
@@ -517,6 +519,7 @@ class AIService:
         system_msg = (
             _format_system_prompt(current_date, existing_goals)
             + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
+            + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы (например: 'Купить молоко', 'Позвонить врачу')!"
         )
 
         for model_name in free_models:

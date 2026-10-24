@@ -15,6 +15,7 @@ from backend.schemas import (
     DaySummary,
     GroceryItemRead,
     GroceryListResponse,
+    capitalize_first,
 )
 from backend.database import engine
 
@@ -188,7 +189,7 @@ async def create_routine(
 ) -> RoutineTask:
     routine = RoutineTask(
         user_id=user_id,
-        title=title.strip(),
+        title=capitalize_first(title),
         description=description.strip() if description else None,
         target_value=target_value,
         step=step or 1.0,
@@ -427,7 +428,7 @@ async def create_one_time_task(
 ) -> OneTimeTask:
     task = OneTimeTask(
         user_id=user_id,
-        title=title.strip(),
+        title=capitalize_first(title),
         scheduled_date=scheduled_date,
         goal_id=goal_id,
         priority=priority,
@@ -687,7 +688,7 @@ async def create_goal(
 ) -> Goal:
     goal = Goal(
         user_id=user_id,
-        title=title.strip(),
+        title=capitalize_first(title),
         description=description.strip() if description else None,
         target_date=target_date,
     )
@@ -853,7 +854,7 @@ async def create_grocery_item(
 ) -> GroceryItemRead:
     item = GroceryItem(
         user_id=user_id,
-        title=title.strip(),
+        title=capitalize_first(title),
         target_value=target_value,
         current_value=0.0,
         step=step or 1.0,

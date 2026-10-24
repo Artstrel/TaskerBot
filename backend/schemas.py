@@ -3,7 +3,24 @@ from typing import List, Optional, Literal, Union, Any
 from pydantic import BaseModel, Field, field_validator
 
 
-# --- Gemini Parsing Schemas ---
+def capitalize_first(text: Optional[str]) -> Optional[str]:
+    """Capitalize only the first letter of a string, preserving the rest of the text and casing."""
+    if not text:
+        return text
+    s = str(text).strip()
+    if not s:
+        return s
+    for i, ch in enumerate(s):
+        if ch.lower() != ch.upper():
+            return s[:i] + ch.upper() + s[i + 1:]
+        if ch.isdigit():
+            return s
+        if ch not in ('"', "'", '«', '“', '‘', '`', '(', '['):
+            return s
+    return s
+
+
+# --- Gemini / AI Parsing Schemas ---
 class ExtractedTask(BaseModel):
     category: Literal["routine", "one_time", "goal", "subtask", "grocery"] = Field(
         ...,
@@ -29,6 +46,20 @@ class ExtractedTask(BaseModel):
     unit: Optional[str] = Field(
         None, description="Unit of measurement (e.g. 'л', 'мл', 'шт', 'раз', 'кг', 'км', 'стр')"
     )
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
+
+    @field_validator("goal_title", mode="before")
+    @classmethod
+    def validate_goal_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
 
 
 class ExtractedTaskList(BaseModel):
@@ -94,6 +125,13 @@ class RoutineTaskCreate(BaseModel):
     step: Optional[float] = 1.0
     unit: Optional[str] = None
 
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
+
 
 class RoutineTaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -102,6 +140,13 @@ class RoutineTaskUpdate(BaseModel):
     target_value: Optional[float] = None
     step: Optional[float] = None
     unit: Optional[str] = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
 
 
 class RoutineWithStatus(BaseModel):
@@ -133,6 +178,13 @@ class GoalCreate(BaseModel):
     description: Optional[str] = None
     target_date: Optional[date] = None
 
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
+
     @field_validator("target_date", mode="before")
     @classmethod
     def parse_target_date(cls, v: Any):
@@ -146,6 +198,13 @@ class GoalUpdate(BaseModel):
     description: Optional[str] = None
     target_date: Optional[date] = None
     is_completed: Optional[bool] = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
 
     @field_validator("target_date", mode="before")
     @classmethod
@@ -204,6 +263,13 @@ class OneTimeTaskCreate(BaseModel):
     step: Optional[float] = 1.0
     unit: Optional[str] = None
 
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
+
     @field_validator("scheduled_date", mode="before")
     @classmethod
     def parse_scheduled_date(cls, v: Any):
@@ -236,6 +302,13 @@ class OneTimeTaskUpdate(BaseModel):
     current_value: Optional[float] = None
     step: Optional[float] = None
     unit: Optional[str] = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
 
     @field_validator("scheduled_date", mode="before")
     @classmethod
@@ -278,6 +351,13 @@ class GroceryItemBase(BaseModel):
     step: Optional[float] = 1.0
     unit: Optional[str] = None
 
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
+
 
 class GroceryItemCreate(GroceryItemBase):
     pass
@@ -290,6 +370,13 @@ class GroceryItemUpdate(BaseModel):
     current_value: Optional[float] = None
     step: Optional[float] = None
     unit: Optional[str] = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return capitalize_first(v)
+        return v
 
 
 class GroceryItemRead(GroceryItemBase):

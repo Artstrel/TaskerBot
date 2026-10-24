@@ -22,6 +22,7 @@ import {
   setCachedGroceries,
   addPendingMutation,
   removePendingMutation,
+  capitalizeFirst,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -118,7 +119,7 @@ export default function GroceriesTab({
 
   // Save inline title edit
   const handleSaveEdit = (itemId) => {
-    const title = editItemTitle.trim();
+    const title = capitalizeFirst(editItemTitle.trim());
     if (!title) {
       setEditingItemId(null);
       return;
@@ -276,13 +277,13 @@ export default function GroceriesTab({
     hapticFeedback('light');
 
     // Parse numeric quantity if present (e.g. "Молоко 2 л" or "Яйца 10 шт")
-    let cleanTitle = title;
+    let cleanTitle = capitalizeFirst(title);
     let targetVal = null;
     let unit = null;
 
     const qtyMatch = title.match(/^(.*?)(?:,\s*|\s+)(\d+(?:[.,]\d+)?)\s*(л|мл|кг|г|шт|упак|банк|бутыл)?$/i);
     if (qtyMatch) {
-      cleanTitle = qtyMatch[1].trim();
+      cleanTitle = capitalizeFirst(qtyMatch[1].trim());
       targetVal = parseFloat(qtyMatch[2].replace(',', '.'));
       unit = qtyMatch[3] ? qtyMatch[3].toLowerCase() : null;
     }

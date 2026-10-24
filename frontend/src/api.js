@@ -954,6 +954,25 @@ export const OPENROUTER_FREE_MODELS = [
   'openrouter/free',
 ];
 
+export const capitalizeFirst = (text) => {
+  if (!text || typeof text !== 'string') return text || '';
+  const s = text.trim();
+  if (!s) return s;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch.toLowerCase() !== ch.toUpperCase()) {
+      return s.slice(0, i) + ch.toUpperCase() + s.slice(i + 1);
+    }
+    if (/\d/.test(ch)) {
+      return s;
+    }
+    if (!/['"«“‘`(\[]/.test(ch)) {
+      return s;
+    }
+  }
+  return s;
+};
+
 export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
   if (!parsed) return null;
   let rawList = null;
@@ -980,9 +999,10 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
     .map((item, idx) => {
       if (!item) return null;
       if (typeof item === 'string') {
-        const title = item.trim();
+        const rawTitle = item.trim();
+        const title = capitalizeFirst(rawTitle);
         if (!title) return null;
-        const lower = title.toLowerCase();
+        const lower = rawTitle.toLowerCase();
         const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(lower);
         const isGoal = /цель|проект|хочу/i.test(lower);
         const isGrocery = /молоко|хлеб|сыр|яйц|помидор|огурц|мясо|куриц|масло|яблок|банан|чай|кофе|сахар|мука|порошок|мыло|продукты|покупк/i.test(lower);
@@ -997,7 +1017,8 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
         };
       }
       if (typeof item === 'object') {
-        const title = String(item.title || item.name || item.text || '').trim();
+        const rawTitle = String(item.title || item.name || item.text || '').trim();
+        const title = capitalizeFirst(rawTitle);
         if (!title) return null;
         let cat = item.category || defaultCategory;
         if (!['routine', 'one_time', 'goal', 'subtask', 'grocery'].includes(cat)) {
@@ -1007,12 +1028,16 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
         if (cat === 'one_time' && !sched) {
           sched = todayStr;
         }
+        const goalTitle = item.goal_title ? capitalizeFirst(String(item.goal_title)) : null;
         return {
           id: item.id || `task_${Date.now()}_${idx}`,
           title,
           category: cat,
           scheduled_date: sched,
           description: item.description || null,
+          goal_title: goalTitle,
+          goal_id: item.goal_id || null,
+          target_date: item.target_date || null,
           target_value: item.target_value !== undefined && item.target_value !== null ? Number(item.target_value) : null,
           step: item.step !== undefined && item.step !== null ? Number(item.step) : (item.target_value ? 1.0 : null),
           unit: item.unit ? String(item.unit) : null,
@@ -1040,9 +1065,12 @@ export const parseTextWithDirectGemini = async (text) => {
 3. "goal": глобальные цели ("цель", "проект")
 4. "grocery": продукты питания, напитки, еда, бытовая химия ("молоко", "хлеб", "сыр", "яйца", "в список продуктов", "купить в магазине")
 
+ВАЖНО:
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Купить молоко", "Позвонить врачу")!
+
 Текущая дата: ${todayStr}.
 Формат ответа строго валидный JSON с ключом "tasks".
-Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}
+Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null}
 Пример структуры:
 {
   "tasks": [
@@ -1106,9 +1134,12 @@ export const parseTextWithDirectGroq = async (text) => {
 Если в сообщении несколько задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
 Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели), "grocery" (продукты, напитки, еда, бытовая химия).
 
+ВАЖНО:
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Купить молоко", "Позвонить врачу")!
+
 Текущая дата: ${todayStr}.
 Формат ответа: строгий JSON с ключом "tasks".
-Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
+Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "Купить молоко", "scheduled_date": "YYYY-MM-DD"|null}`;
 
   for (const model of GROQ_CHAT_MODELS) {
     try {
@@ -1269,9 +1300,13 @@ export const parseTextWithDirectOpenRouter = async (text) => {
 - one_time: разовые дела (сегодня, завтра, в пятницу)
 - goal: глобальные цели и проекты
 - subtask: подзадачи для цели
+- grocery: продукты питания, напитки, еда, бытовая химия (молоко, хлеб, яйца)
+
+ВАЖНО:
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Купить молоко", "Позвонить врачу", "Сделать зарядку")!
 
 Верни ответ СТРОГО в формате JSON с ключом "tasks":
-{"tasks": [{"category": "one_time", "title": "название", "scheduled_date": "YYYY-MM-DD"}]}`;
+{"tasks": [{"category": "one_time", "title": "Купить молоко", "scheduled_date": "YYYY-MM-DD"}]}`;
 
   for (const model of OPENROUTER_FREE_MODELS) {
     try {
@@ -1425,14 +1460,16 @@ export const parseSmartText = async (text, provider = null) => {
     let schedDate = todayStr;
     if (/завтра/i.test(lower)) schedDate = tomorrowStr;
 
-    const cleanTitle = chunk
-      .replace(/^(?:завтра|сегодня|послезавтра|надо|нужно|каждый день|ежедневно|цель:?|проект:?)\s*/i, '')
-      .replace(/\b(?:завтра|послезавтра)\b/gi, '')
-      .trim();
+    const cleanTitle = capitalizeFirst(
+      chunk
+        .replace(/^(?:завтра|сегодня|послезавтра|надо|нужно|каждый день|ежедневно|цель:?|проект:?)\s*/i, '')
+        .replace(/\b(?:завтра|послезавтра)\b/gi, '')
+        .trim()
+    );
 
     return {
       id: `task_${Date.now()}_${idx}`,
-      title: cleanTitle || chunk,
+      title: cleanTitle || capitalizeFirst(chunk),
       category: isRoutine ? 'routine' : isGoal ? 'goal' : 'one_time',
       scheduled_date: isRoutine ? null : schedDate,
       selected: true,
@@ -1440,7 +1477,7 @@ export const parseSmartText = async (text, provider = null) => {
   });
 
   return {
-    tasks: tasks.length > 0 ? tasks : [{ id: `task_${Date.now()}_0`, title: text, category: 'one_time', selected: true }],
+    tasks: tasks.length > 0 ? tasks : [{ id: `task_${Date.now()}_0`, title: capitalizeFirst(text), category: 'one_time', selected: true }],
   };
 };
 

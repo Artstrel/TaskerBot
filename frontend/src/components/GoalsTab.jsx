@@ -21,6 +21,7 @@ import {
   setCachedDashboard,
   addPendingMutation,
   removePendingMutation,
+  capitalizeFirst,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -49,7 +50,7 @@ export default function GoalsTab({
 
   const handleCreateGoal = (e) => {
     e.preventDefault();
-    const title = newGoalTitle.trim();
+    const title = capitalizeFirst(newGoalTitle.trim());
     if (!title) return;
 
     const tempId = `temp_goal_${Date.now()}`;
@@ -108,7 +109,7 @@ export default function GoalsTab({
   };
 
   const handleAddSubtask = (goalId) => {
-    const title = (newSubtaskTitles[goalId] || '').trim();
+    const title = capitalizeFirst((newSubtaskTitles[goalId] || '').trim());
     if (!title) return;
 
     const tempId = `temp_subtask_${Date.now()}`;

@@ -29,6 +29,7 @@ import {
   setCachedGroceries,
   addPendingMutation,
   removePendingMutation,
+  capitalizeFirst,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -182,9 +183,10 @@ export default function QuickAddModal({
 
       return {
         ...t,
+        title: capitalizeFirst(t.title || ''),
         category: cat,
         goal_id: gId,
-        goal_title: gTitle,
+        goal_title: gTitle ? capitalizeFirst(gTitle) : null,
         id: `task_${Date.now()}_${i}`,
         selected: true,
       };
@@ -390,7 +392,7 @@ export default function QuickAddModal({
   // Direct Create (Zero AI latency)
   const handleDirectCreate = (e) => {
     if (e) e.preventDefault();
-    const title = inputText.trim();
+    const title = capitalizeFirst(inputText.trim());
     if (!title) return;
 
     const tempId = `temp_${Date.now()}`;
@@ -747,7 +749,7 @@ export default function QuickAddModal({
           t.id === taskId
             ? {
                 ...t,
-                title: editingTitle.trim(),
+                title: capitalizeFirst(editingTitle.trim()),
                 target_value: parsedTarget && parsedTarget > 0 ? parsedTarget : null,
                 unit: cleanUnit,
                 step: parsedStep && parsedStep > 0 ? parsedStep : 1.0,
@@ -796,7 +798,7 @@ export default function QuickAddModal({
     // 1. Pass 1: Goals
     selected.forEach((t, i) => {
       if (t.category !== 'goal') return;
-      const cleanTitle = (t.title || '').trim();
+      const cleanTitle = capitalizeFirst((t.title || '').trim());
       if (!cleanTitle) return;
 
       const tempId = `temp_ai_goal_${Date.now()}_${i}`;
@@ -846,7 +848,7 @@ export default function QuickAddModal({
 
     // 2. Pass 2: Routines, Subtasks, One-Time tasks
     selected.forEach((t, i) => {
-      const cleanTitle = (t.title || '').trim();
+      const cleanTitle = capitalizeFirst((t.title || '').trim());
       if (!cleanTitle || t.category === 'goal') return;
 
       const tempId = `temp_ai_${Date.now()}_${i}`;
@@ -904,7 +906,7 @@ export default function QuickAddModal({
           .catch(() => removePendingMutation(mutationId));
       } else if (t.category === 'subtask' || t.goal_id || t.goal_title) {
         let targetGoalId = t.goal_id || null;
-        let targetGoalTitle = t.goal_title || null;
+        let targetGoalTitle = t.goal_title ? capitalizeFirst(t.goal_title) : null;
 
         if (!targetGoalId && targetGoalTitle) {
           const matchedNew = createdGoalsMap[targetGoalTitle.toLowerCase()];
