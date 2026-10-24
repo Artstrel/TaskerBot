@@ -34,10 +34,10 @@
 
   --accent-streak: #ffffff;
 
-  /* Radii */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  /* Radii - Super-Rounded Pill/Capsule UI-Kit */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 26px;
   --radius-full: 9999px;
 
   /* Shadows */
@@ -75,8 +75,8 @@
   color-scheme: dark;
 }
 
-body.is-tg-fullscreen,
-html.is-tg-fullscreen {
+body.is-tg-fullscreen.is-ios,
+html.is-tg-fullscreen.is-ios {
   --safe-top: max(
     var(--tg-content-safe-area-inset-top, 0px),
     var(--tg-safe-area-inset-top, 0px),
@@ -177,24 +177,37 @@ h1, h2, h3, h4, .brand-font {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: none;
-  padding: 16px calc(18px + var(--safe-right)) 10px calc(18px + var(--safe-left));
+  padding: 14px calc(18px + var(--safe-right)) 10px calc(18px + var(--safe-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
   transition: padding 0.2s ease;
 }
 
+/* iOS: slightly lower the top profile bubble by 8-12px so it doesn't touch the Telegram buttons */
+body.is-ios .app-header,
+html.is-ios .app-header {
+  padding-top: max(calc(18px + var(--safe-top)), 22px);
+}
+
+body.is-tg-fullscreen.is-ios .app-header,
+html.is-tg-fullscreen.is-ios .app-header {
+  padding-top: max(calc(18px + var(--safe-top)), 66px) !important;
+}
+
 body.is-tg-fullscreen .app-header {
-  padding-top: max(calc(12px + var(--safe-top)), 16px);
-  padding-left: max(calc(18px + var(--safe-left)), 92px) !important;
-  padding-right: max(calc(18px + var(--safe-right)), 92px) !important;
+  padding-left: max(calc(18px + var(--safe-left)), 70px) !important;
+  padding-right: max(calc(18px + var(--safe-right)), 70px) !important;
   justify-content: center !important;
 }
 
-/* iOS Telegram Fullscreen top offset (~70px to clear dynamic island/notch and buttons) */
-body.is-tg-fullscreen.is-ios .app-header,
-html.is-tg-fullscreen.is-ios .app-header {
-  padding-top: max(calc(16px + var(--safe-top)), 70px) !important;
+/* Desktop and non-iOS in fullscreen: keep compact, centered, without excessive gap */
+body.is-tg-fullscreen:not(.is-ios) .app-header,
+html.is-tg-fullscreen:not(.is-ios) .app-header {
+  padding-top: max(calc(12px + var(--safe-top)), 14px) !important;
+  padding-left: max(calc(18px + var(--safe-left)), 70px) !important;
+  padding-right: max(calc(18px + var(--safe-right)), 70px) !important;
+  justify-content: center !important;
 }
 
 body.is-tg-fullscreen .header-profile-bubble {
@@ -292,7 +305,7 @@ body.is-tg-fullscreen .header-actions {
   background: var(--bg-surface);
   border: none;
   color: var(--text-secondary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   width: 34px;
   height: 34px;
   display: flex;
@@ -316,7 +329,7 @@ body.is-tg-fullscreen .header-actions {
   background: var(--bg-surface);
   border: none;
   color: var(--text-tertiary);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   width: 28px;
   height: 28px;
   display: inline-flex;
@@ -398,7 +411,7 @@ body.is-tg-fullscreen .header-actions {
   }
 }
 
-/* Unified Button Design System (Material 3 / Linear) */
+/* Unified Button Design System (Material 3 / Linear / Capsule) */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -406,7 +419,7 @@ body.is-tg-fullscreen .header-actions {
   gap: 8px;
   font-family: inherit;
   font-weight: 500;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   cursor: pointer;
   border: none;
   transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
@@ -484,7 +497,7 @@ body.is-tg-fullscreen .header-actions {
   transform: scale(0.92);
 }
 
-/* Bottom Navigation Dock */
+/* Bottom Navigation Dock with Progressive Scrim Backdrop */
 .bottom-dock {
   position: fixed;
   bottom: 0;
@@ -497,6 +510,23 @@ body.is-tg-fullscreen .header-actions {
   pointer-events: none;
 }
 
+.bottom-dock::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: calc(110px + var(--safe-bottom));
+  background: linear-gradient(
+    to top,
+    var(--bg-app) 0%,
+    rgba(13, 13, 13, 0.96) 35%,
+    rgba(13, 13, 13, 0.72) 65%,
+    rgba(13, 13, 13, 0.25) 88%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
 .dock-card {
   pointer-events: auto;
   max-width: 360px;
@@ -505,7 +535,7 @@ body.is-tg-fullscreen .header-actions {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-subtle);
-  border-radius: 24px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-dock);
   padding: 6px 8px;
   display: flex;
@@ -633,7 +663,7 @@ body.is-tg-fullscreen .header-actions {
 .linear-list {
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   margin-top: 6px;
 }
@@ -731,8 +761,8 @@ body.is-tg-fullscreen .header-actions {
   gap: 4px;
   font-size: 11px;
   font-weight: 500;
-  padding: 2px 7px;
-  border-radius: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
   background: var(--bg-card);
   color: var(--text-secondary);
   border: none;
@@ -784,7 +814,7 @@ body.is-tg-fullscreen .header-actions {
   color: var(--text-tertiary);
   width: 30px;
   height: 30px;
-  border-radius: 6px;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -807,7 +837,7 @@ body.is-tg-fullscreen .header-actions {
   margin: 14px 16px 8px 16px;
   background: var(--bg-surface);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 14px 16px;
   display: flex;
   align-items: center;
@@ -849,8 +879,8 @@ body.is-tg-fullscreen .header-actions {
   gap: 5px;
   font-size: 11px;
   font-weight: 500;
-  padding: 4px 9px;
-  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
   background: var(--bg-card);
   border: none;
   color: var(--text-secondary);
@@ -1037,8 +1067,8 @@ body.is-tg-fullscreen .header-actions {
   background: #ffffff;
   color: #000000;
   border: none;
-  border-radius: var(--radius-sm);
-  padding: 7px 16px;
+  border-radius: var(--radius-full);
+  padding: 7px 18px;
   font-size: 13px;
   font-weight: 600;
   display: inline-flex;
@@ -1095,7 +1125,7 @@ body.is-tg-fullscreen .header-actions {
 .settings-group {
   background: var(--bg-surface);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 16px;
 }
@@ -1200,7 +1230,7 @@ body.is-tg-fullscreen .header-actions {
 .voice-recording-card {
   background: var(--bg-input);
   border: none;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -1325,10 +1355,10 @@ body.is-tg-fullscreen .header-actions {
 .task-inline-input {
   background: var(--bg-card);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   color: var(--text-primary);
   font-size: 14px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   width: 100%;
   outline: none;
   font-family: inherit;
@@ -1354,8 +1384,8 @@ body.is-tg-fullscreen .header-actions {
   border: none;
   color: var(--text-tertiary);
   font-size: 10px;
-  padding: 3px 7px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1454,7 +1484,7 @@ body.is-tg-fullscreen .header-actions {
   align-items: center;
   background: var(--bg-card);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-full);
   padding: 2px;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
@@ -1467,7 +1497,7 @@ body.is-tg-fullscreen .header-actions {
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-full);
   color: var(--text-primary);
   cursor: pointer;
   font-size: 14px;
@@ -1500,7 +1530,7 @@ body.is-tg-fullscreen .header-actions {
   background: transparent;
   border: none;
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-full);
   transition: background-color 0.15s;
 }
 
@@ -1561,7 +1591,7 @@ body.is-tg-fullscreen .header-actions {
   font-size: 13px;
   font-weight: 600;
   text-align: center;
-  border-radius: 4px;
+  border-radius: var(--radius-full);
   outline: none;
   padding: 0 4px;
 }
@@ -1575,14 +1605,14 @@ body.is-tg-fullscreen .header-actions {
   margin-top: 10px;
   background: var(--bg-surface);
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   padding: 8px 12px;
 }
 
 .quickadd-num-input {
   background: var(--bg-card);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-full);
   color: var(--text-primary);
   font-size: 13px;
   padding: 4px 8px;
@@ -1623,8 +1653,11 @@ body.is-tg-fullscreen .header-actions {
     max-width: 560px;
   }
   .app-header {
-    padding: calc(10px + var(--safe-top)) 16px 10px 16px;
+    padding: calc(12px + var(--safe-top)) 16px 10px 16px;
     justify-content: space-between;
+  }
+  .is-ios .app-header {
+    padding-top: max(calc(18px + var(--safe-top)), 22px);
   }
   .groceries-tab-container .groceries-quick-add-wrap {
     margin: 0 16px 14px 16px;
@@ -1977,6 +2010,20 @@ body.is-tg-fullscreen .header-actions {
   }
 
   .groceries-tab-container .groceries-quick-add-wrap {
+    margin: 0 0 20px 0;
+  }
+
+  /* Aligned Empty State Card on Desktop */
+  .empty-state-mascot-card,
+  .groceries-tab-container .empty-state-mascot-card,
+  .today-tab-container .empty-state-mascot-card,
+  .goals-content-wrap .empty-state-mascot-card {
+    margin: 0 0 20px 0;
+    padding: 32px 20px;
+    border-radius: var(--radius-lg);
+  }
+
+  .goals-quick-add-wrap {
     margin: 0 0 20px 0;
   }
 

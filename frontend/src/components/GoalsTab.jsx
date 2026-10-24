@@ -445,35 +445,21 @@ export default function GoalsTab({
         </div>
       </div>
 
-      {/* AI Smart Goal Input Card */}
-      <div
-        style={{
-          background: 'var(--bg-surface)',
-          border: 'none',
-          borderRadius: 'var(--radius-md)',
-          padding: '12px 14px',
-          marginBottom: '16px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-          <Sparkles size={14} color="var(--accent-primary)" />
-          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            ИИ-ввод цели с шагами
-          </span>
-        </div>
-        <form onSubmit={handleAiGoalSubmit} style={{ display: 'flex', gap: '8px' }}>
+      {/* AI Smart Goal Input Bar */}
+      <div className="goals-quick-add-wrap" style={{ marginBottom: '16px' }}>
+        <form onSubmit={handleAiGoalSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <input
             type="text"
             className="unified-textarea"
-            placeholder="Опишите цель или надиктуйте её с шагами..."
+            placeholder="Новая цель или проект с шагами..."
             value={aiGoalInput}
             onChange={(e) => setAiGoalInput(e.target.value)}
             style={{
               flex: 1,
-              background: 'var(--bg-card)',
+              background: 'var(--bg-surface)',
               border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              borderRadius: 'var(--radius-full)',
+              padding: '8px 16px',
               fontSize: '13px',
               minHeight: '38px',
               height: '38px',
@@ -485,7 +471,7 @@ export default function GoalsTab({
             className="voice-recording-btn"
             onClick={handleVoiceGoalClick}
             title="Надиктовать цель голосом"
-            style={{ height: '38px', padding: '0 12px' }}
+            style={{ height: '38px', padding: '0 14px', borderRadius: 'var(--radius-full)' }}
           >
             <Mic size={15} />
             <span>Голос</span>
@@ -494,8 +480,8 @@ export default function GoalsTab({
             <button
               type="submit"
               className="submit-task-btn"
-              title="Распознать через ИИ"
-              style={{ height: '38px', padding: '0 12px' }}
+              title="Создать цель с шагами"
+              style={{ height: '38px', padding: '0 16px', borderRadius: 'var(--radius-full)' }}
             >
               <Sparkles size={14} />
               <span>Создать</span>
@@ -511,7 +497,7 @@ export default function GoalsTab({
           style={{
             background: 'var(--bg-surface)',
             border: 'none',
-            borderRadius: 'var(--radius-md)',
+            borderRadius: 'var(--radius-lg)',
             padding: '14px 16px',
             marginBottom: '16px',
             animation: 'fadeIn 0.2s ease',
@@ -531,8 +517,8 @@ export default function GoalsTab({
               width: '100%',
               background: 'var(--bg-input)',
               border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              borderRadius: 'var(--radius-full)',
+              padding: '8px 16px',
               fontSize: '13px',
               color: 'var(--text-primary)',
               marginBottom: '10px',
@@ -551,8 +537,8 @@ export default function GoalsTab({
               width: '100%',
               background: 'var(--bg-input)',
               border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              padding: '8px 12px',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 14px',
               fontSize: '13px',
               color: 'var(--text-primary)',
               marginBottom: '10px',
@@ -568,8 +554,8 @@ export default function GoalsTab({
               style={{
                 background: 'var(--bg-input)',
                 border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                padding: '5px 10px',
+                borderRadius: 'var(--radius-full)',
+                padding: '5px 12px',
                 fontSize: '12px',
                 color: 'var(--text-primary)',
                 outline: 'none',
@@ -615,7 +601,7 @@ export default function GoalsTab({
                 style={{
                   background: 'var(--bg-surface)',
                   border: 'none',
-                  borderRadius: 'var(--radius-md)',
+                  borderRadius: 'var(--radius-lg)',
                   overflow: 'hidden',
                   transition: 'background-color 0.2s',
                 }}
@@ -803,8 +789,8 @@ export default function GoalsTab({
                           flex: 1,
                           background: 'var(--bg-surface)',
                           border: 'none',
-                          borderRadius: 'var(--radius-sm)',
-                          padding: '7px 10px',
+                          borderRadius: 'var(--radius-full)',
+                          padding: '7px 14px',
                           fontSize: '12px',
                           color: 'var(--text-primary)',
                           outline: 'none',

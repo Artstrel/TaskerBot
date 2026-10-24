@@ -30,6 +30,8 @@ import {
   addPendingMutation,
   removePendingMutation,
   capitalizeFirst,
+  isGroceryText,
+  cleanGroceryTitle,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -159,11 +161,21 @@ export default function QuickAddModal({
   // Map and attach goal associations to extracted AI tasks
   const mapExtractedTask = useCallback(
     (t, i) => {
+      let rawTitle = t.title || '';
       let cat = t.category || 'one_time';
       let gId = t.goal_id || null;
       let gTitle = t.goal_title || null;
+      let schedDate = t.scheduled_date;
 
-      if (initialGoalId && !gId && cat !== 'routine' && cat !== 'goal') {
+      if (cat === 'grocery' || isGroceryText(rawTitle)) {
+        cat = 'grocery';
+        rawTitle = cleanGroceryTitle(rawTitle);
+        schedDate = null;
+      } else {
+        rawTitle = capitalizeFirst(rawTitle);
+      }
+
+      if (initialGoalId && !gId && cat !== 'routine' && cat !== 'goal' && cat !== 'grocery') {
         gId = initialGoalId;
         gTitle = initialGoalTitle || gTitle;
         cat = 'subtask';
@@ -183,8 +195,9 @@ export default function QuickAddModal({
 
       return {
         ...t,
-        title: capitalizeFirst(t.title || ''),
+        title: rawTitle,
         category: cat,
+        scheduled_date: schedDate,
         goal_id: gId,
         goal_title: gTitle ? capitalizeFirst(gTitle) : null,
         id: `task_${Date.now()}_${i}`,
@@ -222,8 +235,11 @@ export default function QuickAddModal({
     setErrorMsg('');
     try {
       const res = await parseSmartAudio(audioBlob, selectedProvider);
-      if (res && res.tasks && res.tasks.length > 0) {
-        setExtractedTasks(res.tasks.map(mapExtractedTask));
+      const validTasks = (res?.tasks || []).filter(
+        (t) => t && t.title && !/не удалось расшифровать|голосовая заметка \(не удалось/i.test(t.title)
+      );
+      if (validTasks.length > 0) {
+        setExtractedTasks(validTasks.map(mapExtractedTask));
         setIsProcessing(false);
         return;
       }
@@ -236,8 +252,11 @@ export default function QuickAddModal({
     if (clientText) {
       try {
         const res = await parseSmartText(clientText, selectedProvider);
-        if (res && res.tasks && res.tasks.length > 0) {
-          setExtractedTasks(res.tasks.map(mapExtractedTask));
+        const validTasks = (res?.tasks || []).filter(
+          (t) => t && t.title && !/не удалось расшифровать|голосовая заметка \(не удалось/i.test(t.title)
+        );
+        if (validTasks.length > 0) {
+          setExtractedTasks(validTasks.map(mapExtractedTask));
           setIsProcessing(false);
           return;
         }
@@ -246,7 +265,7 @@ export default function QuickAddModal({
       }
     }
 
-    setErrorMsg('Не удалось расшифровать аудио. Проверьте микрофон или введите задачу текстом.');
+    setErrorMsg('Не удалось распознать речь в аудиозаписи. Проверьте микрофон или введите задачу текстом.');
     setIsProcessing(false);
   };
 
@@ -1648,7 +1667,7 @@ export default function QuickAddModal({
                       background: 'var(--bg-card)',
                       color: 'var(--text-primary)',
                       border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
+                      borderRadius: 'var(--radius-full)',
                     }}
                   >
                     {goalsData.map((g) => (
@@ -1783,7 +1802,7 @@ export default function QuickAddModal({
                     style={{
                       background: 'var(--bg-card)',
                       border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
+                      borderRadius: 'var(--radius-full)',
                       color: 'var(--text-secondary)',
                       fontSize: '11px',
                       padding: '3px 8px',

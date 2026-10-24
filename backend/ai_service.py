@@ -12,6 +12,44 @@ from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AI
 
 logger = logging.getLogger(__name__)
 
+GROCERY_KEYWORDS = (
+    r"молок[оае]?|сливк\w*|кефир\w*|творог\w*|йогурт\w*|сметан\w*|сыр\w*|масл\w*|"
+    r"хлеб\w*|батон\w*|булк\w*|лаваш\w*|выпечк\w*|яйц\w*|"
+    r"мяс\w*|куриц\w*|говядин\w*|свинин\w*|индейк\w*|фарш\w*|сосиск\w*|колбас\w*|ветчин\w*|бекон\w*|"
+    r"рыб\w*|лосос\w*|форел\w*|селедк\w*|тун[ец]\w*|креветк\w*|"
+    r"овощ\w*|помидор\w*|огурц\w*|карто[фш]\w*|морков\w*|лук\b|чеснок\w*|капуст\w*|свекл\w*|кабач\w*|баклажан\w*|перец\w*|зелен\w*|укроп\w*|петрушк\w*|салат\w*|шпинат\w*|броккол\w*|авокадо|гриб\w*|шампиньон\w*|"
+    r"фрукт\w*|яблок\w*|банан\w*|апельсин\w*|мандарин\w*|лимон\w*|груш\w*|виноград\w*|персик\w*|ягод\w*|клубник\w*|малин\w*|черник\w*|"
+    r"круп\w*|рис\b|гречк\w*|макарон\w*|спагетт\w*|паст[аеу]|овсянк\w*|хлопь\w*|мук[аеу]|сахар\w*|сол[ьи]|"
+    r"кетчуп\w*|майонез\w*|соус\w*|пицц\w*|"
+    r"чай\b|кофе|сок\b|вод[аеуы]|минералк\w*|газировк\w*|квас\w*|лимонад\w*|пив[оа]|вин[оа]|"
+    r"шоколад\w*|печень\w*|конфет\w*|торт\w*|вафл\w*|мед\b|орех\w*|чипс\w*|"
+    r"порошок\w*|мыл[оа]|шампун\w*|гель\s+для\s+душа|зубн\w*\s+паст\w*|зубн\w*\s+щетк\w*|туалетн\w*\s+бумаг\w*|салфетк\w*|губк\w*\s+для\s+посуды|моющее|мусорн\w*\s+пакет\w*|пакет\w*\s+для\s+мусора|батарейк\w*|корм\w*|"
+    r"продукт\w*|покупк\w*"
+)
+
+GROCERY_RE = re.compile(rf"(?:^|[^\wа-яА-ЯёЁ])(?:{GROCERY_KEYWORDS})(?=[^\wа-яА-ЯёЁ]|$)", re.IGNORECASE)
+
+CLEAN_GROCERY_PREFIX_RE = re.compile(
+    r"^(?:купить|докупить|взять|приобрести|заказать|захватить)"
+    r"(?:\s+(?:в\s+магазине|в\s+супермаркете|домой|к\s+чаю|в\s+список\s+(?:продуктов|покупок)))?\s*[:\-]?\s*|"
+    r"^(?:список\s+(?:продуктов|покупок)|в\s+список\s+(?:продуктов|покупок))\s*[:\-]?\s*",
+    re.IGNORECASE,
+)
+
+
+def is_grocery_text(text: Optional[str]) -> bool:
+    if not text or not isinstance(text, str):
+        return False
+    return bool(GROCERY_RE.search(text))
+
+
+def clean_grocery_title(text: Optional[str]) -> str:
+    if not text or not isinstance(text, str):
+        return ""
+    cleaned = CLEAN_GROCERY_PREFIX_RE.sub("", text).strip()
+    return capitalize_first(cleaned or text)
+
+
 SYSTEM_PROMPT = """Ты — интеллектуальный ассистент по планированию задач TaskerBot.
 Твоя задача — внимательно проанализировать текст или аудиосообщение пользователя и извлечь ВСЕ упомянутые задачи.
 
@@ -23,7 +61,8 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 5. "grocery": продукты питания, напитки, еда, бытовая химия и повседневные товары для дома из супермаркета (маркеры: "молоко", "хлеб", "яйца", "помидоры", "сыр", "курица", "стиральный порошок", "мыло", "зубная паста", "купить в магазине", "список продуктов", "список покупок", "в список продуктов").
 
 ВАЖНО по разделению покупок:
-- Обычные продукты питания и повседневные бытовые покупки для дома (молоко, бананы, кофе, губки для посуды, стиральный порошок и т.д.) ВСЕГДА классифицируй как "grocery".
+- Обычные продукты питания и повседневные бытовые покупки для дома (молоко, бананы, кофе, губки для посуды, стиральный порошок и т.д.) ВСЕГДА классифицируй как "grocery". Для них scheduled_date устанавливай в null.
+- Для продуктов в поле "title" пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Сыр", "Хлеб").
 - Крупные разовые покупки, дела и услуги (например: "купить ноутбук", "купить билеты на самолет", "заехать в автосервис", "позвонить маме", "забрать посылку") классифицируй как "one_time".
 - Если пользователь диктует смесь продуктов и обычных дел (например: "Купить молоко 2 литра, десяток яиц и позвонить стоматологу"), ОБЯЗАТЕЛЬНО разбей их: молоко и яйца отправь в "grocery" (с соответствующими target_value/unit), а звонок стоматологу — в "one_time".
 
@@ -48,7 +87,7 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 Формат ответа: строго JSON с полем "tasks".
 Каждый элемент в "tasks" должен содержать:
 - "category": "routine" | "one_time" | "goal" | "subtask" | "grocery"
-- "title": краткое и четкое название задачи или продукта (ОБЯЗАТЕЛЬНО начинай с заглавной буквы, например: "Купить молоко", "Позвонить врачу", "Сделать зарядку")
+- "title": краткое и четкое название задачи или продукта (ОБЯЗАТЕЛЬНО начинай с заглавной буквы, например: "Позвонить врачу", "Сделать зарядку"). Для продуктов из категории "grocery" пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Сыр", "Хлеб").
 - "description": подробности или null
 - "scheduled_date": "YYYY-MM-DD" или null
 - "goal_title": точное название цели из списка или новой цели (всегда с заглавной буквы) или null
@@ -76,14 +115,34 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
     normalized_tasks = []
     for t in raw_tasks:
         if isinstance(t, str):
-            title = capitalize_first(t)
-            if title:
+            raw_title = t.strip()
+            if not raw_title:
+                continue
+            if is_grocery_text(raw_title):
+                normalized_tasks.append(
+                    ExtractedTask(
+                        category="grocery",
+                        title=clean_grocery_title(raw_title),
+                        scheduled_date=None,
+                    )
+                )
+            else:
+                title = capitalize_first(raw_title)
                 normalized_tasks.append(ExtractedTask(category="one_time", title=title))
         elif isinstance(t, dict):
+            raw_title = str(t.get("title") or t.get("name") or "Новая задача").strip()
             cat = t.get("category", "one_time")
             if cat not in ["routine", "one_time", "goal", "subtask", "grocery"]:
                 cat = "one_time"
-            title = capitalize_first(t.get("title") or t.get("name") or "Новая задача")
+
+            if cat == "grocery" or is_grocery_text(raw_title):
+                cat = "grocery"
+                title = clean_grocery_title(raw_title)
+                sched_date = None
+            else:
+                title = capitalize_first(raw_title)
+                sched_date = t.get("scheduled_date")
+
             goal_title = capitalize_first(t.get("goal_title")) if t.get("goal_title") else None
 
             target_val = t.get("target_value")
@@ -105,7 +164,7 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                 ExtractedTask(
                     category=cat,
                     title=title,
-                    scheduled_date=t.get("scheduled_date"),
+                    scheduled_date=sched_date,
                     description=t.get("description"),
                     goal_title=goal_title,
                     target_date=t.get("target_date"),
@@ -231,6 +290,18 @@ def _fallback_parse(
                     title=current_goal,
                 )
             )
+        # Grocery check
+        elif is_grocery_text(line):
+            tasks.append(
+                ExtractedTask(
+                    category="grocery",
+                    title=clean_grocery_title(line),
+                    scheduled_date=None,
+                    target_value=target_val,
+                    step=step_val,
+                    unit=unit_val,
+                )
+            )
         # Subtask check or One-time task check
         else:
             matched_goal = None
@@ -287,7 +358,16 @@ def _fallback_parse(
                 )
 
     if not tasks and text.strip():
-        tasks.append(ExtractedTask(category="one_time", title=capitalize_first(text.strip())))
+        if is_grocery_text(text):
+            tasks.append(
+                ExtractedTask(
+                    category="grocery",
+                    title=clean_grocery_title(text),
+                    scheduled_date=None,
+                )
+            )
+        else:
+            tasks.append(ExtractedTask(category="one_time", title=capitalize_first(text.strip())))
 
     return ExtractedTaskList(tasks=tasks)
 
@@ -473,7 +553,7 @@ class AIService:
                             "content": (
                                 _format_system_prompt(current_date, existing_goals)
                                 + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
-                                + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы!"
+                                + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы (например: 'Позвонить врачу', 'Сделать зарядку')! Все продукты питания, еду и напитки классифицируй как 'grocery' со scheduled_date: null, а в поле title указывай только название продукта без слова 'Купить' (например: 'Молоко 2 л', 'Хлеб')!"
                             ),
                         },
                         {"role": "user", "content": f"Текст сообщения пользователя:\n{text}"},
@@ -519,7 +599,7 @@ class AIService:
         system_msg = (
             _format_system_prompt(current_date, existing_goals)
             + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
-            + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы (например: 'Купить молоко', 'Позвонить врачу')!"
+            + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы (например: 'Позвонить врачу', 'Сделать зарядку')! Все продукты питания, еду и напитки классифицируй как 'grocery' со scheduled_date: null, а в поле title указывай только название продукта без слова 'Купить' (например: 'Молоко 2 л', 'Хлеб')!"
         )
 
         for model_name in free_models:
@@ -617,8 +697,12 @@ class AIService:
         chosen = self.resolve_provider(provider)
         logger.info(f"Parsing audio voice with provider setting: {chosen}")
 
+        if len(audio_bytes) < 100:
+            logger.warning("Audio payload too short (<100 bytes), returning empty tasks list")
+            return ExtractedTaskList(tasks=[])
+
         mime_type, detected_fn = detect_audio_mime_and_filename(audio_bytes)
-        fn = filename or detected_fn
+        fn = detected_fn or filename or "audio.webm"
 
         # 1. Groq Whisper (lightning fast ~300ms transcription)
         groq_client = self._get_groq_client()
@@ -656,14 +740,8 @@ class AIService:
             if res and res.tasks:
                 return res
 
-        return ExtractedTaskList(
-            tasks=[
-                ExtractedTask(
-                    category="one_time",
-                    title="Голосовая заметка (не удалось расшифровать, проверьте микрофон или ключи)",
-                )
-            ]
-        )
+        logger.warning("Audio transcription/parsing produced no valid tasks")
+        return ExtractedTaskList(tasks=[])
 
     async def _parse_audio_gemini(
         self,

@@ -973,6 +973,42 @@ export const capitalizeFirst = (text) => {
   return s;
 };
 
+export const GROCERY_KEYWORDS = [
+  'молок[оае]?', 'сливк[\\p{L}]*', 'кефир[\\p{L}]*', 'творог[\\p{L}]*', 'йогурт[\\p{L}]*', 'сметан[\\p{L}]*', 'сыр[\\p{L}]*', 'масл[\\p{L}]*',
+  'хлеб[\\p{L}]*', 'батон[\\p{L}]*', 'булк[\\p{L}]*', 'лаваш[\\p{L}]*', 'выпечк[\\p{L}]*',
+  'яйц[\\p{L}]*',
+  'мяс[\\p{L}]*', 'куриц[\\p{L}]*', 'говядин[\\p{L}]*', 'свинин[\\p{L}]*', 'индейк[\\p{L}]*', 'фарш[\\p{L}]*', 'сосиск[\\p{L}]*', 'колбас[\\p{L}]*', 'ветчин[\\p{L}]*', 'бекон[\\p{L}]*',
+  'рыб[\\p{L}]*', 'лосос[\\p{L}]*', 'форел[\\p{L}]*', 'селедк[\\p{L}]*', 'тун[ец][\\p{L}]*', 'креветк[\\p{L}]*',
+  'овощ[\\p{L}]*', 'помидор[\\p{L}]*', 'огурц[\\p{L}]*', 'карто[фш][\\p{L}]*', 'морков[\\p{L}]*', 'лук', 'чеснок[\\p{L}]*', 'капуст[\\p{L}]*', 'свекл[\\p{L}]*', 'кабач[\\p{L}]*', 'баклажан[\\p{L}]*', 'перец[\\p{L}]*', 'зелен[\\p{L}]*', 'укроп[\\p{L}]*', 'петрушк[\\p{L}]*', 'салат[\\p{L}]*', 'шпинат[\\p{L}]*', 'броккол[\\p{L}]*', 'авокадо', 'гриб[\\p{L}]*', 'шампиньон[\\p{L}]*',
+  'фрукт[\\p{L}]*', 'яблок[\\p{L}]*', 'банан[\\p{L}]*', 'апельсин[\\p{L}]*', 'мандарин[\\p{L}]*', 'лимон[\\p{L}]*', 'груш[\\p{L}]*', 'виноград[\\p{L}]*', 'персик[\\p{L}]*', 'ягод[\\p{L}]*', 'клубник[\\p{L}]*', 'малин[\\p{L}]*', 'черник[\\p{L}]*',
+  'круп[\\p{L}]*', 'рис', 'гречк[\\p{L}]*', 'макарон[\\p{L}]*', 'спагетт[\\p{L}]*', 'паст[аеу]', 'овсянк[\\p{L}]*', 'хлопь[\\p{L}]*', 'мук[аеу]', 'сахар[\\p{L}]*', 'сол[ьи]',
+  'кетчуп[\\p{L}]*', 'майонез[\\p{L}]*', 'соус[\\p{L}]*', 'пицц[\\p{L}]*',
+  'чай', 'кофе', 'сок', 'вод[аеуы]', 'минералк[\\p{L}]*', 'газировк[\\p{L}]*', 'квас[\\p{L}]*', 'лимонад[\\p{L}]*', 'пив[оа]', 'вин[оа]',
+  'шоколад[\\p{L}]*', 'печень[\\p{L}]*', 'конфет[\\p{L}]*', 'торт[\\p{L}]*', 'вафл[\\p{L}]*', 'мед', 'орех[\\p{L}]*', 'чипс[\\p{L}]*',
+  'порошок[\\p{L}]*', 'мыл[оа]', 'шампун[\\p{L}]*', 'гель\\s+для\\s+душа', 'зубн[\\p{L}]*\\s+паст[\\p{L}]*', 'зубн[\\p{L}]*\\s+щетк[\\p{L}]*', 'туалетн[\\p{L}]*\\s+бумаг[\\p{L}]*', 'салфетк[\\p{L}]*', 'губк[\\p{L}]*\\s+для\\s+посуды', 'моющее', 'мусорн[\\p{L}]*\\s+пакет[\\p{L}]*', 'пакет[\\p{L}]*\\s+для\\s+мусора', 'батарейк[\\p{L}]*', 'корм[\\p{L}]*',
+  'продукт[\\p{L}]*', 'покупк[\\p{L}]*'
+].join('|');
+
+export const GROCERY_RE = new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${GROCERY_KEYWORDS})(?=[^\\p{L}\\p{N}]|$)`, 'iu');
+
+export const CLEAN_GROCERY_PREFIX_RE = new RegExp(
+  '^(?:купить|докупить|взять|приобрести|заказать|захватить)' +
+  '(?:\\s+(?:в\\s+магазине|в\\s+супермаркете|домой|к\\s+чаю|в\\s+список\\s+(?:продуктов|покупок)))?\\s*[:\\-]?\\s*|' +
+  '^(?:список\\s+(?:продуктов|покупок)|в\\s+список\\s+(?:продуктов|покупок))\\s*[:\\-]?\\s*',
+  'iu'
+);
+
+export const isGroceryText = (text) => {
+  if (!text || typeof text !== 'string') return false;
+  return GROCERY_RE.test(text);
+};
+
+export const cleanGroceryTitle = (text) => {
+  if (!text || typeof text !== 'string') return '';
+  const cleaned = text.replace(CLEAN_GROCERY_PREFIX_RE, '').trim();
+  return capitalizeFirst(cleaned || text);
+};
+
 export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
   if (!parsed) return null;
   let rawList = null;
@@ -1000,34 +1036,49 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
       if (!item) return null;
       if (typeof item === 'string') {
         const rawTitle = item.trim();
-        const title = capitalizeFirst(rawTitle);
-        if (!title) return null;
-        const lower = rawTitle.toLowerCase();
-        const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(lower);
-        const isGoal = /цель|проект|хочу/i.test(lower);
-        const isGrocery = /молоко|хлеб|сыр|яйц|помидор|огурц|мясо|куриц|масло|яблок|банан|чай|кофе|сахар|мука|порошок|мыло|продукты|покупк/i.test(lower);
+        if (!rawTitle) return null;
+        if (/не удалось расшифровать|голосовая заметка \(не удалось/i.test(rawTitle)) return null;
+
+        const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(rawTitle);
+        const isGoal = /цель|проект|хочу/i.test(rawTitle);
+        const isGroc = isGroceryText(rawTitle);
+
         let sched = todayStr;
-        if (/завтра/i.test(lower)) sched = tomorrowStr;
+        if (/завтра/i.test(rawTitle)) sched = tomorrowStr;
+        if (isGroc || isRoutine) sched = null;
+
+        const title = isGroc ? cleanGroceryTitle(rawTitle) : capitalizeFirst(rawTitle);
+        const cat = isGroc ? 'grocery' : isRoutine ? 'routine' : isGoal ? 'goal' : defaultCategory;
+
         return {
           id: `task_${Date.now()}_${idx}`,
           title,
-          category: isRoutine ? 'routine' : isGoal ? 'goal' : isGrocery ? 'grocery' : defaultCategory,
-          scheduled_date: isRoutine || isGrocery ? null : sched,
+          category: cat,
+          scheduled_date: sched,
           selected: true,
         };
       }
       if (typeof item === 'object') {
         const rawTitle = String(item.title || item.name || item.text || '').trim();
-        const title = capitalizeFirst(rawTitle);
-        if (!title) return null;
+        if (!rawTitle) return null;
+        if (/не удалось расшифровать|голосовая заметка \(не удалось/i.test(rawTitle)) return null;
+
         let cat = item.category || defaultCategory;
         if (!['routine', 'one_time', 'goal', 'subtask', 'grocery'].includes(cat)) {
           cat = defaultCategory;
         }
+
+        const isGroc = cat === 'grocery' || isGroceryText(rawTitle);
+        let title = isGroc ? cleanGroceryTitle(rawTitle) : capitalizeFirst(rawTitle);
         let sched = item.scheduled_date || null;
-        if (cat === 'one_time' && !sched) {
+
+        if (isGroc) {
+          cat = 'grocery';
+          sched = null;
+        } else if (cat === 'one_time' && !sched) {
           sched = todayStr;
         }
+
         const goalTitle = item.goal_title ? capitalizeFirst(String(item.goal_title)) : null;
         return {
           id: item.id || `task_${Date.now()}_${idx}`,
@@ -1061,12 +1112,15 @@ export const parseTextWithDirectGemini = async (text) => {
 Если в тексте несколько действий/задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
 Категории:
 1. "routine": регулярные привычки ("каждый день", "ежедневно", "утром")
-2. "one_time": разовые задачи ("завтра", "сегодня", "позвонить", "сделать")
+2. "one_time": разовые задачи ("завтра", "сегодня", "позвонить", "сделать", "купить ноутбук")
 3. "goal": глобальные цели ("цель", "проект")
 4. "grocery": продукты питания, напитки, еда, бытовая химия ("молоко", "хлеб", "сыр", "яйца", "в список продуктов", "купить в магазине")
 
 ВАЖНО:
-- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Купить молоко", "Позвонить врачу")!
+- Все продукты питания, еду, напитки и бытовую химию ВСЕГДА классифицируй как "grocery" со "scheduled_date": null!
+- Для категории "grocery" в поле "title" пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Сыр", "Хлеб")!
+- Разовые дела, услуги и покупку крупной техники ("купить ноутбук", "купить билеты") классифицируй как "one_time".
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Позвонить врачу", "Молоко 2 л")!
 
 Текущая дата: ${todayStr}.
 Формат ответа строго валидный JSON с ключом "tasks".
@@ -1075,7 +1129,12 @@ export const parseTextWithDirectGemini = async (text) => {
 {
   "tasks": [
     {
-      "title": "Купить молоко",
+      "title": "Молоко 2 л",
+      "category": "grocery",
+      "scheduled_date": null
+    },
+    {
+      "title": "Позвонить врачу",
       "category": "one_time",
       "scheduled_date": "${todayStr}"
     }
@@ -1135,11 +1194,14 @@ export const parseTextWithDirectGroq = async (text) => {
 Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели), "grocery" (продукты, напитки, еда, бытовая химия).
 
 ВАЖНО:
-- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Купить молоко", "Позвонить врачу")!
+- Все продукты питания, еду, напитки и бытовые товары ВСЕГДА относи к "grocery" со "scheduled_date": null!
+- В поле "title" для продуктов пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Хлеб")!
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Позвонить врачу", "Молоко 2 л")!
 
 Текущая дата: ${todayStr}.
 Формат ответа: строгий JSON с ключом "tasks".
-Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "Купить молоко", "scheduled_date": "YYYY-MM-DD"|null}`;
+Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null}
+Пример: {"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null}, {"category": "one_time", "title": "Позвонить врачу", "scheduled_date": "${todayStr}"}]}`;
 
   for (const model of GROQ_CHAT_MODELS) {
     try {
@@ -1297,16 +1359,18 @@ export const parseTextWithDirectOpenRouter = async (text) => {
 Текущая дата: ${todayStr}.
 Категории:
 - routine: регулярные ежедневные дела (каждый день, по утрам)
-- one_time: разовые дела (сегодня, завтра, в пятницу)
+- one_time: разовые дела (сегодня, завтра, в пятницу, купить ноутбук)
 - goal: глобальные цели и проекты
 - subtask: подзадачи для цели
 - grocery: продукты питания, напитки, еда, бытовая химия (молоко, хлеб, яйца)
 
 ВАЖНО:
-- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Купить молоко", "Позвонить врачу", "Сделать зарядку")!
+- Все продукты питания, еду, напитки и бытовую химию ВСЕГДА классифицируй как "grocery" со "scheduled_date": null!
+- В названии "title" для продуктов пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Хлеб")!
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Позвонить врачу", "Молоко 2 л", "Сделать зарядку")!
 
 Верни ответ СТРОГО в формате JSON с ключом "tasks":
-{"tasks": [{"category": "one_time", "title": "Купить молоко", "scheduled_date": "YYYY-MM-DD"}]}`;
+{"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null}, {"category": "one_time", "title": "Позвонить врачу", "scheduled_date": "YYYY-MM-DD"}]}`;
 
   for (const model of OPENROUTER_FREE_MODELS) {
     try {
@@ -1457,27 +1521,44 @@ export const parseSmartText = async (text, provider = null) => {
     const lower = chunk.toLowerCase();
     const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(lower);
     const isGoal = /цель|проект|хочу/i.test(lower);
+    const isGroc = isGroceryText(chunk);
+
     let schedDate = todayStr;
     if (/завтра/i.test(lower)) schedDate = tomorrowStr;
+    if (isGroc || isRoutine) schedDate = null;
 
-    const cleanTitle = capitalizeFirst(
-      chunk
-        .replace(/^(?:завтра|сегодня|послезавтра|надо|нужно|каждый день|ежедневно|цель:?|проект:?)\s*/i, '')
-        .replace(/\b(?:завтра|послезавтра)\b/gi, '')
-        .trim()
-    );
+    let cleanTitle;
+    if (isGroc) {
+      cleanTitle = cleanGroceryTitle(chunk);
+    } else {
+      cleanTitle = capitalizeFirst(
+        chunk
+          .replace(/^(?:завтра|сегодня|послезавтра|надо|нужно|каждый день|ежедневно|цель:?|проект:?)\s*/i, '')
+          .replace(/\b(?:завтра|послезавтра)\b/gi, '')
+          .trim()
+      );
+    }
 
     return {
       id: `task_${Date.now()}_${idx}`,
       title: cleanTitle || capitalizeFirst(chunk),
-      category: isRoutine ? 'routine' : isGoal ? 'goal' : 'one_time',
-      scheduled_date: isRoutine ? null : schedDate,
+      category: isGroc ? 'grocery' : isRoutine ? 'routine' : isGoal ? 'goal' : 'one_time',
+      scheduled_date: schedDate,
       selected: true,
     };
   });
 
+  const isWholeTextGroc = isGroceryText(text);
+  const defaultTask = {
+    id: `task_${Date.now()}_0`,
+    title: isWholeTextGroc ? cleanGroceryTitle(text) : capitalizeFirst(text),
+    category: isWholeTextGroc ? 'grocery' : 'one_time',
+    scheduled_date: isWholeTextGroc ? null : todayStr,
+    selected: true,
+  };
+
   return {
-    tasks: tasks.length > 0 ? tasks : [{ id: `task_${Date.now()}_0`, title: capitalizeFirst(text), category: 'one_time', selected: true }],
+    tasks: tasks.length > 0 ? tasks : [defaultTask],
   };
 };
 
