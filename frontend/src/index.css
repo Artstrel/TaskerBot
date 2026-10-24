@@ -4,8 +4,8 @@
   --bg-surface: #141414;
   --bg-card: #1c1c1f;
   --bg-card-hover: #26262a;
-  --bg-input: #1c1c1f;
-  --bg-input-focus: #26262a;
+  --bg-input: #141414;
+  --bg-input-focus: #1c1c1f;
   --bg-elevated: #242428;
 
   /* Hairline and Subtle Monochrome Borders */
@@ -189,14 +189,14 @@ h4,
 /* iOS: align the profile bubble center vertically with the axis of Telegram's Close and Menu buttons */
 body.is-ios .app-header,
 html.is-ios .app-header {
-  padding-top: max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px), 16px);
+  padding-top: calc(max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px)) + 6px);
   padding-bottom: 6px;
   min-height: 44px;
 }
 
 body.is-tg-fullscreen.is-ios .app-header,
 html.is-tg-fullscreen.is-ios .app-header {
-  padding-top: max(var(--tg-raw-safe-top, 6px), env(safe-area-inset-top, 6px), 8px) !important;
+  padding-top: calc(max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px)) + 6px) !important;
   padding-bottom: 6px !important;
   padding-left: max(calc(16px + var(--safe-left)), 76px) !important;
   padding-right: max(calc(12px + var(--safe-right)), 76px) !important;
@@ -1208,6 +1208,11 @@ body.is-tg-fullscreen .header-actions {
   transition: all 0.2s ease;
 }
 
+.quick-bar-input:hover {
+  background: var(--bg-card);
+  border-color: var(--border-hover);
+}
+
 .quick-bar-input:focus {
   background: var(--bg-input-focus);
   border-color: rgba(255, 255, 255, 0.28);
@@ -1233,7 +1238,7 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .quick-bar-btn:hover {
-  background: var(--bg-card-hover);
+  background: var(--bg-card);
   color: var(--text-primary);
   border-color: var(--border-hover);
 }
