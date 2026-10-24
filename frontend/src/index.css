@@ -189,7 +189,7 @@ h4,
 /* iOS: align the profile bubble center vertically with the axis of Telegram's Close and Menu buttons */
 body.is-ios .app-header,
 html.is-ios .app-header {
-  padding-top: max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px), 8px);
+  padding-top: max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px), 16px);
   padding-bottom: 6px;
   min-height: 44px;
 }
