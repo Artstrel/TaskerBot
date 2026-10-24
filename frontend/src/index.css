@@ -167,8 +167,7 @@ h4,
 
 /* Minimalist App Header with Progressive Blur Scrim and Dynamic Telegram Safe Areas */
 .app-header {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 40;
   background: linear-gradient(to bottom,
       rgba(13, 13, 13, 0.96) 0%,
