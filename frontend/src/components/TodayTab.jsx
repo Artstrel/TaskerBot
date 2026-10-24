@@ -1024,19 +1024,20 @@ export default function TodayTab({
                 <div className="progress-fill" style={{ width: `${progressPct}%` }} />
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div className="day-status-actions">
               {renderTimeChip()}
               {onForceRefresh && (
                 <button
                   type="button"
-                  className="canvas-sync-btn mobile-only-item"
+                  className="day-status-action-btn mobile-only-item"
                   onClick={() => {
                     hapticFeedback('light');
                     onForceRefresh();
                   }}
                   title="Обновить и синхронизировать данные"
+                  aria-label="Обновить и синхронизировать данные"
                 >
-                  <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+                  <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
                 </button>
               )}
             </div>
@@ -1164,40 +1165,20 @@ export default function TodayTab({
         <div className="today-col-right">
           {/* Inline Quick Add Task input */}
           <div className="today-quick-add-wrap">
-            <form onSubmit={handleQuickSubmit} style={{ display: 'flex', gap: '8px' }}>
+            <form onSubmit={handleQuickSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input
                 type="text"
-                className="unified-textarea"
+                className="quick-bar-input"
                 placeholder="Быстрая задача на сегодня... (Enter для сохранения)"
                 value={quickTitle}
                 onChange={(e) => setQuickTitle(e.target.value)}
-                style={{
-                  flex: 1,
-                  background: 'var(--bg-surface)',
-                  border: 'none',
-                  borderRadius: 'var(--radius-full)',
-                  padding: '8px 16px',
-                  fontSize: '13px',
-                  minHeight: '38px',
-                  height: '38px',
-                  color: 'var(--text-primary)',
-                }}
               />
               <button
                 type="submit"
+                className="quick-bar-btn quick-bar-btn-submit"
                 disabled={!quickTitle.trim() || isSubmittingQuick}
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: 'none',
-                  borderRadius: 'var(--radius-full)',
-                  color: quickTitle.trim() ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                  padding: '0 14px',
-                  fontSize: '13px',
-                  cursor: quickTitle.trim() ? 'pointer' : 'default',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
+                title="Создать задачу"
+                aria-label="Создать задачу"
               >
                 <Plus size={16} />
               </button>

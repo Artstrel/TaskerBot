@@ -1547,11 +1547,11 @@ export default function QuickAddModal({
                     onClick={startRecording}
                     disabled={isProcessing}
                   >
-                    <Mic size={14} />
+                    <Mic size={15} />
                     <span>Голос</span>
                   </button>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {/* Optional Smart AI parse button */}
                     {inputText.trim().length > 12 && (
                       <button
@@ -1560,20 +1560,19 @@ export default function QuickAddModal({
                         onClick={handleSmartAiParse}
                         disabled={isProcessing}
                         title="Распознать несколько задач и дат через AI"
-                        style={{ height: '32px' }}
                       >
-                        <Sparkles size={13} color="var(--accent-primary)" />
+                        <Sparkles size={14} color="var(--accent-primary)" />
                         <span>AI парсинг</span>
                       </button>
                     )}
 
                     <button
-                      type="button"
+                      type="submit"
                       className="submit-task-btn"
                       onClick={handleDirectCreate}
                       disabled={!inputText.trim() || isProcessing}
                     >
-                      <Send size={13} />
+                      <Send size={15} />
                       <span>{isProcessing ? 'Сохраняю...' : 'Создать'}</span>
                     </button>
                   </div>
@@ -1594,7 +1593,7 @@ export default function QuickAddModal({
                       setCategory('one_time');
                     }}
                   >
-                    <Calendar size={12} /> Задача
+                    <Calendar size={14} /> Задача
                   </button>
                   <button
                     type="button"
@@ -1604,7 +1603,7 @@ export default function QuickAddModal({
                       setCategory('grocery');
                     }}
                   >
-                    <ShoppingCart size={12} /> Продукт
+                    <ShoppingCart size={14} /> Продукт
                   </button>
                   <button
                     type="button"
@@ -1614,7 +1613,7 @@ export default function QuickAddModal({
                       setCategory('routine');
                     }}
                   >
-                    <Flame size={12} /> Привычка
+                    <Flame size={14} /> Привычка
                   </button>
                   {goalsData && goalsData.length > 0 && (
                     <button
@@ -1629,7 +1628,7 @@ export default function QuickAddModal({
                         }
                       }}
                     >
-                      <Target size={12} /> Шаг цели
+                      <Target size={14} /> Шаг цели
                     </button>
                   )}
                   <button
@@ -1640,7 +1639,7 @@ export default function QuickAddModal({
                       setCategory('goal');
                     }}
                   >
-                    <Target size={12} /> Проект / Цель
+                    <Target size={14} /> Проект / Цель
                   </button>
                 </div>
               </div>
@@ -1787,34 +1786,6 @@ export default function QuickAddModal({
                       </div>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* AI Provider selector */}
-              {providers.length > 1 && (
-                <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                    AI провайдер:
-                  </span>
-                  <select
-                    value={selectedProvider}
-                    onChange={(e) => setSelectedProvider(e.target.value)}
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-full)',
-                      color: 'var(--text-secondary)',
-                      fontSize: '11px',
-                      padding: '3px 8px',
-                      outline: 'none',
-                    }}
-                  >
-                    {providers.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               )}
             </div>

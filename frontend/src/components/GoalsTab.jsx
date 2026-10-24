@@ -450,30 +450,19 @@ export default function GoalsTab({
         <form onSubmit={handleAiGoalSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <input
             type="text"
-            className="unified-textarea"
+            className="quick-bar-input"
             placeholder="Новая цель или проект с шагами..."
             value={aiGoalInput}
             onChange={(e) => setAiGoalInput(e.target.value)}
-            style={{
-              flex: 1,
-              background: 'var(--bg-surface)',
-              border: 'none',
-              borderRadius: 'var(--radius-full)',
-              padding: '8px 16px',
-              fontSize: '13px',
-              minHeight: '38px',
-              height: '38px',
-              color: 'var(--text-primary)',
-            }}
           />
           <button
             type="button"
-            className="voice-recording-btn"
+            className="quick-bar-btn"
             onClick={handleVoiceGoalClick}
             title="Надиктовать цель голосом"
-            style={{ height: '38px', padding: '0 14px', borderRadius: 'var(--radius-full)' }}
+            aria-label="Надиктовать цель голосом"
           >
-            <Mic size={15} />
+            <Mic size={16} />
             <span>Голос</span>
           </button>
           {aiGoalInput.trim() && (
@@ -481,7 +470,7 @@ export default function GoalsTab({
               type="submit"
               className="submit-task-btn"
               title="Создать цель с шагами"
-              style={{ height: '38px', padding: '0 16px', borderRadius: 'var(--radius-full)' }}
+              style={{ minHeight: '40px', padding: '0 16px', borderRadius: 'var(--radius-full)' }}
             >
               <Sparkles size={14} />
               <span>Создать</span>

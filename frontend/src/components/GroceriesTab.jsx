@@ -480,43 +480,31 @@ export default function GroceriesTab({
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="day-status-actions">
           {onForceRefresh && (
             <button
               type="button"
-              className="canvas-sync-btn mobile-only-item"
+              className="day-status-action-btn mobile-only-item"
               onClick={() => {
                 hapticFeedback('light');
                 onForceRefresh();
               }}
               title="Обновить список продуктов"
+              aria-label="Обновить список продуктов"
             >
-              <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
             </button>
           )}
 
           {completedCount > 0 && (
             <button
               type="button"
-              className="header-icon-btn"
+              className="day-status-action-btn btn-danger-subtle"
               onClick={handleClearCompleted}
               title="Очистить купленные товары"
-              style={{
-                padding: '6px 10px',
-                fontSize: '11px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                background: 'var(--bg-surface)',
-                border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
+              aria-label="Очистить купленные товары"
             >
-              <Trash2 size={13} />
-              <span>Очистить купленное</span>
+              <Trash2 size={15} />
             </button>
           )}
         </div>
@@ -527,26 +515,16 @@ export default function GroceriesTab({
         <form onSubmit={handleQuickSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <input
             type="text"
-            className="unified-textarea"
+            className="quick-bar-input"
             placeholder="Добавить продукт (например, Молоко 2 л)..."
             value={quickTitle}
             onChange={(e) => setQuickTitle(e.target.value)}
-            style={{
-              flex: 1,
-              background: 'var(--bg-surface)',
-              border: 'none',
-              borderRadius: 'var(--radius-full)',
-              padding: '8px 16px',
-              fontSize: '13px',
-              minHeight: '38px',
-              height: '38px',
-              color: 'var(--text-primary)',
-            }}
           />
 
           {/* Direct 1-tap voice dictation button */}
           <button
             type="button"
+            className="quick-bar-btn"
             onClick={() => {
               hapticFeedback('medium');
               if (onOpenQuickAdd) {
@@ -557,18 +535,7 @@ export default function GroceriesTab({
               }
             }}
             title="Надиктовать список продуктов голосом"
-            style={{
-              background: 'var(--bg-surface)',
-              border: 'none',
-              borderRadius: 'var(--radius-full)',
-              color: 'var(--accent-primary, #60a5fa)',
-              padding: '0 12px',
-              height: '38px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
+            aria-label="Надиктовать список продуктов голосом"
           >
             <Mic size={16} />
           </button>
@@ -576,21 +543,10 @@ export default function GroceriesTab({
           {/* Quick Submit (+) button */}
           <button
             type="submit"
+            className="quick-bar-btn quick-bar-btn-submit"
             disabled={!quickTitle.trim() || isSubmittingQuick}
             title="Добавить в список"
-            style={{
-              background: 'var(--bg-surface)',
-              border: 'none',
-              borderRadius: 'var(--radius-full)',
-              color: quickTitle.trim() ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              padding: '0 14px',
-              height: '38px',
-              fontSize: '13px',
-              cursor: quickTitle.trim() ? 'pointer' : 'default',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
+            aria-label="Добавить в список"
           >
             <Plus size={16} />
           </button>

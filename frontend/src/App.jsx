@@ -118,11 +118,15 @@ export default function App() {
             document.body.classList.remove('is-ios');
           }
 
-          const safeTop = tg.contentSafeAreaInset?.top ?? tg.safeAreaInset?.top ?? 0;
+          const rawSafeTop = tg.safeAreaInset?.top ?? 0;
+          const contentSafeTop = tg.contentSafeAreaInset?.top ?? rawSafeTop;
+          const safeTop = contentSafeTop;
           const safeBottom = tg.contentSafeAreaInset?.bottom ?? tg.safeAreaInset?.bottom ?? 0;
           const safeLeft = tg.contentSafeAreaInset?.left ?? tg.safeAreaInset?.left ?? 0;
           const safeRight = tg.contentSafeAreaInset?.right ?? tg.safeAreaInset?.right ?? 0;
 
+          document.documentElement.style.setProperty('--tg-raw-safe-top', `${rawSafeTop}px`);
+          document.documentElement.style.setProperty('--tg-content-safe-top', `${contentSafeTop}px`);
           document.documentElement.style.setProperty('--tg-safe-top', `${safeTop}px`);
           document.documentElement.style.setProperty('--tg-safe-bottom', `${safeBottom}px`);
           document.documentElement.style.setProperty('--tg-safe-left', `${safeLeft}px`);

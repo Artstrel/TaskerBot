@@ -2,14 +2,15 @@
   /* Linear Graphite Monochrome Dark Palette (No blue tint) */
   --bg-app: #0d0d0d;
   --bg-surface: #141414;
-  --bg-card: #1a1a1a;
-  --bg-card-hover: #242424;
-  --bg-input: #161616;
-  --bg-elevated: #202020;
+  --bg-card: #1c1c1f;
+  --bg-card-hover: #26262a;
+  --bg-input: #202024;
+  --bg-input-focus: #28282d;
+  --bg-elevated: #242428;
 
   /* Hairline and Subtle Monochrome Borders */
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.16);
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-hover: rgba(255, 255, 255, 0.20);
   --border-focus: rgba(255, 255, 255, 0.45);
 
   /* Typography Colors */
@@ -69,11 +70,10 @@
 
 body.is-tg-fullscreen.is-ios,
 html.is-tg-fullscreen.is-ios {
-  --safe-top: max(var(--tg-content-safe-area-inset-top, 0px),
+  --safe-top: max(var(--tg-raw-safe-top, 0px),
       var(--tg-safe-area-inset-top, 0px),
-      var(--tg-safe-top, 0px),
       env(safe-area-inset-top, 0px),
-      50px);
+      44px);
 }
 
 * {
@@ -189,26 +189,33 @@ h4,
 /* iOS: align the profile bubble center vertically with the axis of Telegram's Close and Menu buttons */
 body.is-ios .app-header,
 html.is-ios .app-header {
-  padding-top: max(calc(8px + var(--safe-top)), 10px);
+  padding-top: max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px), 8px);
+  padding-bottom: 6px;
+  min-height: 44px;
 }
 
 body.is-tg-fullscreen.is-ios .app-header,
 html.is-tg-fullscreen.is-ios .app-header {
-  padding-top: max(calc(22px + var(--safe-top)), 70px) !important;
+  padding-top: max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px), 8px) !important;
+  padding-bottom: 6px !important;
+  padding-left: max(calc(12px + var(--safe-left)), 76px) !important;
+  padding-right: max(calc(12px + var(--safe-right)), 76px) !important;
+  justify-content: center !important;
 }
 
 body.is-tg-fullscreen .app-header {
-  padding-left: max(calc(18px + var(--safe-left)), 70px) !important;
-  padding-right: max(calc(18px + var(--safe-right)), 70px) !important;
+  padding-left: max(calc(14px + var(--safe-left)), 72px) !important;
+  padding-right: max(calc(14px + var(--safe-right)), 72px) !important;
   justify-content: center !important;
 }
 
 /* Desktop and non-iOS in fullscreen: keep compact, centered, without excessive gap */
 body.is-tg-fullscreen:not(.is-ios) .app-header,
 html.is-tg-fullscreen:not(.is-ios) .app-header {
-  padding-top: max(calc(12px + var(--safe-top)), 14px) !important;
-  padding-left: max(calc(18px + var(--safe-left)), 70px) !important;
-  padding-right: max(calc(18px + var(--safe-right)), 70px) !important;
+  padding-top: max(calc(8px + var(--safe-top)), 12px) !important;
+  padding-bottom: 8px !important;
+  padding-left: max(calc(14px + var(--safe-left)), 72px) !important;
+  padding-right: max(calc(14px + var(--safe-right)), 72px) !important;
   justify-content: center !important;
 }
 
@@ -837,9 +844,9 @@ body.is-tg-fullscreen .header-actions {
 .day-status-card {
   margin: 14px 16px 8px 16px;
   background: var(--bg-surface);
-  border: none;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -848,6 +855,47 @@ body.is-tg-fullscreen .header-actions {
 
 .day-progress-bar-wrap {
   flex: 1;
+  min-width: 0;
+}
+
+.day-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.day-status-action-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  border-radius: var(--radius-full);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.day-status-action-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.day-status-action-btn:active {
+  transform: scale(0.92);
+}
+
+.day-status-action-btn.btn-danger-subtle:hover {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.35);
 }
 
 .day-progress-label {
@@ -987,8 +1035,10 @@ body.is-tg-fullscreen .header-actions {
   background: transparent;
   border: none;
   color: var(--text-tertiary);
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1011,12 +1061,19 @@ body.is-tg-fullscreen .header-actions {
 /* Quick Add Unified Input Box */
 .unified-input-box {
   background: var(--bg-input);
-  border: none;
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 12px 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.unified-input-box:focus-within {
+  background: var(--bg-input-focus);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .unified-textarea {
@@ -1027,7 +1084,7 @@ body.is-tg-fullscreen .header-actions {
   font-family: inherit;
   font-size: 15px;
   resize: none;
-  min-height: 54px;
+  min-height: 56px;
   line-height: 1.45;
 }
 
@@ -1039,17 +1096,18 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .voice-recording-btn {
   background: var(--bg-card);
-  border: none;
+  border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
   border-radius: var(--radius-full);
-  padding: 6px 14px;
-  font-size: 12px;
+  min-height: 40px;
+  padding: 8px 16px;
+  font-size: 13px;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -1058,29 +1116,38 @@ body.is-tg-fullscreen .header-actions {
   transition: all 0.2s;
 }
 
+.voice-recording-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
 .voice-recording-btn.recording {
   background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.4);
   animation: pulseRecording 1.4s infinite;
 }
 
 .submit-task-btn {
   background: #ffffff;
   color: #000000;
-  border: none;
+  border: 1px solid #ffffff;
   border-radius: var(--radius-full);
-  padding: 7px 18px;
-  font-size: 13px;
+  min-height: 40px;
+  padding: 9px 20px;
+  font-size: 14px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .submit-task-btn:hover:not(:disabled) {
   background: #e4e4e7;
+  border-color: #e4e4e7;
 }
 
 .submit-task-btn:disabled {
@@ -1092,34 +1159,106 @@ body.is-tg-fullscreen .header-actions {
 .chips-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-top: 12px;
 }
 
 .filter-chip {
   background: var(--bg-card);
-  border: none;
+  border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 5px 11px;
+  min-height: 36px;
+  padding: 7px 14px;
   border-radius: var(--radius-full);
   cursor: pointer;
   transition: all 0.15s;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .filter-chip:hover {
   background: var(--bg-card-hover);
   color: var(--text-primary);
+  border-color: var(--border-hover);
 }
 
 .filter-chip.active {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.18);
   color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+/* Universal Quick Add Inputs and Action Buttons (Today, Groceries, Goals) */
+.quick-bar-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 8px 16px;
+  font-size: 13px;
+  min-height: 40px;
+  height: 40px;
+  color: var(--text-primary);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.quick-bar-input:focus {
+  background: var(--bg-input-focus);
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+.quick-bar-btn {
+  flex-shrink: 0;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-bar-btn:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
+}
+
+.quick-bar-btn:active {
+  transform: scale(0.94);
+}
+
+.quick-bar-btn-submit {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  font-weight: 600;
+}
+
+.quick-bar-btn-submit:hover:not(:disabled) {
+  background: #e4e4e7;
+}
+
+.quick-bar-btn-submit:disabled {
+  background: var(--bg-input);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+  cursor: default;
+  transform: none;
 }
 
 /* Settings Form Controls */
