@@ -979,7 +979,36 @@ export default function TodayTab({
 
   return (
     <div className="today-tab-container">
+      {/* Mobile iOS HIG Large Title */}
       <h1 className="mobile-large-title mobile-only-item">Сегодня</h1>
+
+      {/* Desktop Material 3 View Header */}
+      <div className="desktop-view-header desktop-only-item">
+        <div className="desktop-view-title-group">
+          <h1 className="desktop-view-title">Сегодня</h1>
+          <div className="desktop-view-subtitle">
+            {completed_count} из {total_count} выполнено ({progressPct}%)
+          </div>
+        </div>
+        <div className="desktop-view-actions">
+          {onForceRefresh && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить данные"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              <span>Обновить</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="today-desktop-grid">
         {/* LEFT COLUMN: Status & Habits */}
         <div className="today-col-left">

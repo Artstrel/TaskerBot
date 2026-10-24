@@ -126,18 +126,57 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
 
   return (
     <div className="linear-section" style={{ paddingBottom: '30px' }}>
-      <h1 className="mobile-large-title mobile-only-item" style={{ margin: '0 0 10px 0' }}>Параметры</h1>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <div>
-          <h2 className="desktop-only-item" style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Параметры
-          </h2>
-          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-            Уведомления, время и AI-интеграция
+      {/* Mobile iOS HIG Large Title */}
+      <h1 className="mobile-large-title mobile-only-item">Параметры</h1>
+
+      {/* Desktop Material 3 View Header */}
+      <div className="desktop-view-header desktop-only-item">
+        <div className="desktop-view-title-group">
+          <h1 className="desktop-view-title">Параметры</h1>
+          <div className="desktop-view-subtitle">
+            Уведомления, время завершения дня и AI-интеграция
           </div>
         </div>
+        <div className="desktop-view-actions">
+          {onForceRefresh && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить настройки"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              <span>Обновить</span>
+            </button>
+          )}
+          {savedSuccess && (
+            <span
+              style={{
+                fontSize: '11px',
+                color: 'var(--accent-success)',
+                background: 'var(--accent-success-dim)',
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Check size={12} /> Сохранено
+            </span>
+          )}
+        </div>
+      </div>
 
+      {/* Mobile Sub-Header Bar */}
+      <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', width: '100%' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+          Уведомления, время и AI-интеграция
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onForceRefresh && (
             <button
@@ -152,7 +191,6 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
               <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
             </button>
           )}
-
           {savedSuccess && (
             <span
               style={{
@@ -204,7 +242,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       <div className="settings-desktop-grid">
-      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px' }}>
+      <div className="settings-section-title">
         Сервер бэкенда (API)
       </div>
       <div className="settings-group" style={{ padding: '14px 16px', marginBottom: '16px' }}>
@@ -278,7 +316,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       {/* SECTION: Notifications */}
-      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px' }}>
+      <div className="settings-section-title">
         Уведомления в Telegram
       </div>
       <div className="settings-group">
@@ -311,7 +349,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       {/* SECTION: Day end cutoff */}
-      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px' }}>
+      <div className="settings-section-title">
         Время сброса дня
       </div>
       <div className="settings-group" style={{ padding: '14px 16px' }}>
@@ -341,7 +379,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       {/* SECTION: Timezone */}
-      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px' }}>
+      <div className="settings-section-title">
         Часовой пояс
       </div>
       <div className="settings-group">
@@ -363,7 +401,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       {/* SECTION: AI Providers */}
-      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px' }}>
+      <div className="settings-section-title">
         AI Провайдер
       </div>
       <div className="settings-group" style={{ padding: '10px' }}>
@@ -452,7 +490,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       {/* SECTION: Direct AI Keys (Browser / Offline Mode) */}
-      <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: '6px', paddingLeft: '4px', marginTop: '16px' }}>
+      <div className="settings-section-title">
         Ключи API для автономного режима (GitHub Pages)
       </div>
       <div className="settings-group" style={{ padding: '14px 16px' }}>

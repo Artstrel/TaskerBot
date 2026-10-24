@@ -168,7 +168,7 @@ h1, h2, h3, h4, .brand-font {
   padding-bottom: calc(116px + var(--safe-bottom));
 }
 
-/* Minimalist App Header with Dynamic Telegram Safe Areas */
+/* Minimalist App Header with Dynamic Telegram Safe Areas (No Border) */
 .app-header {
   position: sticky;
   top: 0;
@@ -176,8 +176,8 @@ h1, h2, h3, h4, .brand-font {
   background-color: rgba(13, 13, 13, 0.88);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: calc(12px + var(--safe-top)) calc(18px + var(--safe-right)) 12px calc(18px + var(--safe-left));
+  border-bottom: none;
+  padding: calc(10px + var(--safe-top)) calc(18px + var(--safe-right)) 10px calc(18px + var(--safe-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -188,74 +188,91 @@ body.is-tg-fullscreen .app-header {
   padding-left: max(calc(18px + var(--safe-left)), 92px) !important;
   padding-right: max(calc(18px + var(--safe-right)), 92px) !important;
   justify-content: center !important;
-  text-align: center;
 }
 
-body.is-tg-fullscreen .header-companion-group {
-  justify-content: center;
+body.is-tg-fullscreen .header-profile-bubble {
   margin: 0 auto;
-  gap: 8px;
-}
-
-body.is-tg-fullscreen .header-titles {
-  align-items: center;
-  text-align: center;
-}
-
-body.is-tg-fullscreen .header-title-main {
-  justify-content: center;
-}
-
-body.is-tg-fullscreen .header-subtitle {
-  text-align: center;
 }
 
 body.is-tg-fullscreen .header-actions {
   display: none !important;
 }
 
-.header-companion-group {
-  display: flex;
+/* User Profile Bubble in Header */
+.header-profile-bubble {
+  display: inline-flex;
   align-items: center;
   gap: 12px;
+  padding: 4px 14px 4px 5px;
+  background: var(--bg-surface);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  user-select: none;
+  cursor: default;
+  max-width: 100%;
 }
 
-.header-mascot-wrapper {
-  position: relative;
+.header-profile-bubble:hover {
+  background: var(--bg-card);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.header-avatar-circle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 3px;
-  border-radius: var(--radius-md);
-  background: var(--bg-surface);
-  border: none;
-  transition: opacity 0.2s;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
-.header-mascot-wrapper:hover {
-  opacity: 0.9;
+.header-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
-.header-titles {
+.header-avatar-initial {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.header-bubble-text {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  min-width: 0;
 }
 
-.header-title-main {
-  font-size: 15px;
+.header-bubble-name {
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.25;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
-.header-subtitle {
-  font-size: 12px;
+.header-bubble-date {
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-tertiary);
-  font-weight: 400;
-  margin-top: 1px;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-transform: capitalize;
 }
 
 .header-actions {
@@ -312,20 +329,65 @@ body.is-tg-fullscreen .header-actions {
   transform: scale(0.94);
 }
 
-/* Mobile Large Title (iOS Style) */
+/* Mobile Large Title (Apple HIG Style) */
 .mobile-large-title {
-  font-family: 'Outfit', 'Inter', sans-serif;
-  font-size: 26px;
+  font-family: 'Outfit', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.025em;
   color: var(--text-primary);
-  margin: 14px 16px 8px 16px;
-  line-height: 1.15;
+  margin: 16px 16px 12px 16px;
+  line-height: 1.2;
 }
 
 @media (min-width: 768px) {
   .mobile-large-title {
     display: none !important;
+  }
+}
+
+/* Unified Desktop View Header (Google Material 3) */
+.desktop-view-header {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .desktop-view-header {
+    display: flex !important;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .desktop-view-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .desktop-view-title {
+    font-family: 'Outfit', 'Inter', sans-serif;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    color: var(--text-primary);
+    margin: 0;
+  }
+
+  .desktop-view-subtitle {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--text-tertiary);
+    line-height: 1.4;
+  }
+
+  .desktop-view-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 }
 
@@ -450,28 +512,40 @@ body.is-tg-fullscreen .header-actions {
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
 }
 
-/* Minimalist Cards and Sections */
+/* Minimalist Cards and Sections (Apple HIG Grouped Lists on Mobile) */
 .linear-section {
-  margin: 14px 16px;
+  margin: 22px 16px 12px 16px;
 }
 
 .linear-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 4px;
+  padding: 6px 4px;
   user-select: none;
   cursor: pointer;
 }
 
 .linear-section-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.settings-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  margin-top: 20px;
+  padding-left: 4px;
 }
 
 .linear-count-badge {
@@ -1772,6 +1846,31 @@ body.is-tg-fullscreen .header-actions {
 
   .app-header {
     padding: 16px 36px;
+    border-bottom: none;
+  }
+
+  /* Material 3 Section Headers on Desktop */
+  .linear-section {
+    margin: 24px 0 14px 0;
+  }
+
+  .linear-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+  }
+
+  .settings-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-transform: none;
+    letter-spacing: -0.01em;
+    margin-bottom: 12px;
+    margin-top: 24px;
+    padding-left: 0;
   }
 
   .main-content-container {

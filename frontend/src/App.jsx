@@ -80,6 +80,7 @@ export default function App() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddOptions, setQuickAddOptions] = useState(null);
   const [mascotMood, setMascotMood] = useState('idle');
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     // Initialize Telegram WebApp
@@ -333,42 +334,25 @@ export default function App() {
         <div className="app-main-wrapper">
           {/* Top Sticky Header */}
           <header className="app-header">
-            <div className="header-companion-group">
-              <div className="header-mascot-wrapper mobile-only-item">
-                <Mascot
-                  state={mascotMood}
-                  size={34}
-                  interactive={true}
-                  onClick={() => {
-                    setMascotMood((prev) => (prev === 'idle' ? 'happy' : 'idle'));
-                  }}
-                />
+            <div className="header-profile-bubble">
+              <div className="header-avatar-circle">
+                {currentUser.photo_url && !avatarError ? (
+                  <img
+                    src={currentUser.photo_url}
+                    alt={currentUser.first_name || 'User'}
+                    className="header-avatar-img"
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  <span className="header-avatar-initial">
+                    {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
-              <div className="header-titles">
-                <div className="header-title-main">
-                  <span className="mobile-only-item">{currentUser.first_name || 'TaskerBot'}</span>
-                  <span className="desktop-only-item">
-                    {activeTab === 'today'
-                      ? 'Сегодня'
-                      : activeTab === 'groceries'
-                      ? 'Список продуктов'
-                      : activeTab === 'goals'
-                      ? 'Проекты & Цели'
-                      : 'Настройки'}
-                  </span>
-                </div>
-                <div className="header-subtitle">
-                  {todayFormatted}
-                  <span className="mobile-only-item">
-                    {activeTab === 'groceries'
-                      ? ' • Продукты'
-                      : activeTab === 'goals'
-                      ? ' • Цели'
-                      : activeTab === 'settings'
-                      ? ' • Параметры'
-                      : ''}
-                  </span>
-                </div>
+              <div className="header-bubble-text">
+                <span className="header-bubble-name">{currentUser.first_name || 'TaskerBot'}</span>
+                <span className="header-bubble-date">{todayFormatted}</span>
               </div>
             </div>
 

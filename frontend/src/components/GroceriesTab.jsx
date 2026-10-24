@@ -424,7 +424,47 @@ export default function GroceriesTab({
 
   return (
     <div className="tab-scroll-container groceries-tab-container">
+      {/* Mobile iOS HIG Large Title */}
       <h1 className="mobile-large-title mobile-only-item">Список продуктов</h1>
+
+      {/* Desktop Material 3 View Header */}
+      <div className="desktop-view-header desktop-only-item">
+        <div className="desktop-view-title-group">
+          <h1 className="desktop-view-title">Список продуктов</h1>
+          <div className="desktop-view-subtitle">
+            {completedCount} из {totalCount} куплено ({progressPct}%)
+          </div>
+        </div>
+        <div className="desktop-view-actions">
+          {onForceRefresh && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить список продуктов"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              <span>Обновить</span>
+            </button>
+          )}
+          {completedCount > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleClearCompleted}
+              title="Очистить купленные товары"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Trash2 size={14} />
+              <span>Очистить купленное</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       {/* Progress & Actions Header Card */}
       <div className="day-status-card">

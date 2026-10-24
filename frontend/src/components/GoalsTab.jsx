@@ -370,18 +370,53 @@ export default function GoalsTab({
 
   return (
     <div className="linear-section" style={{ paddingBottom: '30px' }}>
-      <h1 className="mobile-large-title mobile-only-item" style={{ margin: '0 0 10px 0' }}>Проекты & Цели</h1>
-      {/* Header bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-        <div>
-          <h2 className="desktop-only-item" style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Проекты & Цели
-          </h2>
-          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+      {/* Mobile iOS HIG Large Title */}
+      <h1 className="mobile-large-title mobile-only-item">Проекты & Цели</h1>
+
+      {/* Desktop Material 3 View Header */}
+      <div className="desktop-view-header desktop-only-item">
+        <div className="desktop-view-title-group">
+          <h1 className="desktop-view-title">Проекты & Цели</h1>
+          <div className="desktop-view-subtitle">
             {goalsData.length} {goalsData.length === 1 ? 'цель' : 'целей'} в работе
           </div>
         </div>
+        <div className="desktop-view-actions">
+          {onForceRefresh && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить цели"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              <span>Обновить</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              hapticFeedback('light');
+              setIsCreatingGoal((prev) => !prev);
+            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={15} />
+            <span>Вручную</span>
+          </button>
+        </div>
+      </div>
 
+      {/* Mobile Sub-Header Bar */}
+      <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', width: '100%' }}>
+        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+          {goalsData.length} {goalsData.length === 1 ? 'цель' : 'целей'} в работе
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onForceRefresh && (
             <button
