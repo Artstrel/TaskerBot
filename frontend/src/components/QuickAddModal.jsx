@@ -144,7 +144,7 @@ export default function QuickAddModal({
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         try {
           mediaRecorderRef.current.stop();
-        } catch (_) {}
+        } catch (_) { }
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -227,8 +227,8 @@ export default function QuickAddModal({
               goalId || goalTitle
                 ? 'subtask'
                 : t.category === 'subtask'
-                ? 'one_time'
-                : t.category,
+                  ? 'one_time'
+                  : t.category,
           };
         }
         return t;
@@ -345,7 +345,7 @@ export default function QuickAddModal({
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop();
-      } catch (_) {}
+      } catch (_) { }
     }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
@@ -359,7 +359,7 @@ export default function QuickAddModal({
     if (speechRecognitionRef.current) {
       try {
         speechRecognitionRef.current.stop();
-      } catch (_) {}
+      } catch (_) { }
     }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.onstop = () => {
@@ -369,7 +369,7 @@ export default function QuickAddModal({
       };
       try {
         mediaRecorderRef.current.stop();
-      } catch (_) {}
+      } catch (_) { }
       setIsRecording(false);
     }
   };
@@ -784,12 +784,12 @@ export default function QuickAddModal({
         prev.map((t) =>
           t.id === taskId
             ? {
-                ...t,
-                title: capitalizeFirst(editingTitle.trim()),
-                target_value: parsedTarget && parsedTarget > 0 ? parsedTarget : null,
-                unit: cleanUnit,
-                step: parsedStep && parsedStep > 0 ? parsedStep : 1.0,
-              }
+              ...t,
+              title: capitalizeFirst(editingTitle.trim()),
+              target_value: parsedTarget && parsedTarget > 0 ? parsedTarget : null,
+              unit: cleanUnit,
+              step: parsedStep && parsedStep > 0 ? parsedStep : 1.0,
+            }
             : t
         )
       );
@@ -1219,12 +1219,12 @@ export default function QuickAddModal({
               {isRecording
                 ? 'Запись голоса...'
                 : extractedTasks
-                ? 'Подтверждение задач'
-                : initialGoalTitle
-                ? `Шаг к цели: ${initialGoalTitle}`
-                : category === 'goal'
-                ? 'Новая цель'
-                : 'Создать задачу'}
+                  ? 'Подтверждение задач'
+                  : initialGoalTitle
+                    ? `Шаг к цели: ${initialGoalTitle}`
+                    : category === 'goal'
+                      ? 'Новая цель'
+                      : 'Создать задачу'}
             </span>
           </div>
 
@@ -1466,11 +1466,11 @@ export default function QuickAddModal({
                             {task.category === 'routine' && task.frequency_type === 'weekly' && task.days_of_week && task.days_of_week.length > 0 && (
                               <span className="item-tag">
                                 <RotateCw size={10} /> {
-                                  task.days_of_week.length === 5 && [0,1,2,3,4].every(d => task.days_of_week.includes(d))
+                                  task.days_of_week.length === 5 && [0, 1, 2, 3, 4].every(d => task.days_of_week.includes(d))
                                     ? 'Будни'
-                                    : task.days_of_week.length === 2 && [5,6].every(d => task.days_of_week.includes(d))
-                                    ? 'Выходные'
-                                    : task.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
+                                    : task.days_of_week.length === 2 && [5, 6].every(d => task.days_of_week.includes(d))
+                                      ? 'Выходные'
+                                      : task.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
                                 }
                               </span>
                             )}
@@ -1570,7 +1570,7 @@ export default function QuickAddModal({
                 <textarea
                   ref={inputRef}
                   className="unified-textarea"
-                  placeholder="Напишите задачу или нажмите на микрофон для записи..."
+                  placeholder="Напишите или надиктуйте задачу..."
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   disabled={isProcessing}

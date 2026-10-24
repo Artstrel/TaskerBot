@@ -516,7 +516,7 @@ export default function GroceriesTab({
           <input
             type="text"
             className="quick-bar-input"
-            placeholder="Добавить продукт (например, Молоко 2 л)..."
+            placeholder="Добавить продукт..."
             value={quickTitle}
             onChange={(e) => setQuickTitle(e.target.value)}
           />
@@ -576,161 +576,92 @@ export default function GroceriesTab({
       )}
 
       <div className="groceries-desktop-grid">
-      {/* SECTION 1: Active Grocery Items (Нужно купить) */}
-      {activeItems.length > 0 && (
-        <section className="linear-section">
-          <div className="linear-section-header">
-            <div className="linear-section-title">
-              <ShoppingCart size={15} color="var(--text-primary)" />
-              <span>Нужно купить</span>
-              <span className="linear-count-badge">
-                {activeItems.length}
-              </span>
-            </div>
-          </div>
-
-          <div className="linear-list">
-            {activeItems.map((item) => (
-              <div
-                key={item.id}
-                className="linear-list-item"
-                style={{ alignItems: 'flex-start' }}
-              >
-                {/* Checkbox */}
-                <button
-                  className="linear-checkbox"
-                  onClick={() => handleToggle(item.id, false)}
-                  aria-label="Отметить как купленное"
-                  style={{ marginTop: '3px' }}
-                >
-                  {/* Empty unchecked circle */}
-                </button>
-
-                {/* Title & Editable Box */}
-                {editingItemId === item.id ? (
-                  <div className="task-inline-edit-box">
-                    <input
-                      type="text"
-                      className="task-inline-input"
-                      value={editItemTitle}
-                      onChange={(e) => setEditItemTitle(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleSaveEdit(item.id);
-                        if (e.key === 'Escape') setEditingItemId(null);
-                      }}
-                      autoFocus
-                    />
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        type="button"
-                        className="item-mini-btn"
-                        onClick={() => setEditingItemId(null)}
-                      >
-                        <X size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        className="item-mini-btn btn-success"
-                        onClick={() => handleSaveEdit(item.id)}
-                      >
-                        <Check size={13} />
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="task-content-main" style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      className="linear-title"
-                      onClick={() => handleStartEdit(item)}
-                      title="Нажмите для редактирования названия"
-                      style={{ cursor: 'pointer' }}
-                    >
-                      {item.title}
-                    </div>
-
-                    {/* Numeric Stepper if quantity present */}
-                    {renderNumericStepper(item)}
-                  </div>
-                )}
-
-                {/* Right Actions */}
-                <div className="item-action-btns">
-                  <button
-                    className="item-mini-btn"
-                    onClick={() => handleStartEdit(item)}
-                    title="Редактировать"
-                  >
-                    <Pencil size={13} />
-                  </button>
-                  <button
-                    className="item-mini-btn btn-danger"
-                    onClick={() => handleDelete(item.id)}
-                    title="Удалить"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+        {/* SECTION 1: Active Grocery Items (Нужно купить) */}
+        {activeItems.length > 0 && (
+          <section className="linear-section">
+            <div className="linear-section-header">
+              <div className="linear-section-title">
+                <ShoppingCart size={15} color="var(--text-primary)" />
+                <span>Нужно купить</span>
+                <span className="linear-count-badge">
+                  {activeItems.length}
+                </span>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* SECTION 2: Completed / Purchased Items (Куплено) */}
-      {completedItems.length > 0 && (
-        <section className="linear-section" style={{ marginTop: '16px' }}>
-          <div
-            className="linear-section-header"
-            onClick={() => setIsCompletedOpen((prev) => !prev)}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="linear-section-title">
-              <CheckCheck size={15} color="var(--text-secondary)" />
-              <span style={{ color: 'var(--text-secondary)' }}>Куплено</span>
-              <span className="linear-count-badge badge-success">
-                {completedItems.length}
-              </span>
             </div>
-            {isCompletedOpen ? (
-              <ChevronUp size={16} color="var(--text-tertiary)" />
-            ) : (
-              <ChevronDown size={16} color="var(--text-tertiary)" />
-            )}
-          </div>
 
-          {isCompletedOpen && (
             <div className="linear-list">
-              {completedItems.map((item) => (
+              {activeItems.map((item) => (
                 <div
                   key={item.id}
-                  className="linear-list-item completed"
+                  className="linear-list-item"
                   style={{ alignItems: 'flex-start' }}
                 >
-                  {/* Checked checkbox */}
+                  {/* Checkbox */}
                   <button
-                    className="linear-checkbox checked"
-                    onClick={() => handleToggle(item.id, true)}
-                    aria-label="Вернуть в список покупок"
+                    className="linear-checkbox"
+                    onClick={() => handleToggle(item.id, false)}
+                    aria-label="Отметить как купленное"
                     style={{ marginTop: '3px' }}
                   >
-                    <Check size={12} strokeWidth={3} />
+                    {/* Empty unchecked circle */}
                   </button>
 
-                  <div className="task-content-main" style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      className="linear-title completed-title"
-                      style={{ textDecoration: 'line-through', opacity: 0.6 }}
-                    >
-                      {item.title}
-                      {item.target_value ? (
-                        <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                          ({item.target_value} {item.unit || 'шт'})
-                        </span>
-                      ) : null}
+                  {/* Title & Editable Box */}
+                  {editingItemId === item.id ? (
+                    <div className="task-inline-edit-box">
+                      <input
+                        type="text"
+                        className="task-inline-input"
+                        value={editItemTitle}
+                        onChange={(e) => setEditItemTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveEdit(item.id);
+                          if (e.key === 'Escape') setEditingItemId(null);
+                        }}
+                        autoFocus
+                      />
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          type="button"
+                          className="item-mini-btn"
+                          onClick={() => setEditingItemId(null)}
+                        >
+                          <X size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          className="item-mini-btn btn-success"
+                          onClick={() => handleSaveEdit(item.id)}
+                        >
+                          <Check size={13} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="task-content-main" style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        className="linear-title"
+                        onClick={() => handleStartEdit(item)}
+                        title="Нажмите для редактирования названия"
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {item.title}
+                      </div>
 
+                      {/* Numeric Stepper if quantity present */}
+                      {renderNumericStepper(item)}
+                    </div>
+                  )}
+
+                  {/* Right Actions */}
                   <div className="item-action-btns">
+                    <button
+                      className="item-mini-btn"
+                      onClick={() => handleStartEdit(item)}
+                      title="Редактировать"
+                    >
+                      <Pencil size={13} />
+                    </button>
                     <button
                       className="item-mini-btn btn-danger"
                       onClick={() => handleDelete(item.id)}
@@ -742,9 +673,78 @@ export default function GroceriesTab({
                 </div>
               ))}
             </div>
-          )}
-        </section>
-      )}
+          </section>
+        )}
+
+        {/* SECTION 2: Completed / Purchased Items (Куплено) */}
+        {completedItems.length > 0 && (
+          <section className="linear-section" style={{ marginTop: '16px' }}>
+            <div
+              className="linear-section-header"
+              onClick={() => setIsCompletedOpen((prev) => !prev)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="linear-section-title">
+                <CheckCheck size={15} color="var(--text-secondary)" />
+                <span style={{ color: 'var(--text-secondary)' }}>Куплено</span>
+                <span className="linear-count-badge badge-success">
+                  {completedItems.length}
+                </span>
+              </div>
+              {isCompletedOpen ? (
+                <ChevronUp size={16} color="var(--text-tertiary)" />
+              ) : (
+                <ChevronDown size={16} color="var(--text-tertiary)" />
+              )}
+            </div>
+
+            {isCompletedOpen && (
+              <div className="linear-list">
+                {completedItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="linear-list-item completed"
+                    style={{ alignItems: 'flex-start' }}
+                  >
+                    {/* Checked checkbox */}
+                    <button
+                      className="linear-checkbox checked"
+                      onClick={() => handleToggle(item.id, true)}
+                      aria-label="Вернуть в список покупок"
+                      style={{ marginTop: '3px' }}
+                    >
+                      <Check size={12} strokeWidth={3} />
+                    </button>
+
+                    <div className="task-content-main" style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        className="linear-title completed-title"
+                        style={{ textDecoration: 'line-through', opacity: 0.6 }}
+                      >
+                        {item.title}
+                        {item.target_value ? (
+                          <span style={{ marginLeft: '6px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                            ({item.target_value} {item.unit || 'шт'})
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="item-action-btns">
+                      <button
+                        className="item-mini-btn btn-danger"
+                        onClick={() => handleDelete(item.id)}
+                        title="Удалить"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

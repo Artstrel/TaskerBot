@@ -1141,11 +1141,11 @@ export default function TodayTab({
                               {routine.frequency_type === 'weekly' && routine.days_of_week && routine.days_of_week.length > 0 && (
                                 <span className="item-tag" title="Дни недели">
                                   <RotateCw size={10} /> {
-                                    routine.days_of_week.length === 5 && [0,1,2,3,4].every(d => routine.days_of_week.includes(d))
+                                    routine.days_of_week.length === 5 && [0, 1, 2, 3, 4].every(d => routine.days_of_week.includes(d))
                                       ? 'Будни'
-                                      : routine.days_of_week.length === 2 && [5,6].every(d => routine.days_of_week.includes(d))
-                                      ? 'Выходные'
-                                      : routine.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
+                                      : routine.days_of_week.length === 2 && [5, 6].every(d => routine.days_of_week.includes(d))
+                                        ? 'Выходные'
+                                        : routine.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
                                   }
                                 </span>
                               )}
@@ -1187,7 +1187,7 @@ export default function TodayTab({
               <input
                 type="text"
                 className="quick-bar-input"
-                placeholder="Быстрая задача на сегодня... (Enter для сохранения)"
+                placeholder="Быстрая задача на сегодня..."
                 value={quickTitle}
                 onChange={(e) => setQuickTitle(e.target.value)}
               />
