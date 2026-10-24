@@ -196,7 +196,7 @@ html.is-ios .app-header {
 
 body.is-tg-fullscreen.is-ios .app-header,
 html.is-tg-fullscreen.is-ios .app-header {
-  padding-top: calc(max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px)) + 6px) !important;
+  padding-top: calc(max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px)) + 4px) !important;
   padding-bottom: 6px !important;
   padding-left: max(calc(16px + var(--safe-left)), 76px) !important;
   padding-right: max(calc(12px + var(--safe-right)), 76px) !important;
