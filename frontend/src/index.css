@@ -186,10 +186,10 @@ h4,
   transition: padding 0.2s ease;
 }
 
-/* iOS: align the profile bubble vertically on the same level as Telegram's Close and Menu buttons */
+/* iOS: align the profile bubble center vertically with the axis of Telegram's Close and Menu buttons */
 body.is-ios .app-header,
 html.is-ios .app-header {
-  padding-top: max(calc(14px + var(--safe-top)), 16px);
+  padding-top: max(calc(8px + var(--safe-top)), 10px);
 }
 
 body.is-tg-fullscreen.is-ios .app-header,
