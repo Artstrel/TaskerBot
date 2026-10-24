@@ -53,6 +53,7 @@ async def lifespan(app: FastAPI):
                     BotCommand(command="routines", description="🔄 Ежедневные рутины"),
                     BotCommand(command="goals", description="🎯 Мои цели и проекты"),
                     BotCommand(command="settings", description="⚙️ Настройки и напоминания"),
+                    BotCommand(command="test", description="🔔 Тест уведомлений"),
                     BotCommand(command="webapp", description="📱 Открыть WebApp"),
                     BotCommand(command="help", description="💡 Помощь и справка"),
                     BotCommand(command="start", description="👋 Главное меню"),

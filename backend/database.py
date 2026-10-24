@@ -53,6 +53,7 @@ async def init_db() -> None:
             ("users", "ai_provider", "VARCHAR(32) DEFAULT 'groq'"),
             ("users", "morning_digest_time", "VARCHAR(5) DEFAULT '09:00'"),
             ("users", "evening_digest_enabled", "BOOLEAN DEFAULT TRUE"),
+            ("users", "praise_notifications_enabled", "BOOLEAN DEFAULT TRUE"),
             ("routine_tasks", "target_value", "FLOAT"),
             ("routine_tasks", "step", "FLOAT DEFAULT 1.0"),
             ("routine_tasks", "unit", "VARCHAR(32)"),

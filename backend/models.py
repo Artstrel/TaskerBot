@@ -27,6 +27,7 @@ class User(Base):
     reminder_6h_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     reminder_3h_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     reminder_1h_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    praise_notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     morning_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     morning_digest_time: Mapped[str] = mapped_column(String(5), default="09:00")  # HH:MM
     evening_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -427,6 +427,7 @@ async def handle_settings(message: Message):
             reminder_1h=user.reminder_1h_enabled,
             morning_digest=user.morning_digest_enabled,
             evening_digest=user.evening_digest_enabled,
+            praise_notifications=getattr(user, "praise_notifications_enabled", True),
         ),
     )
 
@@ -906,6 +907,7 @@ async def cb_toggle_setting(query: CallbackQuery):
             reminder_1h=updated_user.reminder_1h_enabled,
             morning_digest=updated_user.morning_digest_enabled,
             evening_digest=updated_user.evening_digest_enabled,
+            praise_notifications=getattr(updated_user, "praise_notifications_enabled", True),
         )
     )
 
@@ -916,3 +918,28 @@ async def cb_show_tz_help(query: CallbackQuery):
         "Точный часовой пояс автоматически синхронизируется при открытии WebApp!",
         show_alert=True,
     )
+
+
+@router.message(Command("test"))
+@router.message(Command("test_notification"))
+async def handle_test_notification_cmd(message: Message):
+    from backend.scheduler import send_test_notification
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user.id)
+        try:
+            await send_test_notification(session, user)
+        except Exception as e:
+            await message.answer(f"❌ Не удалось отправить тестовое уведомление: {e}")
+
+
+@router.callback_query(F.data == "test_notification")
+async def cb_test_notification(query: CallbackQuery):
+    from backend.scheduler import send_test_notification
+    async with AsyncSessionLocal() as session:
+        user = await get_or_create_user(session, query.from_user.id)
+        try:
+            await send_test_notification(session, user)
+            await query.answer("🔔 Тестовое уведомление отправлено!")
+        except Exception as e:
+            await query.answer(f"Ошибка: {e}", show_alert=True)
+

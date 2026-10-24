@@ -23,6 +23,7 @@ import {
   setGroqKey,
   getOpenRouterKey,
   setOpenRouterKey,
+  sendTestNotification,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -34,6 +35,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   const [geminiKeyInput, setGeminiKeyInput] = useState(getGeminiKey());
   const [groqKeyInput, setGroqKeyInput] = useState(getGroqKey());
   const [openRouterKeyInput, setOpenRouterKeyInput] = useState(getOpenRouterKey());
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [testFeedback, setTestFeedback] = useState(null);
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(() => {
     const saved = localStorage.getItem('settings_notifications_open');
@@ -43,6 +46,26 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
     const saved = localStorage.getItem('settings_ai_open');
     return saved !== null ? saved === 'true' : false;
   });
+
+  const handleSendTestNotification = async () => {
+    setIsSendingTest(true);
+    setTestFeedback(null);
+    try {
+      const res = await sendTestNotification();
+      if (res && res.error) {
+        setTestFeedback({ error: true, text: `Ошибка: ${res.error}` });
+      } else {
+        setTestFeedback({ error: false, text: 'Тестовое уведомление успешно отправлено в Telegram!' });
+      }
+    } catch (e) {
+      setTestFeedback({ error: true, text: 'Не удалось отправить уведомление' });
+    } finally {
+      setIsSendingTest(false);
+      setTimeout(() => {
+        setTestFeedback(null);
+      }, 5000);
+    }
+  };
 
   const toggleNotifications = () => {
     hapticFeedback('selection');
@@ -117,7 +140,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   const handleToggle = async (key) => {
     if (!settings) return;
     hapticFeedback('selection');
-    const newSettings = { ...settings, [key]: !settings[key] };
+    const currentVal = settings[key] !== false;
+    const newSettings = { ...settings, [key]: !currentVal };
     setSettings(newSettings);
     await updateUserSettings({ [key]: newSettings[key] });
     triggerSaved();
@@ -345,10 +369,11 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                   { key: 'reminder_6h_enabled', label: 'Напоминание за 6 ч. до конца дня' },
                   { key: 'reminder_3h_enabled', label: 'Напоминание за 3 ч. до конца дня' },
                   { key: 'reminder_1h_enabled', label: 'Срочное напоминание за 1 ч.' },
+                  { key: 'praise_notifications_enabled', label: 'Похвала, если все дела завершены' },
                   { key: 'morning_digest_enabled', label: 'Утренний дайджест задач' },
                   { key: 'evening_digest_enabled', label: 'Вечерний отчет и итоги дня (за 15м)' },
                 ].map((item) => {
-                  const isEnabled = settings[item.key];
+                  const isEnabled = settings[item.key] !== false;
                   return (
                     <div key={item.key}>
                       <div
@@ -399,6 +424,46 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                     </div>
                   );
                 })}
+
+                <div style={{ padding: '10px 16px 14px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <button
+                    type="button"
+                    onClick={handleSendTestNotification}
+                    disabled={isSendingTest}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '9px 14px',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      cursor: isSendingTest ? 'default' : 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <Bell size={14} style={{ color: 'var(--accent-primary)' }} />
+                    {isSendingTest ? 'Отправка...' : 'Отправить тестовое уведомление в Telegram'}
+                  </button>
+                  {testFeedback && (
+                    <div
+                      style={{
+                        fontSize: '12px',
+                        color: testFeedback.error ? 'var(--color-danger, #ef4444)' : 'var(--color-success, #22c55e)',
+                        textAlign: 'center',
+                        marginTop: '8px',
+                        fontWeight: '500',
+                      }}
+                    >
+                      {testFeedback.text}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* SECTION: Day end cutoff */}

@@ -520,3 +520,17 @@ async def clear_completed(
     deleted_count = await clear_completed_groceries(session, user.telegram_id)
     return {"status": "cleared", "deleted_count": deleted_count}
 
+
+# --- Notifications Endpoints ---
+@router.post("/notifications/test")
+async def trigger_test_notification(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        from backend.scheduler import send_test_notification
+        return await send_test_notification(session, user)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send test notification: {e}")
+
+

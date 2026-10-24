@@ -192,6 +192,7 @@ def get_settings_kb(
     reminder_1h: bool,
     morning_digest: bool,
     evening_digest: bool = True,
+    praise_notifications: bool = True,
 ) -> InlineKeyboardMarkup:
     def mark(b: bool) -> str:
         return "🔔 Вкл" if b else "🔕 Выкл"
@@ -218,6 +219,12 @@ def get_settings_kb(
             ],
             [
                 InlineKeyboardButton(
+                    text=f"Похвала за день: {mark(praise_notifications)}",
+                    callback_data="toggle_setting:praise_notifications",
+                )
+            ],
+            [
+                InlineKeyboardButton(
                     text=f"Утренний дайджест: {mark(morning_digest)}",
                     callback_data="toggle_setting:morning_digest",
                 )
@@ -226,6 +233,12 @@ def get_settings_kb(
                 InlineKeyboardButton(
                     text=f"Вечерний отчет (за 15м): {mark(evening_digest)}",
                     callback_data="toggle_setting:evening_digest",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🔔 Отправить тестовое уведомление",
+                    callback_data="test_notification",
                 )
             ],
             [

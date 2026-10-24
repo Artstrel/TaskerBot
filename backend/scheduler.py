@@ -86,6 +86,108 @@ def format_reminder_text(title: str, subtitle: str, routines: list, tasks: list)
     return "\n".join(lines).strip()
 
 
+def format_praise_text(
+    title: str,
+    intro: str,
+    completed_routines: list,
+    completed_tasks: list,
+) -> str:
+    lines = [title, "", intro, ""]
+    total_done = len(completed_routines) + len(completed_tasks)
+    if total_done > 0:
+        lines.append(f"📊 <b>Выполнено дел: {total_done}</b>")
+        if completed_routines:
+            lines.append("🔄 <b>Ежедневные рутины:</b>")
+            for r in completed_routines:
+                streak = f" (стрик: 🔥 {r.current_streak})" if r.current_streak > 0 else ""
+                unit_str = f" {html.escape(r.unit)}" if r.unit else ""
+                prog = f" [{r.current_value:g}/{r.target_value:g}{unit_str}]" if r.target_value else ""
+                lines.append(f"• <b>{html.escape(r.title)}</b>{prog}{streak} — ✅")
+            lines.append("")
+        if completed_tasks:
+            lines.append("⚡️ <b>Задачи на день:</b>")
+            show_tasks = completed_tasks[:10]
+            for t in show_tasks:
+                unit_str = f" {html.escape(t.unit)}" if t.unit else ""
+                prog = f" [{t.current_value:g}/{t.target_value:g}{unit_str}]" if t.target_value else ""
+                lines.append(f"• {html.escape(t.title)}{prog} — ✅")
+            if len(completed_tasks) > 10:
+                lines.append(f"• <i>...и ещё {len(completed_tasks) - 10} задач</i>")
+            lines.append("")
+        lines.append("Отличная продуктивность! Наслаждайтесь заслуженным отдыхом! 👏✨")
+    else:
+        lines.append("🌟 <b>На сегодня задач не было запланировано.</b>")
+        lines.append("Отличный повод отдохнуть или наметить цели на завтра! 💪")
+    return "\n".join(lines).strip()
+
+
+async def send_test_notification(session, user: User) -> dict:
+    """Sends a rich test notification to the user in Telegram explaining notification status."""
+    now = get_user_now(user.timezone)
+    effective_date, hours_left, urgency = get_user_effective_date_and_urgency(
+        now, user.day_end_time
+    )
+    routines = await get_user_routines_with_status(session, user.telegram_id, effective_date)
+    overdue, today_tasks = await get_day_tasks(session, user.telegram_id, effective_date)
+    all_tasks = overdue + today_tasks
+
+    completed_routines = [r for r in routines if r.is_completed_today]
+    uncompleted_routines = [r for r in routines if not r.is_completed_today]
+    completed_tasks = [t for t in all_tasks if t.is_completed]
+    uncompleted_tasks = [t for t in all_tasks if not t.is_completed]
+
+    hours = int(max(0, hours_left))
+    minutes = int(max(0, (hours_left - hours) * 60))
+    time_left_str = f"{hours} ч. {minutes} мин." if hours > 0 else f"{minutes} мин."
+
+    lines = [
+        "🔔 <b>Тестовое уведомление от TaskerBot</b>",
+        "",
+        "Уведомления настроены и работают корректно! Текущий статус вашей системы:",
+        "",
+        "🕒 <b>Время и расписание:</b>",
+        f"• Местное время: <b>{now.strftime('%H:%M')}</b> (пояс {html.escape(user.timezone)})",
+        f"• Время сброса дня: <b>{user.day_end_time}</b>",
+        f"• До сброса дня осталось: <b>{time_left_str}</b>",
+        "",
+        "⚙️ <b>Статус напоминаний:</b>",
+        f"• За 6 часов: {'🔔 Включено' if user.reminder_6h_enabled else '🔕 Выключено'}",
+        f"• За 3 часа: {'🔔 Включено' if user.reminder_3h_enabled else '🔕 Выключено'}",
+        f"• За 1 час (срочное): {'🔔 Включено' if user.reminder_1h_enabled else '🔕 Выключено'}",
+        f"• Похвала за закрытие всех дел: {'🔔 Включено' if getattr(user, 'praise_notifications_enabled', True) else '🔕 Выключено'}",
+        f"• Утренний дайджест: {'🔔 Включено (' + (user.morning_digest_time or '09:00') + ')' if user.morning_digest_enabled else '🔕 Выключено'}",
+        f"• Вечерний отчет (за 15м): {'🔔 Включено' if user.evening_digest_enabled else '🔕 Выключено'}",
+        "",
+        "📊 <b>Дела на сегодня:</b>",
+        f"• Рутины: <b>{len(completed_routines)}/{len(routines)}</b> выполнено",
+        f"• Задачи: <b>{len(completed_tasks)}/{len(all_tasks)}</b> выполнено",
+    ]
+
+    if not uncompleted_routines and not uncompleted_tasks:
+        lines.append("")
+        lines.append("🌟 <b>Все намеченные дела на сегодня выполнены на 100%!</b>")
+        if getattr(user, "praise_notifications_enabled", True):
+            lines.append("В контрольные моменты (за 6ч, 3ч и 1ч) бот присылает <b>уведомление-похвалу</b> с итогами закрытых дел. 🎉")
+        else:
+            lines.append("Уведомления-похвала отключены в настройках — бот не будет беспокоить, если всё закрыто. 🔕")
+    else:
+        pending_total = len(uncompleted_routines) + len(uncompleted_tasks)
+        lines.append("")
+        lines.append(f"⏳ Осталось невыполненных дел: <b>{pending_total}</b>")
+        lines.append("В контрольные часы бот напомнит завершить их.")
+
+    lines.append("")
+    lines.append("✨ <i>Система уведомлений активна и готова к работе!</i>")
+
+    msg = "\n".join(lines).strip()
+    await bot.send_message(
+        chat_id=user.telegram_id,
+        text=msg,
+        reply_markup=get_webapp_inline_keyboard(),
+    )
+    return {"status": "ok", "message": "Тестовое уведомление успешно отправлено в Telegram"}
+
+
 async def send_evening_report(session, user: User, target_date: date):
     """Generates and sends the evening report/summary for a specific date."""
     if await is_stage_sent(session, user.telegram_id, target_date, "evening"):
@@ -263,22 +365,25 @@ async def check_user_reminders_and_rollover():
                             except Exception as e:
                                 logger.warning(f"Could not send morning digest to {user.telegram_id}: {e}")
 
-                    # --- 3. Routine and Task Reminders (6h, 3h, 1h before day end) ---
+                    # --- 3. Routine and Task Reminders / Praise (6h, 3h, 1h before day end) ---
                     routines = await get_user_routines_with_status(session, user.telegram_id, effective_date)
                     uncompleted_routines = [r for r in routines if not r.is_completed_today]
+                    completed_routines = [r for r in routines if r.is_completed_today]
 
                     overdue, today_tasks = await get_day_tasks(session, user.telegram_id, effective_date)
                     all_tasks = overdue + today_tasks
                     uncompleted_tasks = [t for t in all_tasks if not t.is_completed]
+                    completed_tasks = [t for t in all_tasks if t.is_completed]
 
-                    # Check reminders only if there are unfinished items
-                    if uncompleted_routines or uncompleted_tasks:
-                        # 6 hours reminder (window: 3h < hours_left <= 6h)
-                        if (
-                            user.reminder_6h_enabled
-                            and 3.0 < hours_left <= 6.0
-                            and not await is_stage_sent(session, user.telegram_id, effective_date, "6h")
-                        ):
+                    has_unfinished = bool(uncompleted_routines or uncompleted_tasks)
+
+                    # 6 hours reminder (window: 3h < hours_left <= 6h)
+                    if (
+                        user.reminder_6h_enabled
+                        and 3.0 < hours_left <= 6.0
+                        and not await is_stage_sent(session, user.telegram_id, effective_date, "6h")
+                    ):
+                        if has_unfinished:
                             msg = format_reminder_text(
                                 title="🟡 <b>Напоминание: осталось 6 часов до конца дня!</b>",
                                 subtitle="Не забудьте завершить намеченные дела и рутины:",
@@ -291,17 +396,34 @@ async def check_user_reminders_and_rollover():
                                     text=msg,
                                     reply_markup=get_webapp_inline_keyboard(),
                                 )
-                                await record_stage_sent(session, user.telegram_id, effective_date, "6h")
                                 logger.info(f"6h reminder sent to {user.telegram_id}")
                             except Exception as e:
                                 logger.warning(f"Failed to send 6h reminder to {user.telegram_id}: {e}")
+                        elif getattr(user, "praise_notifications_enabled", True):
+                            msg = format_praise_text(
+                                title="✨ <b>Осталось 6 часов: отличный темп!</b>",
+                                intro="Все задачи и привычки на сегодня уже закрыты! Можно заслуженно перевести дух.",
+                                completed_routines=completed_routines,
+                                completed_tasks=completed_tasks,
+                            )
+                            try:
+                                await bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=msg,
+                                    reply_markup=get_webapp_inline_keyboard(),
+                                )
+                                logger.info(f"6h praise sent to {user.telegram_id}")
+                            except Exception as e:
+                                logger.warning(f"Failed to send 6h praise to {user.telegram_id}: {e}")
+                        await record_stage_sent(session, user.telegram_id, effective_date, "6h")
 
-                        # 3 hours reminder (window: 1h < hours_left <= 3h)
-                        elif (
-                            user.reminder_3h_enabled
-                            and 1.0 < hours_left <= 3.0
-                            and not await is_stage_sent(session, user.telegram_id, effective_date, "3h")
-                        ):
+                    # 3 hours reminder (window: 1h < hours_left <= 3h)
+                    elif (
+                        user.reminder_3h_enabled
+                        and 1.0 < hours_left <= 3.0
+                        and not await is_stage_sent(session, user.telegram_id, effective_date, "3h")
+                    ):
+                        if has_unfinished:
                             msg = format_reminder_text(
                                 title="🟠 <b>Внимание: осталось 3 часа до конца дня!</b>",
                                 subtitle="Остались незавершенные дела на сегодня:",
@@ -314,18 +436,35 @@ async def check_user_reminders_and_rollover():
                                     text=msg,
                                     reply_markup=get_webapp_inline_keyboard(),
                                 )
-                                await record_stage_sent(session, user.telegram_id, effective_date, "3h")
-                                await record_stage_sent(session, user.telegram_id, effective_date, "6h")
                                 logger.info(f"3h reminder sent to {user.telegram_id}")
                             except Exception as e:
                                 logger.warning(f"Failed to send 3h reminder to {user.telegram_id}: {e}")
+                        elif getattr(user, "praise_notifications_enabled", True):
+                            msg = format_praise_text(
+                                title="🎉 <b>Осталось 3 часа: день прошел на отлично!</b>",
+                                intro="До конца дня ещё 3 часа, а у тебя уже всё сделано на 100%! Вечер свободен для отдыха.",
+                                completed_routines=completed_routines,
+                                completed_tasks=completed_tasks,
+                            )
+                            try:
+                                await bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=msg,
+                                    reply_markup=get_webapp_inline_keyboard(),
+                                )
+                                logger.info(f"3h praise sent to {user.telegram_id}")
+                            except Exception as e:
+                                logger.warning(f"Failed to send 3h praise to {user.telegram_id}: {e}")
+                        await record_stage_sent(session, user.telegram_id, effective_date, "3h")
+                        await record_stage_sent(session, user.telegram_id, effective_date, "6h")
 
-                        # 1 hour critical reminder (window: 0.25h < hours_left <= 1h)
-                        elif (
-                            user.reminder_1h_enabled
-                            and 0.25 < hours_left <= 1.0
-                            and not await is_stage_sent(session, user.telegram_id, effective_date, "1h")
-                        ):
+                    # 1 hour critical reminder (window: 0.25h < hours_left <= 1h)
+                    elif (
+                        user.reminder_1h_enabled
+                        and 0.25 < hours_left <= 1.0
+                        and not await is_stage_sent(session, user.telegram_id, effective_date, "1h")
+                    ):
+                        if has_unfinished:
                             msg = format_reminder_text(
                                 title="🚨 <b>Критично: остался 1 час до сброса дня!</b>",
                                 subtitle="Срочно завершите дела, чтобы не потерять стрик привычек и не просрочить задачи:",
@@ -338,12 +477,28 @@ async def check_user_reminders_and_rollover():
                                     text=msg,
                                     reply_markup=get_webapp_inline_keyboard(),
                                 )
-                                await record_stage_sent(session, user.telegram_id, effective_date, "1h")
-                                await record_stage_sent(session, user.telegram_id, effective_date, "3h")
-                                await record_stage_sent(session, user.telegram_id, effective_date, "6h")
                                 logger.info(f"1h reminder sent to {user.telegram_id}")
                             except Exception as e:
                                 logger.warning(f"Failed to send 1h reminder to {user.telegram_id}: {e}")
+                        elif getattr(user, "praise_notifications_enabled", True):
+                            msg = format_praise_text(
+                                title="🏆 <b>Остался 1 час: идеальный финиш дня!</b>",
+                                intro="Все задачи закрыты, стрики привычек защищены, ни одного хвоста на завтра! Ты супермолодец.",
+                                completed_routines=completed_routines,
+                                completed_tasks=completed_tasks,
+                            )
+                            try:
+                                await bot.send_message(
+                                    chat_id=user.telegram_id,
+                                    text=msg,
+                                    reply_markup=get_webapp_inline_keyboard(),
+                                )
+                                logger.info(f"1h praise sent to {user.telegram_id}")
+                            except Exception as e:
+                                logger.warning(f"Failed to send 1h praise to {user.telegram_id}: {e}")
+                        await record_stage_sent(session, user.telegram_id, effective_date, "1h")
+                        await record_stage_sent(session, user.telegram_id, effective_date, "3h")
+                        await record_stage_sent(session, user.telegram_id, effective_date, "6h")
 
                     # --- 4. Evening Report (approx. 15-18 minutes before day end cutoff) ---
                     if (

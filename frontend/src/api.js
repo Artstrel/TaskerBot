@@ -237,6 +237,7 @@ const getLocalDb = () => {
       reminder_6h_enabled: true,
       reminder_3h_enabled: true,
       reminder_1h_enabled: true,
+      praise_notifications_enabled: true,
       morning_digest_enabled: true,
       morning_digest_time: '09:00',
       evening_digest_enabled: true,
@@ -529,6 +530,21 @@ export const updateUserSettings = async (settingsData) => {
   saveLocalDb(db);
   return db.settings;
 };
+
+export const sendTestNotification = async () => {
+  hapticFeedback('medium');
+  try {
+    const res = await fetch(`${API_BASE}/notifications/test?telegram_id=${currentUser.id}`, {
+      method: 'POST',
+    });
+    if (res.ok) return await res.json();
+    const data = await res.json().catch(() => ({}));
+    return { error: data.detail || 'Не удалось отправить тестовое уведомление' };
+  } catch (e) {
+    return { error: e.message || 'Ошибка сети при отправке уведомления' };
+  }
+};
+
 
 export const toggleTask = async (taskId, completed = null) => {
   hapticFeedback('light');
