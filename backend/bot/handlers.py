@@ -195,6 +195,21 @@ async def handle_today(message: Message):
                 ),
             )
 
+    for t in summary.today_tasks:
+        if not t.is_completed:
+            prog_str = f"\n📊 Прогресс: <b>{t.current_value:g}/{t.target_value:g} {t.unit}</b>" if t.target_value else ""
+            await message.answer(
+                f"⚡️ <b>Задача:</b> {t.title}{prog_str}",
+                reply_markup=get_task_actions_kb(
+                    t.id,
+                    t.is_completed,
+                    is_overdue=False,
+                    target_value=t.target_value,
+                    step=t.step,
+                    unit=t.unit,
+                ),
+            )
+
 
 # --- Groceries Handlers ---
 @router.message(Command("groceries"))
@@ -380,6 +395,8 @@ async def handle_routines(message: Message):
         )
 
 
+@router.message(Command("webapp"))
+@router.message(Command("app"))
 @router.message(F.text == "📱 Открыть WebApp")
 async def handle_open_webapp(message: Message):
     await message.answer(

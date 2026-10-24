@@ -1,7 +1,7 @@
 from datetime import datetime, date, timedelta
 from typing import List, Optional, Tuple
 import zoneinfo
-from sqlalchemy import select, update, delete, and_, func, desc, Integer
+from sqlalchemy import select, update, delete, and_, func, desc, Integer, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -460,6 +460,8 @@ async def get_day_tasks(
     else:
         days_diff_expr = func.cast(current_date - OneTimeTask.scheduled_date, Integer)
 
+    overdue_days_expr = case((days_diff_expr > 1, days_diff_expr), else_=1)
+
     mark_overdue_stmt = (
         update(OneTimeTask)
         .where(
@@ -471,7 +473,7 @@ async def get_day_tasks(
         )
         .values(
             is_overdue=True,
-            overdue_days=func.max(1, days_diff_expr),
+            overdue_days=overdue_days_expr,
         )
     )
     try:

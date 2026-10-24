@@ -45,6 +45,10 @@ class User(Base):
     grocery_items: Mapped[List["GroceryItem"]] = relationship(
         "GroceryItem", back_populates="user", cascade="all, delete-orphan"
     )
+    notifications_sent: Mapped[List["SentNotification"]] = relationship(
+        "SentNotification", back_populates="user", cascade="all, delete-orphan"
+    )
+
 
 
 class RoutineTask(Base):
@@ -154,4 +158,20 @@ class GroceryItem(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="grocery_items")
+
+
+class SentNotification(Base):
+    __tablename__ = "sent_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True
+    )
+    date: Mapped[dt_date] = mapped_column(Date, index=True)
+    stage: Mapped[str] = mapped_column(String(32))  # "6h", "3h", "1h", "morning"
+    created_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="notifications_sent")
+
 

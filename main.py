@@ -15,6 +15,7 @@ from backend.scheduler import start_scheduler, scheduler
 from backend.api.routes import router as api_router
 from backend.bot.bot_instance import bot, dp
 from backend.bot.handlers import router as bot_router
+from aiogram.types import BotCommand, BotCommandScopeDefault
 
 logging.basicConfig(
     level=logging.INFO,
@@ -44,9 +45,27 @@ async def lifespan(app: FastAPI):
         logger.info("Valid Telegram BOT_TOKEN detected. Starting Aiogram bot polling...")
         dp.include_router(bot_router)
 
+        async def setup_bot_commands(bot_instance):
+            try:
+                commands = [
+                    BotCommand(command="today", description="📋 Задачи на сегодня"),
+                    BotCommand(command="groceries", description="🛒 Список продуктов"),
+                    BotCommand(command="routines", description="🔄 Ежедневные рутины"),
+                    BotCommand(command="goals", description="🎯 Мои цели и проекты"),
+                    BotCommand(command="settings", description="⚙️ Настройки и напоминания"),
+                    BotCommand(command="webapp", description="📱 Открыть WebApp"),
+                    BotCommand(command="help", description="💡 Помощь и справка"),
+                    BotCommand(command="start", description="👋 Главное меню"),
+                ]
+                await bot_instance.set_my_commands(commands, scope=BotCommandScopeDefault())
+                logger.info("Telegram Bot commands successfully registered.")
+            except Exception as e:
+                logger.warning(f"Could not register Telegram bot commands: {e}")
+
         async def run_bot():
             try:
                 await bot.delete_webhook(drop_pending_updates=True)
+                await setup_bot_commands(bot)
                 await dp.start_polling(bot)
             except Exception as e:
                 logger.error(f"Error in bot polling: {e}", exc_info=True)
