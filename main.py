@@ -15,7 +15,7 @@ from backend.scheduler import start_scheduler, scheduler
 from backend.api.routes import router as api_router
 from backend.bot.bot_instance import bot, dp
 from backend.bot.handlers import router as bot_router
-from aiogram.types import BotCommand, BotCommandScopeDefault
+from aiogram.types import BotCommand, BotCommandScopeDefault, MenuButtonCommands
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,7 +58,8 @@ async def lifespan(app: FastAPI):
                     BotCommand(command="start", description="👋 Главное меню"),
                 ]
                 await bot_instance.set_my_commands(commands, scope=BotCommandScopeDefault())
-                logger.info("Telegram Bot commands successfully registered.")
+                await bot_instance.set_chat_menu_button(menu_button=MenuButtonCommands())
+                logger.info("Telegram Bot commands and commands menu button successfully registered.")
             except Exception as e:
                 logger.warning(f"Could not register Telegram bot commands: {e}")
 

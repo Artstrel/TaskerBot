@@ -96,9 +96,8 @@ async def check_user_reminders_and_rollover():
                     now, user.day_end_time
                 )
 
-                # --- 1. Day Rollover Logic ---
+                # --- 1. Day Rollover Logic (triggers at bedtime / day_end_time) ---
                 if user.last_active_date and user.last_active_date < effective_date:
-                    # Previous day just completed!
                     prev_date = user.last_active_date
 
                     # Routine streak reset check for prev_date
@@ -141,114 +140,184 @@ async def check_user_reminders_and_rollover():
                     user.last_active_date = effective_date
                     await session.commit()
 
-                # --- 2. Morning Digest (7:00 - 11:59) ---
-                if user.morning_digest_enabled and 7 <= now.hour <= 11:
-                    if not await is_stage_sent(session, user.telegram_id, effective_date, "morning"):
+                # --- 2. Morning Digest (Configurable time, default 09:00) ---
+                if user.morning_digest_enabled:
+                    try:
+                        m_parts = (user.morning_digest_time or "09:00").split(":")
+                        m_hour = int(m_parts[0])
+                        m_min = int(m_parts[1]) if len(m_parts) > 1 else 0
+                    except Exception:
+                        m_hour, m_min = 9, 0
+
+                    # Morning window: from morning_digest_time up to 13:00 (1 PM)
+                    is_morning_time = (
+                        (now.hour > m_hour or (now.hour == m_hour and now.minute >= m_min))
+                        and now.hour < 13
+                    )
+
+                    if is_morning_time and not await is_stage_sent(session, user.telegram_id, effective_date, "morning"):
                         overdue, today = await get_day_tasks(session, user.telegram_id, effective_date)
                         routines = await get_user_routines_with_status(session, user.telegram_id, effective_date)
 
-                        if overdue or today or routines:
-                            digest_text = (
-                                f"☀️ <b>Доброе утро, {user.first_name or 'друг'}!</b>\n\n"
-                                f"📋 <b>Ваш план на сегодня ({effective_date.strftime('%d.%m')}):</b>\n"
-                            )
-                            if overdue:
-                                digest_text += f"⚠️ Перенесено невыполненных задач: <b>{len(overdue)}</b> (закреплены сверху)\n"
-                            if routines:
-                                digest_text += f"🔄 Ежедневных рутин: <b>{len(routines)}</b>\n"
-                            if today:
-                                digest_text += f"⚡️ Разовых задач на день: <b>{len(today)}</b>\n"
-                            digest_text += "\nУдачного и продуктивного дня! 💪"
+                        digest_text = (
+                            f"☀️ <b>Доброе утро, {user.first_name or 'друг'}!</b>\n\n"
+                            f"📋 <b>Ваш план на сегодня ({effective_date.strftime('%d.%m')}):</b>\n"
+                        )
+                        if overdue:
+                            digest_text += f"⚠️ Перенесено невыполненных задач: <b>{len(overdue)}</b> (закреплены сверху)\n"
+                        if routines:
+                            digest_text += f"🔄 Ежедневных рутин: <b>{len(routines)}</b>\n"
+                        if today:
+                            digest_text += f"⚡️ Разовых задач на день: <b>{len(today)}</b>\n"
+                        if not overdue and not routines and not today:
+                            digest_text += "Пока нет запланированных дел. Самое время наметить задачи на день! 🎯\n"
+                        digest_text += "\nУдачного и продуктивного дня! 💪"
 
-                            try:
-                                await bot.send_message(
-                                    chat_id=user.telegram_id,
-                                    text=digest_text,
-                                    reply_markup=get_webapp_inline_keyboard(),
-                                )
-                                await record_stage_sent(session, user.telegram_id, effective_date, "morning")
-                            except Exception as e:
-                                logger.warning(f"Could not send morning digest to {user.telegram_id}: {e}")
+                        try:
+                            await bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=digest_text,
+                                reply_markup=get_webapp_inline_keyboard(),
+                            )
+                            await record_stage_sent(session, user.telegram_id, effective_date, "morning")
+                        except Exception as e:
+                            logger.warning(f"Could not send morning digest to {user.telegram_id}: {e}")
 
                 # --- 3. Routine and Task Reminders (6h, 3h, 1h before day end) ---
                 routines = await get_user_routines_with_status(session, user.telegram_id, effective_date)
                 uncompleted_routines = [r for r in routines if not r.is_completed_today]
 
                 overdue, today_tasks = await get_day_tasks(session, user.telegram_id, effective_date)
-                uncompleted_tasks = [t for t in (overdue + today_tasks) if not t.is_completed]
+                all_tasks = overdue + today_tasks
+                uncompleted_tasks = [t for t in all_tasks if not t.is_completed]
 
-                # If no uncompleted items left, skip reminders
-                if not uncompleted_routines and not uncompleted_tasks:
-                    continue
+                # Check reminders only if there are unfinished items
+                if uncompleted_routines or uncompleted_tasks:
+                    # 6 hours reminder (window: 3h < hours_left <= 6h)
+                    if (
+                        user.reminder_6h_enabled
+                        and 3.0 < hours_left <= 6.0
+                        and not await is_stage_sent(session, user.telegram_id, effective_date, "6h")
+                    ):
+                        msg = format_reminder_text(
+                            title="🟡 <b>Напоминание: осталось 6 часов до конца дня!</b>",
+                            subtitle="Не забудьте завершить намеченные дела и рутины:",
+                            routines=uncompleted_routines,
+                            tasks=uncompleted_tasks,
+                        )
+                        try:
+                            await bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=msg,
+                                reply_markup=get_webapp_inline_keyboard(),
+                            )
+                            await record_stage_sent(session, user.telegram_id, effective_date, "6h")
+                        except Exception as e:
+                            logger.warning(f"Failed to send 6h reminder to {user.telegram_id}: {e}")
 
-                # 6 hours reminder (window: 3h < hours_left <= 6h)
+                    # 3 hours reminder (window: 1h < hours_left <= 3h)
+                    elif (
+                        user.reminder_3h_enabled
+                        and 1.0 < hours_left <= 3.0
+                        and not await is_stage_sent(session, user.telegram_id, effective_date, "3h")
+                    ):
+                        msg = format_reminder_text(
+                            title="🟠 <b>Внимание: осталось 3 часа до конца дня!</b>",
+                            subtitle="Остались незавершенные дела на сегодня:",
+                            routines=uncompleted_routines,
+                            tasks=uncompleted_tasks,
+                        )
+                        try:
+                            await bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=msg,
+                                reply_markup=get_webapp_inline_keyboard(),
+                            )
+                            await record_stage_sent(session, user.telegram_id, effective_date, "3h")
+                            await record_stage_sent(session, user.telegram_id, effective_date, "6h")
+                        except Exception as e:
+                            logger.warning(f"Failed to send 3h reminder to {user.telegram_id}: {e}")
+
+                    # 1 hour critical reminder (window: 0.25h < hours_left <= 1h)
+                    elif (
+                        user.reminder_1h_enabled
+                        and 0.25 < hours_left <= 1.0
+                        and not await is_stage_sent(session, user.telegram_id, effective_date, "1h")
+                    ):
+                        msg = format_reminder_text(
+                            title="🚨 <b>Критично: остался 1 час до сброса дня!</b>",
+                            subtitle="Срочно завершите дела, чтобы не потерять стрик привычек и не просрочить задачи:",
+                            routines=uncompleted_routines,
+                            tasks=uncompleted_tasks,
+                        )
+                        try:
+                            await bot.send_message(
+                                chat_id=user.telegram_id,
+                                text=msg,
+                                reply_markup=get_webapp_inline_keyboard(),
+                            )
+                            await record_stage_sent(session, user.telegram_id, effective_date, "1h")
+                            await record_stage_sent(session, user.telegram_id, effective_date, "3h")
+                            await record_stage_sent(session, user.telegram_id, effective_date, "6h")
+                        except Exception as e:
+                            logger.warning(f"Failed to send 1h reminder to {user.telegram_id}: {e}")
+
+                # --- 4. Evening Report (15 minutes before day end cutoff) ---
                 if (
-                    user.reminder_6h_enabled
-                    and 3.0 < hours_left <= 6.0
-                    and not await is_stage_sent(session, user.telegram_id, effective_date, "6h")
+                    user.evening_digest_enabled
+                    and 0.0 < hours_left <= 0.25
+                    and not await is_stage_sent(session, user.telegram_id, effective_date, "evening")
                 ):
-                    msg = format_reminder_text(
-                        title="🟡 <b>Напоминание: осталось 6 часов до конца дня!</b>",
-                        subtitle="Не забудьте завершить намеченные дела и рутины:",
-                        routines=uncompleted_routines,
-                        tasks=uncompleted_tasks,
-                    )
-                    try:
-                        await bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=msg,
-                            reply_markup=get_webapp_inline_keyboard(),
-                        )
-                        await record_stage_sent(session, user.telegram_id, effective_date, "6h")
-                    except Exception as e:
-                        logger.warning(f"Failed to send 6h reminder to {user.telegram_id}: {e}")
+                    completed_routines = [r for r in routines if r.is_completed_today]
+                    completed_tasks = [t for t in all_tasks if t.is_completed]
+                    pending_tasks = [t for t in all_tasks if not t.is_completed]
 
-                # 3 hours reminder (window: 1h < hours_left <= 3h)
-                elif (
-                    user.reminder_3h_enabled
-                    and 1.0 < hours_left <= 3.0
-                    and not await is_stage_sent(session, user.telegram_id, effective_date, "3h")
-                ):
-                    msg = format_reminder_text(
-                        title="🟠 <b>Внимание: осталось 3 часа до конца дня!</b>",
-                        subtitle="Остались незавершенные дела на сегодня:",
-                        routines=uncompleted_routines,
-                        tasks=uncompleted_tasks,
-                    )
-                    try:
-                        await bot.send_message(
-                            chat_id=user.telegram_id,
-                            text=msg,
-                            reply_markup=get_webapp_inline_keyboard(),
-                        )
-                        await record_stage_sent(session, user.telegram_id, effective_date, "3h")
-                        await record_stage_sent(session, user.telegram_id, effective_date, "6h")
-                    except Exception as e:
-                        logger.warning(f"Failed to send 3h reminder to {user.telegram_id}: {e}")
+                    report_lines = [
+                        f"🌙 <b>Итоги дня ({effective_date.strftime('%d.%m')}):</b>",
+                        "<i>До завершения дня осталось ~15 минут.</i>\n",
+                    ]
 
-                # 1 hour critical reminder (window: 0h < hours_left <= 1h)
-                elif (
-                    user.reminder_1h_enabled
-                    and 0.0 < hours_left <= 1.0
-                    and not await is_stage_sent(session, user.telegram_id, effective_date, "1h")
-                ):
-                    msg = format_reminder_text(
-                        title="🚨 <b>Критично: остался 1 час до сброса дня!</b>",
-                        subtitle="Срочно завершите дела, чтобы не потерять стрик привычек и не просрочить задачи:",
-                        routines=uncompleted_routines,
-                        tasks=uncompleted_tasks,
-                    )
+                    if routines:
+                        report_lines.append(
+                            f"🔄 <b>Рутины и привычки:</b> {len(completed_routines)}/{len(routines)} выполнено"
+                        )
+                        for r in routines:
+                            icon = "✅" if r.is_completed_today else "❌"
+                            streak_tag = f" (🔥 {r.current_streak})" if r.current_streak > 0 else ""
+                            prog_tag = (
+                                f" [{r.current_value:g}/{r.target_value:g} {r.unit}]"
+                                if r.target_value
+                                else ""
+                            )
+                            report_lines.append(f"  {icon} {r.title}{prog_tag}{streak_tag}")
+                        report_lines.append("")
+
+                    if all_tasks:
+                        report_lines.append(
+                            f"⚡️ <b>Задачи:</b> {len(completed_tasks)}/{len(all_tasks)} завершено"
+                        )
+                        for t in all_tasks:
+                            icon = "✅" if t.is_completed else "⏳"
+                            report_lines.append(f"  {icon} {t.title}")
+                        if pending_tasks:
+                            report_lines.append("\n⚠️ <i>Невыполненные задачи будут автоматически перенесены на завтра.</i>")
+                        report_lines.append("")
+
+                    if (not routines or len(completed_routines) == len(routines)) and not pending_tasks:
+                        report_lines.append("🌟 <b>Блестяще! Все намеченные дела выполнены на 100%! Спокойной ночи! 😴</b>")
+                    else:
+                        report_lines.append("Хороший день! Отдохните и наберитесь сил перед завтрашним днем! ✨")
+
+                    report_msg = "\n".join(report_lines).strip()
                     try:
                         await bot.send_message(
                             chat_id=user.telegram_id,
-                            text=msg,
+                            text=report_msg,
                             reply_markup=get_webapp_inline_keyboard(),
                         )
-                        await record_stage_sent(session, user.telegram_id, effective_date, "1h")
-                        await record_stage_sent(session, user.telegram_id, effective_date, "3h")
-                        await record_stage_sent(session, user.telegram_id, effective_date, "6h")
+                        await record_stage_sent(session, user.telegram_id, effective_date, "evening")
                     except Exception as e:
-                        logger.warning(f"Failed to send 1h reminder to {user.telegram_id}: {e}")
+                        logger.warning(f"Could not send evening report to {user.telegram_id}: {e}")
 
     except Exception as e:
         logger.error(f"Error in check_user_reminders_and_rollover: {e}", exc_info=True)

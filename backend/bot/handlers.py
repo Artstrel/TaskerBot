@@ -415,7 +415,8 @@ async def handle_settings(message: Message):
     text = (
         "⚙️ <b>Настройки уведомлений и расписания:</b>\n\n"
         f"🌍 Часовой пояс: <b>{user.timezone}</b>\n"
-        f"🌙 Конец дня: <b>{user.day_end_time}</b>\n\n"
+        f"🌙 Конец дня: <b>{user.day_end_time}</b>\n"
+        f"☀️ Утренний дайджест: <b>{user.morning_digest_time or '09:00'}</b>\n\n"
         "Нажмите на кнопку, чтобы переключить напоминание:"
     )
     await message.answer(
@@ -425,6 +426,7 @@ async def handle_settings(message: Message):
             reminder_3h=user.reminder_3h_enabled,
             reminder_1h=user.reminder_1h_enabled,
             morning_digest=user.morning_digest_enabled,
+            evening_digest=user.evening_digest_enabled,
         ),
     )
 
@@ -903,6 +905,7 @@ async def cb_toggle_setting(query: CallbackQuery):
             reminder_3h=updated_user.reminder_3h_enabled,
             reminder_1h=updated_user.reminder_1h_enabled,
             morning_digest=updated_user.morning_digest_enabled,
+            evening_digest=updated_user.evening_digest_enabled,
         )
     )
 

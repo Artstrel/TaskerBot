@@ -46,30 +46,22 @@
   --shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.8);
 
   /* Telegram Safe Areas & Adaptive Insets */
-  --safe-top: max(
-    var(--tg-content-safe-area-inset-top, 0px),
-    var(--tg-safe-area-inset-top, 0px),
-    var(--tg-safe-top, 0px),
-    env(safe-area-inset-top, 0px)
-  );
-  --safe-bottom: max(
-    var(--tg-content-safe-area-inset-bottom, 0px),
-    var(--tg-safe-area-inset-bottom, 0px),
-    var(--tg-safe-bottom, 0px),
-    env(safe-area-inset-bottom, 0px)
-  );
-  --safe-left: max(
-    var(--tg-content-safe-area-inset-left, 0px),
-    var(--tg-safe-area-inset-left, 0px),
-    var(--tg-safe-left, 0px),
-    env(safe-area-inset-left, 0px)
-  );
-  --safe-right: max(
-    var(--tg-content-safe-area-inset-right, 0px),
-    var(--tg-safe-area-inset-right, 0px),
-    var(--tg-safe-right, 0px),
-    env(safe-area-inset-right, 0px)
-  );
+  --safe-top: max(var(--tg-content-safe-area-inset-top, 0px),
+      var(--tg-safe-area-inset-top, 0px),
+      var(--tg-safe-top, 0px),
+      env(safe-area-inset-top, 0px));
+  --safe-bottom: max(var(--tg-content-safe-area-inset-bottom, 0px),
+      var(--tg-safe-area-inset-bottom, 0px),
+      var(--tg-safe-bottom, 0px),
+      env(safe-area-inset-bottom, 0px));
+  --safe-left: max(var(--tg-content-safe-area-inset-left, 0px),
+      var(--tg-safe-area-inset-left, 0px),
+      var(--tg-safe-left, 0px),
+      env(safe-area-inset-left, 0px));
+  --safe-right: max(var(--tg-content-safe-area-inset-right, 0px),
+      var(--tg-safe-area-inset-right, 0px),
+      var(--tg-safe-right, 0px),
+      env(safe-area-inset-right, 0px));
 
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color-scheme: dark;
@@ -77,13 +69,11 @@
 
 body.is-tg-fullscreen.is-ios,
 html.is-tg-fullscreen.is-ios {
-  --safe-top: max(
-    var(--tg-content-safe-area-inset-top, 0px),
-    var(--tg-safe-area-inset-top, 0px),
-    var(--tg-safe-top, 0px),
-    env(safe-area-inset-top, 0px),
-    50px
-  );
+  --safe-top: max(var(--tg-content-safe-area-inset-top, 0px),
+      var(--tg-safe-area-inset-top, 0px),
+      var(--tg-safe-top, 0px),
+      env(safe-area-inset-top, 0px),
+      50px);
 }
 
 * {
@@ -103,7 +93,11 @@ body {
   letter-spacing: -0.011em;
 }
 
-h1, h2, h3, h4, .brand-font {
+h1,
+h2,
+h3,
+h4,
+.brand-font {
   font-family: 'Outfit', 'Inter', sans-serif;
   letter-spacing: -0.025em;
   font-weight: 600;
@@ -114,13 +108,16 @@ h1, h2, h3, h4, .brand-font {
   width: 5px;
   height: 5px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.14);
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
@@ -173,12 +170,10 @@ h1, h2, h3, h4, .brand-font {
   position: sticky;
   top: 0;
   z-index: 40;
-  background: linear-gradient(
-    to bottom,
-    rgba(13, 13, 13, 0.96) 0%,
-    rgba(13, 13, 13, 0.82) 65%,
-    rgba(13, 13, 13, 0) 100%
-  );
+  background: linear-gradient(to bottom,
+      rgba(13, 13, 13, 0.96) 0%,
+      rgba(13, 13, 13, 0.82) 65%,
+      rgba(13, 13, 13, 0) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   -webkit-mask-image: linear-gradient(to bottom, black 0%, black 72%, transparent 100%);
@@ -194,7 +189,7 @@ h1, h2, h3, h4, .brand-font {
 /* iOS: align the profile bubble vertically on the same level as Telegram's Close and Menu buttons */
 body.is-ios .app-header,
 html.is-ios .app-header {
-  padding-top: max(calc(24px + var(--safe-top)), 28px);
+  padding-top: max(calc(8px + var(--safe-top)), 28px);
 }
 
 body.is-tg-fullscreen.is-ios .app-header,
@@ -522,14 +517,12 @@ body.is-tg-fullscreen .header-actions {
   position: absolute;
   inset: auto 0 0 0;
   height: calc(110px + var(--safe-bottom));
-  background: linear-gradient(
-    to top,
-    var(--bg-app) 0%,
-    rgba(13, 13, 13, 0.96) 35%,
-    rgba(13, 13, 13, 0.72) 65%,
-    rgba(13, 13, 13, 0.25) 88%,
-    transparent 100%
-  );
+  background: linear-gradient(to top,
+      var(--bg-app) 0%,
+      rgba(13, 13, 13, 0.96) 35%,
+      rgba(13, 13, 13, 0.72) 65%,
+      rgba(13, 13, 13, 0.25) 88%,
+      transparent 100%);
   pointer-events: none;
   z-index: -1;
 }
@@ -734,6 +727,7 @@ body.is-tg-fullscreen .header-actions {
 .linear-checkbox.habit-streak {
   border-color: rgba(255, 255, 255, 0.5);
 }
+
 .linear-checkbox.habit-streak.checked {
   background: #ffffff;
   border-color: #ffffff;
@@ -1198,19 +1192,39 @@ body.is-tg-fullscreen .header-actions {
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes sheetSlideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(100%);
+  }
+
+  to {
+    transform: translateY(0);
+  }
 }
 
 @keyframes mascotBounce {
-  0%, 100% { transform: translateY(0) scale(1); }
-  40% { transform: translateY(-7px) scale(1.08); }
-  60% { transform: translateY(2px) scale(0.97); }
+
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  40% {
+    transform: translateY(-7px) scale(1.08);
+  }
+
+  60% {
+    transform: translateY(2px) scale(0.97);
+  }
 }
 
 .mascot-bounce {
@@ -1218,13 +1232,27 @@ body.is-tg-fullscreen .header-actions {
 }
 
 @keyframes pulseRecording {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(0.98); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .spin-icon {
@@ -1270,10 +1298,13 @@ body.is-tg-fullscreen .header-actions {
 }
 
 @keyframes gentlePulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.35;
     transform: scale(0.85);
@@ -1303,16 +1334,36 @@ body.is-tg-fullscreen .header-actions {
   opacity: 0.85;
 }
 
-.wb-1 { height: 10px; animation: voiceWave 1.4s ease-in-out infinite alternate; animation-delay: 0s; }
-.wb-2 { height: 18px; animation: voiceWave 1.4s ease-in-out infinite alternate; animation-delay: 0.25s; }
-.wb-3 { height: 14px; animation: voiceWave 1.4s ease-in-out infinite alternate; animation-delay: 0.5s; }
-.wb-4 { height: 8px; animation: voiceWave 1.4s ease-in-out infinite alternate; animation-delay: 0.75s; }
+.wb-1 {
+  height: 10px;
+  animation: voiceWave 1.4s ease-in-out infinite alternate;
+  animation-delay: 0s;
+}
+
+.wb-2 {
+  height: 18px;
+  animation: voiceWave 1.4s ease-in-out infinite alternate;
+  animation-delay: 0.25s;
+}
+
+.wb-3 {
+  height: 14px;
+  animation: voiceWave 1.4s ease-in-out infinite alternate;
+  animation-delay: 0.5s;
+}
+
+.wb-4 {
+  height: 8px;
+  animation: voiceWave 1.4s ease-in-out infinite alternate;
+  animation-delay: 0.75s;
+}
 
 @keyframes voiceWave {
   0% {
     transform: scaleY(0.4);
     opacity: 0.35;
   }
+
   100% {
     transform: scaleY(1);
     opacity: 0.95;
@@ -1444,10 +1495,13 @@ body.is-tg-fullscreen .header-actions {
 }
 
 @keyframes pulse-sync {
-  0%, 100% {
+
+  0%,
+  100% {
     transform: scale(0.85);
     opacity: 0.5;
   }
+
   50% {
     transform: scale(1.2);
     opacity: 1;
@@ -1641,31 +1695,40 @@ body.is-tg-fullscreen .header-actions {
   .desktop-sidebar {
     display: none !important;
   }
+
   .desktop-only-item {
     display: none !important;
   }
+
   .mobile-only-item {
     display: inline-flex;
   }
+
   span.mobile-only-item {
     display: inline;
   }
+
   .mobile-only-fab {
     display: flex;
   }
+
   .mobile-only-dock {
     display: flex;
   }
+
   .app-main-wrapper {
     max-width: 560px;
   }
+
   .app-header {
     padding: calc(14px + var(--safe-top)) 16px 14px 16px;
     justify-content: space-between;
   }
+
   .is-ios .app-header {
     padding-top: max(calc(24px + var(--safe-top)), 28px);
   }
+
   .groceries-tab-container .groceries-quick-add-wrap {
     margin: 0 16px 14px 16px;
   }
@@ -1902,11 +1965,13 @@ body.is-tg-fullscreen .header-actions {
    ========================================================================== */
 
 @media (min-width: 768px) {
+
   .mobile-only-item,
   .mobile-only-fab,
   .mobile-only-dock {
     display: none !important;
   }
+
   .desktop-only-item {
     display: inline-flex;
   }
@@ -2102,10 +2167,9 @@ body.is-tg-fullscreen .header-actions {
     opacity: 0;
     transform: scale(0.96) translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
 }
-
-

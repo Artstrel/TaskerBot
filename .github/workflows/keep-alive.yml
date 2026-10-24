@@ -2,8 +2,8 @@ name: Render Service Keep-Alive
 
 on:
   schedule:
-    # Run every 12 minutes (Render free instances sleep after 15 minutes of inactivity)
-    - cron: '*/12 * * * *'
+    # Run every 10 minutes (Render free instances sleep after 15 minutes of inactivity)
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,13 +12,31 @@ jobs:
     steps:
       - name: Ping TaskerBot Health Endpoint
         env:
-          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL || vars.RENDER_SERVICE_URL || 'https://taskerbot.onrender.com' }}
+          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL || vars.RENDER_SERVICE_URL || secrets.WEBAPP_URL || 'https://taskerbot-plp5.onrender.com' }}
         run: |
-          echo "Pinging $SERVICE_URL/health to keep container warm..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "$SERVICE_URL/health" || true)
+          if [ -z "$SERVICE_URL" ]; then
+            echo "❌ ERROR: RENDER_SERVICE_URL is not set!"
+            echo "ℹ️ Please add your Render Web Service URL to GitHub Secrets:"
+            echo "   Go to GitHub Repository -> Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "   Name: RENDER_SERVICE_URL"
+            echo "   Value: https://your-taskerbot-name.onrender.com"
+            exit 1
+          fi
+
+          # Strip trailing slash if present
+          CLEAN_URL="${SERVICE_URL%/}"
+          echo "Pinging $CLEAN_URL/health to keep container active and background scheduler running..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "$CLEAN_URL/health" || true)
           echo "Response HTTP Status: $HTTP_STATUS"
+
           if [ "$HTTP_STATUS" = "200" ]; then
-            echo "✅ TaskerBot server is active and healthy!"
+            echo "✅ TaskerBot server is active, healthy, and awake!"
           else
-            echo "⚠️ Server ping responded with code $HTTP_STATUS (may still be waking up)"
+            echo "⚠️ Server ping responded with code $HTTP_STATUS (attempting /api/health fallback)..."
+            ALT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "$CLEAN_URL/api/health" || true)
+            if [ "$ALT_STATUS" = "200" ]; then
+              echo "✅ TaskerBot API is active and awake!"
+            else
+              echo "⚠️ Server status: $ALT_STATUS (service may be waking up from sleep)"
+            fi
           fi

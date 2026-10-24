@@ -97,6 +97,8 @@ class UserBase(BaseModel):
     reminder_3h_enabled: bool = True
     reminder_1h_enabled: bool = True
     morning_digest_enabled: bool = True
+    morning_digest_time: str = "09:00"
+    evening_digest_enabled: bool = True
     ai_provider: str = "groq"
 
 
@@ -114,6 +116,8 @@ class UserUpdate(BaseModel):
     reminder_3h_enabled: Optional[bool] = None
     reminder_1h_enabled: Optional[bool] = None
     morning_digest_enabled: Optional[bool] = None
+    morning_digest_time: Optional[str] = None
+    evening_digest_enabled: Optional[bool] = None
     ai_provider: Optional[str] = None
 
 

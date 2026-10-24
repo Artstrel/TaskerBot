@@ -95,6 +95,16 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
     if (onRefresh) onRefresh();
   };
 
+  const handleMorningTimeChange = async (val) => {
+    if (!settings) return;
+    hapticFeedback('selection');
+    const newSettings = { ...settings, morning_digest_time: val };
+    setSettings(newSettings);
+    await updateUserSettings({ morning_digest_time: val });
+    triggerSaved();
+    if (onRefresh) onRefresh();
+  };
+
   const handleAutoDetectTz = async () => {
     hapticFeedback('medium');
     const detected = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
@@ -325,24 +335,56 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
           { key: 'reminder_3h_enabled', label: 'Напоминание за 3 ч. до конца дня' },
           { key: 'reminder_1h_enabled', label: 'Срочное напоминание за 1 ч.' },
           { key: 'morning_digest_enabled', label: 'Утренний дайджест задач' },
-          { key: 'evening_digest_enabled', label: 'Вечерний отчет и итоги дня' },
+          { key: 'evening_digest_enabled', label: 'Вечерний отчет и итоги дня (за 15м)' },
         ].map((item) => {
           const isEnabled = settings[item.key];
           return (
-            <div
-              key={item.key}
-              className="settings-row"
-              onClick={() => handleToggle(item.key)}
-              style={{ cursor: 'pointer' }}
-            >
-              <span className="settings-row-label">{item.label}</span>
-              <button
-                type="button"
-                className={`linear-toggle ${isEnabled ? 'active' : ''}`}
-                aria-label={item.label}
+            <div key={item.key}>
+              <div
+                className="settings-row"
+                onClick={() => handleToggle(item.key)}
+                style={{ cursor: 'pointer' }}
               >
-                <div className="linear-toggle-knob" />
-              </button>
+                <span className="settings-row-label">{item.label}</span>
+                <button
+                  type="button"
+                  className={`linear-toggle ${isEnabled ? 'active' : ''}`}
+                  aria-label={item.label}
+                >
+                  <div className="linear-toggle-knob" />
+                </button>
+              </div>
+              {item.key === 'morning_digest_enabled' && isEnabled && (
+                <div style={{ padding: '4px 16px 14px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                    Время отправки утреннего дайджеста:
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                    {['07:00', '08:00', '09:00', '10:00'].map((time) => {
+                      const isSelected = (settings.morning_digest_time || '09:00') === time;
+                      return (
+                        <button
+                          key={time}
+                          type="button"
+                          className={`filter-chip ${isSelected ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleMorningTimeChange(time);
+                          }}
+                          style={{
+                            justifyContent: 'center',
+                            padding: '6px 2px',
+                            fontSize: '12px',
+                            borderRadius: 'var(--radius-sm)',
+                          }}
+                        >
+                          {time}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

@@ -238,6 +238,7 @@ const getLocalDb = () => {
       reminder_3h_enabled: true,
       reminder_1h_enabled: true,
       morning_digest_enabled: true,
+      morning_digest_time: '09:00',
       evening_digest_enabled: true,
       ai_provider: 'groq',
     },

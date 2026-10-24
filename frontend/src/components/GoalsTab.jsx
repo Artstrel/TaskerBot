@@ -600,10 +600,10 @@ export default function GoalsTab({
                 key={goal.id}
                 style={{
                   background: 'var(--bg-surface)',
-                  border: 'none',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: 'var(--radius-lg)',
                   overflow: 'hidden',
-                  transition: 'background-color 0.2s',
+                  transition: 'background-color 0.2s, border-color 0.2s',
                 }}
               >
                 {/* Goal summary card header */}
@@ -671,65 +671,22 @@ export default function GoalsTab({
                   </div>
                 </div>
 
-                {/* Subtasks Accordion */}
+                {/* Subtasks Accordion (Seamless background without contrasting podlozhka or border-top) */}
                 {isExpanded && (
                   <div
                     style={{
-                      borderTop: '1px solid var(--border-subtle)',
-                      background: 'var(--bg-card)',
-                      padding: '12px 16px',
+                      background: 'transparent',
+                      padding: '0 16px 14px 16px',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                       <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
                         Шаги ({goal.completed_subtasks} из {goal.total_subtasks})
                       </div>
-                      {onOpenQuickAdd && (
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            type="button"
-                            className="item-mini-btn"
-                            title="Надиктовать шаги голосом"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              hapticFeedback('medium');
-                              onOpenQuickAdd({
-                                initialCategory: 'subtask',
-                                initialGoalId: goal.id,
-                                initialGoalTitle: goal.title,
-                                autoStartVoice: true,
-                              });
-                            }}
-                            style={{ color: 'var(--accent-primary)', padding: '2px 6px', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px' }}
-                          >
-                            <Mic size={11} />
-                            <span>Голос</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="item-mini-btn"
-                            title="Сгенерировать шаги через ИИ"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              hapticFeedback('medium');
-                              onOpenQuickAdd({
-                                initialCategory: 'subtask',
-                                initialGoalId: goal.id,
-                                initialGoalTitle: goal.title,
-                                initialText: `Шаги для цели «${goal.title}»: `,
-                              });
-                            }}
-                            style={{ color: 'var(--accent-primary)', padding: '2px 6px', display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px' }}
-                          >
-                            <Sparkles size={11} />
-                            <span>ИИ</span>
-                          </button>
-                        </div>
-                      )}
                     </div>
 
                     {goal.subtasks && goal.subtasks.length > 0 ? (
-                      <div className="linear-list" style={{ background: 'var(--bg-surface)' }}>
+                      <div className="linear-list" style={{ background: 'transparent', border: 'none', margin: '4px 0 10px 0' }}>
                         {goal.subtasks.map((st) => {
                           const isToday =
                             st.scheduled_date === new Date().toISOString().split('T')[0];
@@ -762,13 +719,13 @@ export default function GoalsTab({
                         })}
                       </div>
                     ) : (
-                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '6px 0' }}>
+                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '6px 0 10px 0' }}>
                         В этой цели пока нет шагов.
                       </div>
                     )}
 
                     {/* Add subtask inline input */}
-                    <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+                    <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
                       <input
                         type="text"
                         placeholder="Новый шаг..."
@@ -787,7 +744,7 @@ export default function GoalsTab({
                         }}
                         style={{
                           flex: 1,
-                          background: 'var(--bg-surface)',
+                          background: 'var(--bg-card)',
                           border: 'none',
                           borderRadius: 'var(--radius-full)',
                           padding: '7px 14px',
@@ -796,29 +753,10 @@ export default function GoalsTab({
                           outline: 'none',
                         }}
                       />
-                      {onOpenQuickAdd && (
-                        <button
-                          type="button"
-                          className="filter-chip"
-                          title="Голосовой ввод шага"
-                          onClick={() => {
-                            hapticFeedback('medium');
-                            onOpenQuickAdd({
-                              initialCategory: 'subtask',
-                              initialGoalId: goal.id,
-                              initialGoalTitle: goal.title,
-                              autoStartVoice: true,
-                            });
-                          }}
-                          style={{ padding: '0 8px', height: '32px' }}
-                        >
-                          <Mic size={13} color="var(--accent-primary)" />
-                        </button>
-                      )}
                       <button
                         type="button"
                         className="submit-task-btn"
-                        style={{ padding: '6px 12px', fontSize: '12px' }}
+                        style={{ padding: '6px 14px', fontSize: '12px' }}
                         onClick={() => handleAddSubtask(goal.id)}
                       >
                         Добавить
