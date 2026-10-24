@@ -369,7 +369,7 @@ export default function GoalsTab({
   };
 
   return (
-    <div className="linear-section" style={{ paddingBottom: '30px' }}>
+    <div className="tab-scroll-container goals-tab-container">
       {/* Mobile iOS HIG Large Title */}
       <h1 className="mobile-large-title mobile-only-item">Проекты & Цели</h1>
 
@@ -391,7 +391,6 @@ export default function GoalsTab({
                 onForceRefresh();
               }}
               title="Обновить цели"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
               <span>Обновить</span>
@@ -404,19 +403,19 @@ export default function GoalsTab({
               hapticFeedback('light');
               setIsCreatingGoal((prev) => !prev);
             }}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
             <Plus size={15} />
-            <span>Вручную</span>
+            <span>Новая цель</span>
           </button>
         </div>
       </div>
 
-      {/* Mobile Sub-Header Bar */}
-      <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', width: '100%' }}>
-        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-          {goalsData.length} {goalsData.length === 1 ? 'цель' : 'целей'} в работе
-        </div>
+      <div className="goals-content-wrap">
+        {/* Mobile Sub-Header Bar */}
+        <div className="mobile-only-item goals-mobile-subheader">
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+            {goalsData.length} {goalsData.length === 1 ? 'цель' : 'целей'} в работе
+          </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onForceRefresh && (
             <button
@@ -845,6 +844,7 @@ export default function GoalsTab({
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -177,7 +177,7 @@ h1, h2, h3, h4, .brand-font {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: none;
-  padding: calc(10px + var(--safe-top)) calc(18px + var(--safe-right)) 10px calc(18px + var(--safe-left));
+  padding: 16px calc(18px + var(--safe-right)) 10px calc(18px + var(--safe-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -185,9 +185,16 @@ h1, h2, h3, h4, .brand-font {
 }
 
 body.is-tg-fullscreen .app-header {
+  padding-top: max(calc(12px + var(--safe-top)), 16px);
   padding-left: max(calc(18px + var(--safe-left)), 92px) !important;
   padding-right: max(calc(18px + var(--safe-right)), 92px) !important;
   justify-content: center !important;
+}
+
+/* iOS Telegram Fullscreen top offset (~70px to clear dynamic island/notch and buttons) */
+body.is-tg-fullscreen.is-ios .app-header,
+html.is-tg-fullscreen.is-ios .app-header {
+  padding-top: max(calc(16px + var(--safe-top)), 70px) !important;
 }
 
 body.is-tg-fullscreen .header-profile-bubble {
@@ -357,8 +364,8 @@ body.is-tg-fullscreen .header-actions {
     align-items: flex-end;
     justify-content: space-between;
     margin-bottom: 24px;
-    padding-bottom: 16px;
-    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 6px;
+    border-bottom: none;
   }
 
   .desktop-view-title-group {
@@ -387,8 +394,63 @@ body.is-tg-fullscreen .header-actions {
   .desktop-view-actions {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
   }
+}
+
+/* Unified Button Design System (Material 3 / Linear) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn-sm {
+  height: 36px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.btn-primary {
+  background: #ffffff;
+  color: #000000;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-primary:hover {
+  background: #f4f4f5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: none;
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card);
+  color: #ffffff;
+}
+
+.btn-secondary:active {
+  transform: scale(0.98);
 }
 
 /* Floating Action Button (FAB) */
@@ -1569,7 +1631,7 @@ body.is-tg-fullscreen .header-actions {
   }
 }
 
-/* Desktop Sidebar Styles (>= 768px) */
+/* Desktop Sidebar Styles (>= 768px, Borderless) */
 .desktop-sidebar {
   display: flex;
   flex-direction: column;
@@ -1579,54 +1641,26 @@ body.is-tg-fullscreen .header-actions {
   position: sticky;
   top: 0;
   background: #111111;
-  border-right: 1px solid var(--border-subtle);
+  border-right: none;
+  box-shadow: 2px 0 24px rgba(0, 0, 0, 0.3);
   padding: 20px 16px;
   overflow-y: auto;
   z-index: 35;
 }
 
-.sidebar-brand-group {
+.sidebar-top-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 4px 18px 4px;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 16px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 14px 0;
+  border-bottom: none;
+  margin-bottom: 6px;
 }
 
-.sidebar-mascot-box {
-  padding: 4px;
-  background: var(--bg-surface);
-  border: none;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.sidebar-mascot-box:hover {
-  transform: scale(1.05);
-}
-
-.sidebar-brand-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.sidebar-brand-title {
-  font-family: 'Outfit', 'Inter', sans-serif;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
-.sidebar-brand-user {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 1px;
+.sidebar-top-bar .header-profile-bubble {
+  flex: 1;
+  min-width: 0;
 }
 
 .sidebar-quick-add-btn {
@@ -1673,7 +1707,7 @@ body.is-tg-fullscreen .header-actions {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
 }
 
@@ -1682,12 +1716,12 @@ body.is-tg-fullscreen .header-actions {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 10px 14px;
+  padding: 11px 14px;
   border-radius: var(--radius-md);
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -1718,11 +1752,7 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .sidebar-footer {
-  padding-top: 16px;
-  border-top: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: none;
 }
 
 .sidebar-date-label {
@@ -1808,6 +1838,19 @@ body.is-tg-fullscreen .header-actions {
   gap: 12px;
 }
 
+.goals-content-wrap,
+.settings-content-wrap {
+  padding: 0 16px 30px 16px;
+}
+
+.goals-mobile-subheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  width: 100%;
+}
+
 /* SettingsTab Layout */
 .settings-desktop-grid {
   display: flex;
@@ -1844,9 +1887,9 @@ body.is-tg-fullscreen .header-actions {
     padding-bottom: 48px;
   }
 
+  /* Desktop Header is hidden since profile and sync live in sidebar */
   .app-header {
-    padding: 16px 36px;
-    border-bottom: none;
+    display: none !important;
   }
 
   /* Material 3 Section Headers on Desktop */
@@ -1873,11 +1916,23 @@ body.is-tg-fullscreen .header-actions {
     padding-left: 0;
   }
 
+  .goals-content-wrap,
+  .settings-content-wrap {
+    padding: 0 0 40px 0;
+  }
+
   .main-content-container {
     max-width: 1200px;
     width: 100%;
     margin: 0 auto;
-    padding: 24px 36px 64px 36px;
+    padding: 32px 40px 64px 40px;
+  }
+
+  /* Borderless Cards & Groups on Desktop (Preserve borders only in task lists) */
+  .settings-group,
+  .day-status-card,
+  .today-quick-add-wrap {
+    border: none !important;
   }
 
   /* TodayTab 2-Column Grid on Desktop */

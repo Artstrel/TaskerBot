@@ -105,6 +105,19 @@ export default function App() {
             document.body.classList.remove('is-tg-fullscreen');
           }
 
+          const isIOS =
+            tg.platform === 'ios' ||
+            /iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+          if (isIOS) {
+            document.documentElement.classList.add('is-ios');
+            document.body.classList.add('is-ios');
+          } else {
+            document.documentElement.classList.remove('is-ios');
+            document.body.classList.remove('is-ios');
+          }
+
           const safeTop = tg.contentSafeAreaInset?.top ?? tg.safeAreaInset?.top ?? 0;
           const safeBottom = tg.contentSafeAreaInset?.bottom ?? tg.safeAreaInset?.bottom ?? 0;
           const safeLeft = tg.contentSafeAreaInset?.left ?? tg.safeAreaInset?.left ?? 0;
@@ -227,23 +240,40 @@ export default function App() {
       <div className="app-shell">
         {/* Desktop Sidebar (hidden on mobile, visible >= 768px) */}
         <aside className="desktop-sidebar">
-          <div className="sidebar-brand-group">
-            <div className="sidebar-mascot-box">
-              <Mascot
-                state={mascotMood}
-                size={38}
-                interactive={true}
-                onClick={() => {
-                  setMascotMood((prev) => (prev === 'idle' ? 'happy' : 'idle'));
-                }}
-              />
-            </div>
-            <div className="sidebar-brand-text">
-              <div className="sidebar-brand-title">TaskerBot</div>
-              <div className="sidebar-brand-user">
-                {currentUser.first_name || 'Личный помощник'}
+          {/* Desktop Sidebar Top: Profile Bubble & Refresh */}
+          <div className="sidebar-top-bar">
+            <div className="header-profile-bubble">
+              <div className="header-avatar-circle">
+                {currentUser.photo_url && !avatarError ? (
+                  <img
+                    src={currentUser.photo_url}
+                    alt={currentUser.first_name || 'User'}
+                    className="header-avatar-img"
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarError(true)}
+                  />
+                ) : (
+                  <span className="header-avatar-initial">
+                    {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="header-bubble-text">
+                <span className="header-bubble-name">{currentUser.first_name || 'TaskerBot'}</span>
+                <span className="header-bubble-date">{todayFormatted}</span>
               </div>
             </div>
+
+            <button
+              className="header-icon-btn"
+              onClick={() => {
+                hapticFeedback('light');
+                loadData(true);
+              }}
+              title="Обновить данные"
+            >
+              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+            </button>
           </div>
 
           {/* Sidebar Quick Action Button */}
@@ -303,31 +333,6 @@ export default function App() {
               <span>Настройки</span>
             </button>
           </nav>
-
-          {/* Sidebar Footer */}
-          <div className="sidebar-footer">
-            <div className="sidebar-date-label">{todayFormatted}</div>
-            <div className="sidebar-sync-row">
-              {isSyncing ? (
-                <span className="sync-badge">
-                  <span className="sync-dot" />
-                  Синхронизация...
-                </span>
-              ) : (
-                <span className="sidebar-status-ok">Онлайн</span>
-              )}
-              <button
-                className="header-icon-btn"
-                onClick={() => {
-                  hapticFeedback('light');
-                  loadData(true);
-                }}
-                title="Обновить данные"
-              >
-                <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-              </button>
-            </div>
-          </div>
         </aside>
 
         {/* Main Application Area */}

@@ -125,7 +125,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   }
 
   return (
-    <div className="linear-section" style={{ paddingBottom: '30px' }}>
+    <div className="tab-scroll-container settings-tab-container">
       {/* Mobile iOS HIG Large Title */}
       <h1 className="mobile-large-title mobile-only-item">Параметры</h1>
 
@@ -147,7 +147,6 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                 onForceRefresh();
               }}
               title="Обновить настройки"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
               <span>Обновить</span>
@@ -172,11 +171,12 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
         </div>
       </div>
 
-      {/* Mobile Sub-Header Bar */}
-      <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', width: '100%' }}>
-        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-          Уведомления, время и AI-интеграция
-        </div>
+      <div className="settings-content-wrap">
+        {/* Mobile Sub-Header Bar */}
+        <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', width: '100%' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+            Уведомления, время и AI-интеграция
+          </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {onForceRefresh && (
             <button
@@ -586,6 +586,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
             Сохранить ключи API
           </button>
         </div>
+      </div>
       </div>
       </div>
     </div>
