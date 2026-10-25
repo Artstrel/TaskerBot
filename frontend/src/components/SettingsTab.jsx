@@ -385,56 +385,25 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                 ].map((item) => {
                   const isEnabled = settings[item.key] !== false;
                   return (
-                    <div key={item.key}>
-                      <div
-                        className="settings-row"
-                        onClick={() => handleToggle(item.key)}
-                        style={{ cursor: 'pointer' }}
+                    <div
+                      key={item.key}
+                      className="settings-row"
+                      onClick={() => handleToggle(item.key)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <span className="settings-row-label">{item.label}</span>
+                      <button
+                        type="button"
+                        className={`linear-toggle ${isEnabled ? 'active' : ''}`}
+                        aria-label={item.label}
                       >
-                        <span className="settings-row-label">{item.label}</span>
-                        <button
-                          type="button"
-                          className={`linear-toggle ${isEnabled ? 'active' : ''}`}
-                          aria-label={item.label}
-                        >
-                          <div className="linear-toggle-knob" />
-                        </button>
-                      </div>
-                      {item.key === 'morning_digest_enabled' && isEnabled && (
-                        <div style={{ padding: '4px 16px 14px', borderTop: '1px solid var(--border-subtle)' }}>
-                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            Время отправки утреннего дайджеста:
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                            {['07:00', '08:00', '09:00', '10:00'].map((time) => {
-                              const isSelected = (settings.morning_digest_time || '09:00') === time;
-                              return (
-                                <button
-                                  key={time}
-                                  type="button"
-                                  className={`filter-chip ${isSelected ? 'active' : ''}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleMorningTimeChange(time);
-                                  }}
-                                  style={{
-                                    justifyContent: 'center',
-                                    padding: '6px 2px',
-                                    fontSize: '12px',
-                                  }}
-                                >
-                                  {time}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                        <div className="linear-toggle-knob" />
+                      </button>
                     </div>
                   );
                 })}
 
-                <div style={{ padding: '10px 16px 14px', borderTop: '1px solid var(--border-subtle)' }}>
+                <div style={{ padding: '12px 16px 14px' }}>
                   <button
                     type="button"
                     onClick={handleSendTestNotification}
@@ -474,6 +443,39 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                   )}
                 </div>
               </div>
+
+              {/* SECTION: Morning Digest */}
+              {settings.morning_digest_enabled !== false && (
+                <>
+                  <div className="settings-section-title">
+                    Время утреннего дайджеста
+                  </div>
+                  <div className="settings-group" style={{ padding: '14px 16px' }}>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                      Время отправки краткой сводки главных задач и привычек на день в Telegram.
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                      {['07:00', '08:00', '09:00', '10:00'].map((time) => {
+                        const isSelected = (settings.morning_digest_time || '09:00') === time;
+                        return (
+                          <button
+                            key={time}
+                            type="button"
+                            className={`filter-chip ${isSelected ? 'active' : ''}`}
+                            onClick={() => handleMorningTimeChange(time)}
+                            style={{
+                              justifyContent: 'center',
+                              padding: '8px 4px',
+                            }}
+                          >
+                            {time}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* SECTION: Day end cutoff */}
               <div className="settings-section-title">

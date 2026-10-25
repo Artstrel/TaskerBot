@@ -957,7 +957,19 @@ export default function TodayTab({
     const isEditing = editingNumericId === `${type}_${item.id}`;
 
     return (
-      <div className="numeric-stepper-row">
+      <div className="numeric-task-stepper-wrap" onClick={(e) => e.stopPropagation()}>
+        {/* Full width progress bar */}
+        <div className="numeric-progress-container-full">
+          <div className="numeric-progress-track">
+            <div
+              className={`numeric-progress-fill ${pct >= 100 ? 'completed' : ''}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="numeric-percent-text">{pct}%</span>
+        </div>
+
+        {/* Stepper controls */}
         <div className="numeric-stepper-controls">
           <button
             type="button"
@@ -1027,16 +1039,6 @@ export default function TodayTab({
           >
             <Plus size={14} strokeWidth={2.5} />
           </button>
-        </div>
-
-        <div className="numeric-progress-container">
-          <div className="numeric-progress-track">
-            <div
-              className={`numeric-progress-fill ${pct >= 100 ? 'completed' : ''}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-          <span className="numeric-percent-text">{pct}%</span>
         </div>
       </div>
     );

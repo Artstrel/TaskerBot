@@ -15,6 +15,8 @@ import {
   Pencil,
   ShoppingCart,
   RotateCw,
+  Milestone,
+  Hash,
 } from 'lucide-react';
 import {
   fetchAIProviders,
@@ -1828,7 +1830,7 @@ export default function QuickAddModal({
                         }
                       }}
                     >
-                      <Target size={14} /> Шаг цели
+                      <Milestone size={14} /> Шаг цели
                     </button>
                   )}
                   <button
@@ -1887,6 +1889,22 @@ export default function QuickAddModal({
                   <div className="chips-row" style={{ flexWrap: 'wrap', gap: '6px' }}>
                     <button
                       type="button"
+                      className={`filter-chip ${dueDateOption === 'custom' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setDueDateOption('custom');
+                        if (!customDueDate) {
+                          const d = new Date();
+                          d.setDate(d.getDate() + 2);
+                          setCustomDueDate(d.toISOString().split('T')[0]);
+                        }
+                      }}
+                    >
+                      <Calendar size={13} />
+                      <span>{dueDateOption === 'custom' && customDueDate ? customDueDate : 'Выбрать дату'}</span>
+                    </button>
+                    <button
+                      type="button"
                       className={`filter-chip ${dueDateOption === 'today' ? 'active' : ''}`}
                       onClick={() => {
                         hapticFeedback('selection');
@@ -1907,22 +1925,6 @@ export default function QuickAddModal({
                     </button>
                     <button
                       type="button"
-                      className={`filter-chip ${dueDateOption === 'custom' ? 'active' : ''}`}
-                      onClick={() => {
-                        hapticFeedback('selection');
-                        setDueDateOption('custom');
-                        if (!customDueDate) {
-                          const d = new Date();
-                          d.setDate(d.getDate() + 2);
-                          setCustomDueDate(d.toISOString().split('T')[0]);
-                        }
-                      }}
-                    >
-                      <Calendar size={12} />
-                      <span>{dueDateOption === 'custom' && customDueDate ? customDueDate : 'Выбрать дату'}</span>
-                    </button>
-                    <button
-                      type="button"
                       className={`filter-chip ${dueDateOption === 'none' ? 'active' : ''}`}
                       onClick={() => {
                         hapticFeedback('selection');
@@ -1939,12 +1941,12 @@ export default function QuickAddModal({
                         type="date"
                         className="quick-add-input"
                         style={{
-                          padding: '6px 12px',
+                          padding: '6px 14px',
                           fontSize: '13px',
                           colorScheme: 'dark',
-                          background: 'rgba(255, 255, 255, 0.06)',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '8px',
+                          background: 'var(--bg-input)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 'var(--radius-full)',
                           color: 'var(--text-primary)',
                           outline: 'none',
                         }}
@@ -2077,7 +2079,7 @@ export default function QuickAddModal({
                         setIsNumeric((prev) => !prev);
                       }}
                     >
-                      <Target size={12} />
+                      <Hash size={13} />
                       <span>{isNumeric ? 'Количественная цель: Вкл' : '+ Задать количество'}</span>
                     </button>
                   </div>

@@ -679,7 +679,7 @@ body.is-tg-fullscreen .header-actions {
 
 .settings-accordion-content {
   padding: 4px 16px 16px 16px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: none;
   animation: fadeIn 0.15s ease;
 }
 
@@ -1129,7 +1129,9 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 18px 8px 18px;
+  padding: 14px 18px 12px 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .sheet-title {
@@ -2038,6 +2040,40 @@ body.is-tg-fullscreen .header-actions {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.numeric-task-stepper-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.numeric-progress-container-full {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.numeric-progress-container-full .numeric-progress-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+}
+
+.numeric-progress-container-full .numeric-percent-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
 .numeric-progress-container {
   flex: 1;
   min-width: 60px;
@@ -2120,28 +2156,32 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 12px;
   margin-top: 10px;
   background: var(--bg-surface);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
 }
 
 .quickadd-num-input {
-  background: var(--bg-card);
-  border: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
   color: var(--text-primary);
   font-size: 13px;
-  padding: 4px 8px;
+  font-weight: 500;
+  height: 32px;
+  padding: 0 12px;
   width: 75px;
   text-align: center;
   outline: none;
+  transition: all 0.15s ease;
 }
 
 .quickadd-num-input:focus {
-  box-shadow: 0 0 0 1px var(--border-focus);
+  border-color: var(--border-focus);
+  background: var(--bg-input-focus);
 }
 
 /* ==========================================================================
