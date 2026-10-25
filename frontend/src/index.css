@@ -1470,8 +1470,8 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .voice-recording-card.voice-recording-dialog-stage {
-  background: linear-gradient(180deg, rgba(28, 28, 31, 0.95) 0%, rgba(18, 18, 20, 0.98) 100%);
-  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  border: none;
   border-radius: var(--radius-lg);
   padding: 18px 20px 16px 20px;
   display: flex;
@@ -1497,8 +1497,8 @@ body.is-tg-fullscreen .header-actions {
   gap: 8px;
   padding: 6px 14px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--bg-elevated);
+  border: none;
 }
 
 .voice-status-label {
@@ -1514,8 +1514,8 @@ body.is-tg-fullscreen .header-actions {
   gap: 6px;
   padding: 6px 12px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--bg-elevated);
+  border: none;
 }
 
 .voice-timer-pill .voice-timer-display {
@@ -1540,7 +1540,7 @@ body.is-tg-fullscreen .header-actions {
   gap: 16px;
   padding: 16px 12px;
   width: 100%;
-  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, transparent 72%);
+  background: transparent;
   border-radius: var(--radius-md);
   box-sizing: border-box;
 }
@@ -1555,7 +1555,7 @@ body.is-tg-fullscreen .header-actions {
   font-weight: 400;
 }
 
-/* LiveKit-Style Bar Visualizer */
+/* LiveKit-Style Bar Visualizer (Solid White, No Gradients, No Borders) */
 .livekit-bar-visualizer {
   display: flex;
   align-items: flex-end; /* Bottom boundary alignment: bars grow upwards */
@@ -1564,14 +1564,16 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .livekit-bar-visualizer .visualizer-bar {
-  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.65) 100%);
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  background: #ffffff;
+  box-shadow: none;
+  border: none;
   display: block;
 }
 
 .livekit-bar-visualizer.processing .visualizer-bar {
-  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.45) 100%);
-  box-shadow: 0 0 14px rgba(255, 255, 255, 0.45);
+  background: #ffffff;
+  box-shadow: none;
+  border: none;
 }
 
 .voice-stage-actions {
@@ -1579,8 +1581,8 @@ body.is-tg-fullscreen .header-actions {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+  border-top: none;
   width: 100%;
 }
 
@@ -1594,15 +1596,15 @@ body.is-tg-fullscreen .header-actions {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--bg-elevated);
+  border: none;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .voice-stage-cancel-btn:hover:not(:disabled) {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--bg-card-hover);
 }
 
 .voice-stage-cancel-btn:disabled {
@@ -1625,11 +1627,11 @@ body.is-tg-fullscreen .header-actions {
   border: none;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+  box-shadow: none;
 }
 
 .voice-stage-submit-btn:hover:not(:disabled) {
-  background: #e4e4e7;
+  background: #ededed;
   transform: translateY(-1px);
 }
 
