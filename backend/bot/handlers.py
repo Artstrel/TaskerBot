@@ -54,6 +54,9 @@ router = Router()
 # In-memory temporary cache for tasks pending confirmation
 PENDING_TASKS_CACHE: Dict[str, Dict[str, Any]] = {}
 
+# In-memory tracker for users waiting to add a subtask to a goal: telegram_id -> goal_id
+USER_WAITING_FOR_GOAL_STEP: Dict[int, int] = {}
+
 
 def render_progress_bar(percentage: int, length: int = 8) -> str:
     filled = int(round(length * (percentage / 100.0)))
@@ -354,6 +357,8 @@ async def handle_goals(message: Message):
             for st in g.subtasks:
                 icon = "✅" if st.is_completed else "▫️"
                 text += f"{icon} {st.title}\n"
+        elif not g.is_completed:
+            text += "\n⚠️ <i>0 шагов — цель не отслеживается! Нажмите «➕ Добавить шаг», чтобы начать.</i>\n"
 
         await message.answer(text, reply_markup=get_goal_actions_kb(g.id, g.is_completed))
 
@@ -469,6 +474,21 @@ async def handle_voice_message(message: Message):
             await message.answer("🤔 Не удалось распознать задачи из голосового сообщения. Попробуйте еще раз.")
             return
 
+        if message.from_user.id in USER_WAITING_FOR_GOAL_STEP:
+            goal_id = USER_WAITING_FOR_GOAL_STEP.pop(message.from_user.id)
+            first_title = extracted.tasks[0].title if extracted.tasks else None
+            if first_title:
+                async with AsyncSessionLocal() as session:
+                    subtask = await add_subtask_to_goal(
+                        session, goal_id=goal_id, user_id=message.from_user.id, title=first_title, scheduled_date=effective_date
+                    )
+                if subtask:
+                    await message.answer(
+                        f"✅ Шаг <b>«{subtask.title}»</b> успешно добавлен к цели из голосового сообщения!",
+                        reply_markup=get_webapp_inline_keyboard(),
+                    )
+                    return
+
         await present_parsed_tasks(message, extracted, effective_date)
 
     except Exception as e:
@@ -479,6 +499,31 @@ async def handle_voice_message(message: Message):
 @router.message(F.text)
 async def handle_text_message(message: Message):
     text = message.text.strip()
+
+    if text == "/cancel":
+        if message.from_user.id in USER_WAITING_FOR_GOAL_STEP:
+            del USER_WAITING_FOR_GOAL_STEP[message.from_user.id]
+            await message.answer("❌ Добавление шага к цели отменено.")
+            return
+
+    if message.from_user.id in USER_WAITING_FOR_GOAL_STEP:
+        goal_id = USER_WAITING_FOR_GOAL_STEP.pop(message.from_user.id)
+        async with AsyncSessionLocal() as session:
+            user = await get_or_create_user(session, message.from_user.id)
+            now = get_user_now(user.timezone)
+            effective_date, _, _ = get_user_effective_date_and_urgency(now, user.day_end_time)
+            subtask = await add_subtask_to_goal(
+                session, goal_id=goal_id, user_id=message.from_user.id, title=text, scheduled_date=effective_date
+            )
+        if subtask:
+            await message.answer(
+                f"✅ Шаг <b>«{subtask.title}»</b> успешно добавлен к цели!",
+                reply_markup=get_webapp_inline_keyboard(),
+            )
+        else:
+            await message.answer("❌ Не удалось добавить шаг (цель не найдена).")
+        return
+
     # Skip command or menu button if not handled above
     if text.startswith("/") or text in [
         "📋 Задачи на сегодня",
@@ -889,6 +934,19 @@ async def cb_routine_delete(query: CallbackQuery):
         await query.message.delete()
     else:
         await query.answer("Не удалось удалить рутину.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("goal_add_step:"))
+async def cb_goal_add_step(query: CallbackQuery):
+    goal_id = int(query.data.split(":")[1])
+    USER_WAITING_FOR_GOAL_STEP[query.from_user.id] = goal_id
+    await query.answer("Ожидаю название шага...")
+    await query.message.answer(
+        "➕ <b>Добавление шага к цели</b>\n\n"
+        "Отправьте название шага сообщением или надиктуйте голосом. "
+        "Шаг сразу добавится к цели и появится в списке задач на сегодня.\n\n"
+        "<i>Для отмены отправьте /cancel</i>"
+    )
 
 
 @router.callback_query(F.data.startswith("goal_toggle:"))

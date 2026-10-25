@@ -588,16 +588,18 @@ async def get_day_tasks(
 
 
 async def _sync_goal_completion_from_subtasks(session: AsyncSession, goal_id: int):
-    goal_stmt = (
-        select(Goal)
-        .options(selectinload(Goal.subtasks))
-        .where(Goal.id == goal_id)
-    )
-    goal_res = await session.execute(goal_stmt)
-    goal = goal_res.scalar_one_or_none()
-    if not goal or not goal.subtasks:
+    await session.flush()
+    subtasks_stmt = select(OneTimeTask).where(OneTimeTask.goal_id == goal_id)
+    s_res = await session.execute(subtasks_stmt)
+    subtasks = s_res.scalars().all()
+    if not subtasks:
         return
-    all_done = all(st.is_completed for st in goal.subtasks)
+    all_done = all(st.is_completed for st in subtasks)
+    goal_stmt = select(Goal).where(Goal.id == goal_id)
+    g_res = await session.execute(goal_stmt)
+    goal = g_res.scalar_one_or_none()
+    if not goal:
+        return
     if all_done and not goal.is_completed:
         goal.is_completed = True
         goal.completed_at = datetime.utcnow()
@@ -815,6 +817,7 @@ async def get_user_goals(
     goals = res.scalars().all()
 
     result: List[GoalWithProgress] = []
+    dirty = False
     for g in goals:
         subtasks_dto: List[OneTimeTaskRead] = []
         completed_count = 0
@@ -824,6 +827,15 @@ async def get_user_goals(
             if st.is_completed:
                 completed_count += 1
             subtasks_dto.append(_task_to_read(st, g.title))
+
+        if total_count > 0 and completed_count == total_count and not g.is_completed:
+            g.is_completed = True
+            g.completed_at = datetime.utcnow()
+            dirty = True
+        elif total_count > 0 and completed_count < total_count and g.is_completed:
+            g.is_completed = False
+            g.completed_at = None
+            dirty = True
 
         pct = int((completed_count / total_count * 100)) if total_count > 0 else 0
         result.append(
@@ -840,6 +852,11 @@ async def get_user_goals(
                 subtasks=subtasks_dto,
             )
         )
+    if dirty:
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
     return result
 
 

@@ -980,17 +980,17 @@ export const fetchAIProviders = async () => {
 };
 
 export const GEMINI_MODELS = [
-  'gemini-3.8-flash',
+  'gemini-flash-latest',
   'gemini-3.5-flash-lite',
-  'gemini-3.7-flash',
-  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.8-flash',
   'gemini-3-flash-preview',
 ];
 
 export const GROQ_CHAT_MODELS = [
-  'openai/gpt-oss-20b',
   'qwen/qwen3.8-27b',
   'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
 ];
 
 export const OPENROUTER_FREE_MODELS = [
@@ -1274,9 +1274,27 @@ export const parseTextWithDirectGroq = async (text) => {
         continue;
       }
       const data = await res.json();
-      const raw = data.choices?.[0]?.message?.content;
+      const msg = data.choices?.[0]?.message;
+      let raw = (msg?.content && msg.content.trim()) || (msg?.reasoning && msg.reasoning.trim());
       if (!raw) continue;
-      const parsed = JSON.parse(raw);
+      if (raw.includes('```')) {
+        raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (jsonErr) {
+        const match = raw.match(/\{[\s\S]*\}/);
+        if (match) {
+          try {
+            parsed = JSON.parse(match[0]);
+          } catch (_) {
+            continue;
+          }
+        } else {
+          continue;
+        }
+      }
       const normalized = normalizeTasks(parsed);
       if (normalized && normalized.tasks.length > 0) {
         return normalized;

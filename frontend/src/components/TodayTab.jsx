@@ -31,6 +31,7 @@ import {
   hapticFeedback,
   calculateDayEndAndUrgency,
   setCachedDashboard,
+  setCachedGoals,
   addPendingMutation,
   removePendingMutation,
 } from '../api';
@@ -39,6 +40,8 @@ import Mascot from './Mascot';
 export default function TodayTab({
   dashboardData,
   setDashboardData,
+  goalsData,
+  setGoalsData,
   onRefresh,
   onForceRefresh,
   isSyncing,
@@ -195,6 +198,12 @@ export default function TodayTab({
     }
 
     // 2. Instant 0ms Optimistic State & Local Cache
+    const targetTask = [
+      ...(dashboardData?.today_tasks || []),
+      ...(dashboardData?.overdue_tasks || []),
+    ].find((t) => t.id === taskId);
+    const goalId = targetTask?.goal_id;
+
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
@@ -218,6 +227,33 @@ export default function TodayTab({
           completed_count: newCompletedCount,
         };
         setCachedDashboard(updated);
+        return updated;
+      });
+    }
+
+    if (goalId && setGoalsData) {
+      setGoalsData((prevGoals) => {
+        if (!prevGoals || !Array.isArray(prevGoals)) return prevGoals;
+        const updated = prevGoals.map((g) => {
+          if (g.id !== goalId) return g;
+          const updatedSubtasks = (g.subtasks || []).map((st) =>
+            st.id === taskId ? { ...st, is_completed: nextStatus } : st
+          );
+          const total = updatedSubtasks.length;
+          const completed = updatedSubtasks.filter((st) => st.is_completed).length;
+          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+          const isDone = total > 0 && completed === total;
+          return {
+            ...g,
+            subtasks: updatedSubtasks,
+            total_subtasks: total,
+            completed_subtasks: completed,
+            progress_percentage: pct,
+            is_completed: isDone,
+            completed_at: isDone ? (g.completed_at || new Date().toISOString()) : null,
+          };
+        });
+        setCachedGoals(updated);
         return updated;
       });
     }
@@ -249,6 +285,32 @@ export default function TodayTab({
               completed_count: newCompletedCount,
             };
             setCachedDashboard(rolledBack);
+            return rolledBack;
+          });
+        }
+        if (goalId && setGoalsData) {
+          setGoalsData((prevGoals) => {
+            if (!prevGoals || !Array.isArray(prevGoals)) return prevGoals;
+            const rolledBack = prevGoals.map((g) => {
+              if (g.id !== goalId) return g;
+              const updatedSubtasks = (g.subtasks || []).map((st) =>
+                st.id === taskId ? { ...st, is_completed: currentStatus } : st
+              );
+              const total = updatedSubtasks.length;
+              const completed = updatedSubtasks.filter((st) => st.is_completed).length;
+              const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+              const isDone = total > 0 && completed === total;
+              return {
+                ...g,
+                subtasks: updatedSubtasks,
+                total_subtasks: total,
+                completed_subtasks: completed,
+                progress_percentage: pct,
+                is_completed: isDone,
+                completed_at: isDone ? (g.completed_at || new Date().toISOString()) : null,
+              };
+            });
+            setCachedGoals(rolledBack);
             return rolledBack;
           });
         }

@@ -456,6 +456,8 @@ export default function App() {
                 <TodayTab
                   dashboardData={dashboardData}
                   setDashboardData={setDashboardData}
+                  goalsData={goalsData}
+                  setGoalsData={setGoalsData}
                   onRefresh={() => loadData(false)}
                   onForceRefresh={() => loadData(true)}
                   isSyncing={isSyncing}

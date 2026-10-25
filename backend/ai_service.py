@@ -505,7 +505,7 @@ class AIService:
             ),
             AIProviderInfo(
                 id="gemini",
-                name="Google Gemini (3.8 Flash / 3.5 Flash-Lite)",
+                name="Google Gemini (Flash Latest / 3.5 Flash)",
                 description="Официальные мультимодальные модели Google Gemini",
                 is_configured=gemini_ready,
             ),
@@ -619,11 +619,11 @@ class AIService:
         if not client:
             return None
 
-        # Ultrafast models on Groq: 20B first (~200ms), then Qwen 27B and 120B
+        # Ultrafast models on Groq: Qwen 27B first (~200ms), then GPT-OSS 120B and 20B
         for model_name in [
-            "openai/gpt-oss-20b",
             "qwen/qwen3.8-27b",
             "openai/gpt-oss-120b",
+            "openai/gpt-oss-20b",
         ]:
             try:
                 # Wrap with 6.0 second timeout to ensure snappy response
@@ -644,12 +644,15 @@ class AIService:
                     temperature=0.1,
                 )
                 response = await asyncio.wait_for(coro, timeout=6.0)
-                raw = response.choices[0].message.content
+                msg = response.choices[0].message
+                raw = msg.content
+                if not raw or not raw.strip():
+                    raw = getattr(msg, "reasoning", "") or ""
                 parsed = _parse_json_tasks(raw)
                 if parsed:
                     return parsed
             except Exception as e:
-                logger.warning(f"Groq text model {model_name} failed: {e}")
+                logger.warning(f"Groq text model {model_name} failed: {type(e).__name__} - {e}")
                 continue
         return None
 
@@ -735,14 +738,14 @@ class AIService:
 
         # Official supported active models per documentation
         for model_name in [
-            "gemini-3.8-flash",
+            "gemini-flash-latest",
             "gemini-3.5-flash-lite",
-            "gemini-3.7-flash",
-            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.8-flash",
             "gemini-3-flash-preview",
         ]:
             try:
-                # Run synchronous call in thread pool with 7.0s timeout
+                # Run synchronous call in thread pool with 10.0s timeout
                 def _call():
                     return client.models.generate_content(
                         model=model_name,
@@ -754,7 +757,7 @@ class AIService:
                         ),
                     )
 
-                response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=7.0)
+                response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=10.0)
                 if response.parsed and isinstance(response.parsed, ExtractedTaskList) and response.parsed.tasks:
                     return response.parsed
                 if response.text:
@@ -764,7 +767,7 @@ class AIService:
                         cleaned = re.sub(r"\s*```$", "", cleaned)
                     return ExtractedTaskList.model_validate_json(cleaned)
             except Exception as e:
-                logger.warning(f"Gemini model {model_name} failed: {e}")
+                logger.warning(f"Gemini model {model_name} failed: {type(e).__name__} - {e}")
                 continue
         return None
 
@@ -844,10 +847,10 @@ class AIService:
         from google.genai import types
 
         for model_name in [
-            "gemini-3.8-flash",
+            "gemini-flash-latest",
             "gemini-3.5-flash-lite",
-            "gemini-3.7-flash",
-            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+            "gemini-3.8-flash",
             "gemini-3-flash-preview",
         ]:
             try:
@@ -863,7 +866,7 @@ class AIService:
                         ),
                     )
 
-                response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=10.0)
+                response = await asyncio.wait_for(asyncio.to_thread(_call), timeout=12.0)
                 if response.parsed and isinstance(response.parsed, ExtractedTaskList) and response.parsed.tasks:
                     return response.parsed
                 if response.text:
@@ -881,7 +884,7 @@ class AIService:
                     if fb and fb.tasks:
                         return fb
             except Exception as e:
-                logger.warning(f"Gemini audio model {model_name} failed: {e}")
+                logger.warning(f"Gemini audio model {model_name} failed: {type(e).__name__} - {e}")
                 continue
         return None
 

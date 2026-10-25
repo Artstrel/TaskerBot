@@ -364,6 +364,8 @@ async def check_user_reminders_and_rollover():
                         if is_morning_time and not await is_stage_sent(session, user.telegram_id, effective_date, "morning"):
                             overdue, today = await get_day_tasks(session, user.telegram_id, effective_date)
                             routines = await get_user_routines_with_status(session, user.telegram_id, effective_date)
+                            goals = await get_user_goals(session, user.telegram_id)
+                            empty_goals = [g for g in goals if not g.is_completed and g.total_subtasks == 0]
 
                             safe_name = html.escape(user.first_name or "друг")
                             digest_text = (
@@ -378,6 +380,9 @@ async def check_user_reminders_and_rollover():
                                 digest_text += f"⚡️ Разовых задач на день: <b>{len(today)}</b>\n"
                             if not overdue and not routines and not today:
                                 digest_text += "Пока нет запланированных дел. Самое время наметить задачи на день! 🎯\n"
+                            if empty_goals:
+                                g_names = ", ".join(f"«{g.title}»" for g in empty_goals[:2])
+                                digest_text += f"\n⚠️ <b>Цели без шагов ({len(empty_goals)}):</b> {g_names}. Добавьте к ним первые шаги в приложении, чтобы начать прогресс!\n"
                             digest_text += "\nУдачного и продуктивного дня! 💪"
 
                             try:

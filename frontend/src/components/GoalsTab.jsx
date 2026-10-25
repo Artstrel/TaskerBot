@@ -75,6 +75,7 @@ export default function GoalsTab({
     setNewGoalDesc('');
     setNewGoalDate('');
     setIsCreatingGoal(false);
+    setExpandedGoalId(tempId);
     hapticFeedback('success');
 
     if (setGoalsData) {
@@ -90,6 +91,9 @@ export default function GoalsTab({
     createGoal({ title, description: desc, target_date: targetDate })
       .then((realGoal) => {
         removePendingMutation(mutationId);
+        if (realGoal && realGoal.id) {
+          setExpandedGoalId((cur) => (cur === tempId ? realGoal.id : cur));
+        }
         if (setGoalsData && realGoal && realGoal.id) {
           setGoalsData((prev) => {
             const updated = (prev || []).map((g) => (g.id === tempId ? { ...realGoal, is_optimistic: false } : g));
@@ -791,6 +795,25 @@ export default function GoalsTab({
                             {goal.progress_percentage}% ({goal.completed_subtasks}/{goal.total_subtasks})
                           </span>
                         </div>
+
+                        {(!goal.subtasks || goal.subtasks.length === 0) && (
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              background: 'rgba(245, 158, 11, 0.12)',
+                              color: 'var(--accent-warning, #f59e0b)',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              marginTop: '8px',
+                            }}
+                          >
+                            <span>⚠️ 0 шагов — цель не отслеживается</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Subtasks Accordion */}
@@ -841,8 +864,19 @@ export default function GoalsTab({
                               })}
                             </div>
                           ) : (
-                            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', margin: '6px 0 10px 0' }}>
-                              В этой цели пока нет шагов.
+                            <div
+                              style={{
+                                padding: '10px 12px',
+                                borderRadius: '8px',
+                                background: 'rgba(245, 158, 11, 0.08)',
+                                border: '1px dashed rgba(245, 158, 11, 0.3)',
+                                color: 'var(--accent-warning, #f59e0b)',
+                                fontSize: '12px',
+                                lineHeight: 1.4,
+                                margin: '4px 0 10px 0',
+                              }}
+                            >
+                              ⚠️ В этой цели пока нет шагов. Добавьте первый шаг ниже, чтобы цель начала отслеживаться!
                             </div>
                           )}
 
@@ -851,6 +885,7 @@ export default function GoalsTab({
                             <input
                               type="text"
                               placeholder="Новый шаг..."
+                              autoFocus={isExpanded && (!goal.subtasks || goal.subtasks.length === 0)}
                               value={newSubtaskTitles[goal.id] || ''}
                               onChange={(e) =>
                                 setNewSubtaskTitles((prev) => ({
