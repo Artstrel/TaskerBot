@@ -471,7 +471,9 @@ async def handle_voice_message(message: Message):
         await status_msg.delete()
 
         if not extracted.tasks:
-            await message.answer("🤔 Не удалось распознать задачи из голосового сообщения. Попробуйте еще раз.")
+            await message.answer(
+                "🎙 <i>Не удалось разобрать слова в аудиосообщении. Попробуйте надиктовать чуть громче и ближе к микрофону, либо отправьте задачу текстом.</i>"
+            )
             return
 
         if message.from_user.id in USER_WAITING_FOR_GOAL_STEP:

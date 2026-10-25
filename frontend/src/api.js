@@ -994,12 +994,10 @@ export const GROQ_CHAT_MODELS = [
 ];
 
 export const OPENROUTER_FREE_MODELS = [
-  'dots-studio/dots-3-note-preview:free',
-  'nvidia/nemotron-3.5-lightning:free',
-  'google/gemma-4-31b-it:free',
-  'google/gemma-4-26b-a4b-it:free',
   'liquid/lfm-2.5-2.6b:free',
   'openrouter/free',
+  'dots-studio/dots-3-note-preview:free',
+  'nvidia/nemotron-3.5-lightning:free',
 ];
 
 export const capitalizeFirst = (text) => {
@@ -1393,6 +1391,7 @@ export const transcribeWithDirectGroqWhisper = async (audioBlob) => {
       const ext = audioBlob.type && audioBlob.type.includes('webm') ? 'voice.webm' : 'voice.ogg';
       gFormData.append('file', audioBlob, ext);
       gFormData.append('model', whisperModel);
+      gFormData.append('language', 'ru');
       gFormData.append('response_format', 'json');
 
       const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -1406,7 +1405,8 @@ export const transcribeWithDirectGroqWhisper = async (audioBlob) => {
       if (whisperRes.ok) {
         const whisperData = await whisperRes.json();
         const text = whisperData.text && whisperData.text.trim();
-        if (text) return text;
+        const clean = text ? text.replace(/[^\p{L}\d]/gu, '').trim() : '';
+        if (clean.length >= 2) return text;
       }
     } catch (we) {
       console.warn(`Direct Groq Whisper ${whisperModel} failed:`, we);

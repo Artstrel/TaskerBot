@@ -236,43 +236,56 @@ export default function QuickAddModal({
     );
   };
 
-  // Process audio with backend AI
+  // Helper to validate extracted task title
+  const isValidTaskTitle = (title) => {
+    if (!title || typeof title !== 'string') return false;
+    const clean = title.replace(/[^\p{L}\d]/gu, '').trim();
+    if (clean.length < 2) return false;
+    if (/^[\s\.\,\!\?\-—\:\;]+$/.test(title)) return false;
+    if (/не удалось расшифровать|голосовая заметка \(не удалось/i.test(title)) return false;
+    return true;
+  };
+
+  // Process audio: Priority #1 Device SpeechRecognition (0 tokens, instant), Priority #2 Server/Whisper audio upload
   const handleAudioProcess = async (audioBlob) => {
     setIsProcessing(true);
     setErrorMsg('');
-    try {
-      const res = await parseSmartAudio(audioBlob, selectedProvider);
-      const validTasks = (res?.tasks || []).filter(
-        (t) => t && t.title && !/не удалось расшифровать|голосовая заметка \(не удалось/i.test(t.title)
-      );
-      if (validTasks.length > 0) {
-        setExtractedTasks(validTasks.map(mapExtractedTask));
-        setIsProcessing(false);
-        return;
-      }
-    } catch (err) {
-      console.warn('Backend audio parse failed, trying browser speech recognition fallback:', err);
-    }
 
-    // Fallback: If client speech recognition captured speech (e.g. on GitHub Pages)
+    // 1. Приоритет №1: Системный диктант устройства (Web Speech API - iOS Siri / Android Google Speech)
+    // 0 токенов, мгновенно, не расходует трафик на выгрузку аудиофайла
     const clientText = speechTranscriptRef.current && speechTranscriptRef.current.trim();
-    if (clientText) {
+    const cleanSpeech = clientText ? clientText.replace(/[^\p{L}\d]/gu, '').trim() : '';
+
+    if (cleanSpeech.length >= 2) {
       try {
         const res = await parseSmartText(clientText, selectedProvider);
-        const validTasks = (res?.tasks || []).filter(
-          (t) => t && t.title && !/не удалось расшифровать|голосовая заметка \(не удалось/i.test(t.title)
-        );
+        const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
         if (validTasks.length > 0) {
           setExtractedTasks(validTasks.map(mapExtractedTask));
           setIsProcessing(false);
           return;
         }
-      } catch (e) {
-        console.error('Fallback speech text parse error:', e);
+      } catch (speechErr) {
+        console.warn('Direct parse of device speech failed, falling back to audio upload:', speechErr);
       }
     }
 
-    setErrorMsg('Не удалось распознать речь в аудиозаписи. Проверьте микрофон или введите задачу текстом.');
+    // 2. Fallback: Серверный / облачный Whisper (если Web Speech API недоступен на клиенте или вернул пустую строку)
+    if (audioBlob && audioBlob.size > 0) {
+      try {
+        const res = await parseSmartAudio(audioBlob, selectedProvider);
+        const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
+        if (validTasks.length > 0) {
+          setExtractedTasks(validTasks.map(mapExtractedTask));
+          setIsProcessing(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend/Whisper audio parse failed:', err);
+      }
+    }
+
+    setErrorMsg('🎙 Речь не распознана. Попробуйте сказать чуть громче или напишите задачу текстом.');
     setIsProcessing(false);
   };
 

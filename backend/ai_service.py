@@ -111,8 +111,9 @@ def _format_system_prompt(current_date: date, existing_goals: Optional[List[str]
         cleaned_goals = [g.strip() for g in existing_goals if g and g.strip()]
         if cleaned_goals:
             goals_info = "\n".join(f"- {g}" for g in cleaned_goals)
+    date_str = current_date.isoformat() if hasattr(current_date, "isoformat") else str(current_date)
     return SYSTEM_PROMPT.format(
-        current_date=current_date.isoformat(),
+        current_date=date_str,
         existing_goals_info=goals_info,
     )
 
@@ -554,6 +555,10 @@ class AIService:
         existing_goals: Optional[List[str]] = None,
     ) -> ExtractedTaskList:
         chosen = self.resolve_provider(provider)
+        clean_chars = re.sub(r"[^\wа-яА-ЯёЁ\d]+", "", text or "")
+        if len(clean_chars) < 2:
+            return ExtractedTaskList(tasks=[])
+
         logger.info(f"Parsing text tasks with requested provider: {chosen}")
 
         if chosen == "auto":
@@ -671,14 +676,12 @@ class AIService:
             "Content-Type": "application/json",
         }
 
-        # Free lightweight models on OpenRouter (tested and active)
+        # Top tested and verified fast free models on OpenRouter
         free_models = [
-            "dots-studio/dots-3-note-preview:free",
-            "nvidia/nemotron-3.5-lightning:free",
-            "google/gemma-4-31b-it:free",
-            "google/gemma-4-26b-a4b-it:free",
             "liquid/lfm-2.5-2.6b:free",
             "openrouter/free",
+            "dots-studio/dots-3-note-preview:free",
+            "nvidia/nemotron-3.5-lightning:free",
         ]
 
         system_msg = (
@@ -800,6 +803,7 @@ class AIService:
                         model=whisper_model,
                         response_format="text",
                         temperature=0.0,
+                        language="ru",
                     )
                     if transcription:
                         break
@@ -807,17 +811,22 @@ class AIService:
                     logger.warning(f"Groq Whisper {whisper_model} error: {we}")
 
             if transcription and str(transcription).strip():
-                text = str(transcription).strip()
-                logger.info(f"Audio transcribed successfully via Whisper: {text[:100]}")
-                # Parse through Auto-Fast cascade (Groq 8B -> OpenRouter -> Gemini)
-                res = await self.parse_text_tasks(
-                    text, current_date, provider=chosen, existing_goals=existing_goals
-                )
-                if res and res.tasks:
-                    return res
-                return _fallback_parse(text, current_date, existing_goals)
+                raw_text = str(transcription).strip()
+                # Check that transcription contains actual words/numbers, not just noise, dots or punctuation
+                clean_speech = re.sub(r"[^\wа-яА-ЯёЁ\d]+", "", raw_text)
+                if len(clean_speech) >= 2:
+                    logger.info(f"Audio transcribed successfully via Whisper: {raw_text[:100]}")
+                    # Parse through Auto-Fast cascade (Groq -> OpenRouter -> Gemini)
+                    res = await self.parse_text_tasks(
+                        raw_text, current_date, provider=chosen, existing_goals=existing_goals
+                    )
+                    if res and res.tasks:
+                        return res
+                    return _fallback_parse(raw_text, current_date, existing_goals)
+                else:
+                    logger.info(f"Whisper transcription discarded as noise or punctuation: {raw_text!r}")
 
-        # 2. Fallback to Gemini multimodal audio if Groq client not available
+        # 2. Fallback to Gemini multimodal audio if Groq client not available or returned no speech
         if self._get_gemini_client():
             res = await self._parse_audio_gemini(
                 audio_bytes, current_date, mime_type, existing_goals=existing_goals
@@ -825,7 +834,7 @@ class AIService:
             if res and res.tasks:
                 return res
 
-        logger.warning("Audio transcription/parsing produced no valid tasks")
+        logger.warning("Audio transcription/parsing produced no valid speech tasks")
         return ExtractedTaskList(tasks=[])
 
     async def _parse_audio_gemini(
