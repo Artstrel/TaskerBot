@@ -89,6 +89,7 @@ body {
   min-height: 100vh;
   min-height: -webkit-fill-available;
   overflow-x: hidden;
+  overflow-x: clip;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   letter-spacing: -0.011em;
 }
@@ -165,17 +166,30 @@ h4,
   padding-bottom: calc(116px + var(--safe-bottom));
 }
 
-/* Minimalist App Header with Dynamic Telegram Safe Areas */
+/* Minimalist App Header with Dynamic Telegram Safe Areas & Sticky Pinned Pill */
 .app-header {
-  position: relative;
+  position: sticky;
+  top: 0;
   z-index: 40;
   background: var(--bg-app);
   border-bottom: none;
-  padding: 14px calc(18px + var(--safe-right)) 16px calc(18px + var(--safe-left));
+  padding: 12px calc(18px + var(--safe-right)) 8px calc(18px + var(--safe-left));
   display: flex;
   align-items: center;
   justify-content: space-between;
   transition: padding 0.2s ease;
+}
+
+/* Compact gradient tail (fade-out to 0% opacity) under the sticky header */
+.app-header::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 18px;
+  background: linear-gradient(to bottom, var(--bg-app) 0%, rgba(13, 13, 13, 0) 100%);
+  pointer-events: none;
 }
 
 /* iOS: align the profile bubble center vertically with the axis of Telegram's Close and Menu buttons */
@@ -1903,7 +1917,7 @@ body.is-tg-fullscreen .header-actions {
   .app-header {
     padding-left: 16px;
     padding-right: 16px;
-    padding-bottom: 14px;
+    padding-bottom: 8px;
     justify-content: space-between;
   }
 
