@@ -267,6 +267,7 @@ export default function TodayTab({
       })
       .catch((err) => {
         console.error('Failed to toggle task:', err);
+        hapticFeedback('error');
         removePendingMutation(mutationId);
         // Rollback state on error
         if (setDashboardData) {
@@ -359,12 +360,13 @@ export default function TodayTab({
 
     addPendingMutation({ id: mutationId, type: 'toggle_routine', routineId, nextStatus, timestamp: Date.now() });
 
-    toggleRoutine(routineId)
+    toggleRoutine(routineId, nextStatus)
       .then(() => {
         removePendingMutation(mutationId);
       })
       .catch((err) => {
         console.error('Failed to toggle routine:', err);
+        hapticFeedback('error');
         removePendingMutation(mutationId);
         // Rollback state on error
         if (setDashboardData) {

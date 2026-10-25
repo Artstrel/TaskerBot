@@ -17,6 +17,11 @@ import {
   getCachedGoals,
   getCachedGroceries,
   hapticFeedback,
+  getLastUserActionTime,
+  hasActivePendingMutations,
+  reconcileDashboardWithPending,
+  reconcileGoalsWithPending,
+  reconcileGroceriesWithPending,
 } from './api';
 import Mascot from './components/Mascot';
 import TodayTab from './components/TodayTab';
@@ -178,13 +183,19 @@ export default function App() {
 
   const lastFetchedRef = useRef(0);
   const isFetchingRef = useRef(false);
+  const latestFetchIdRef = useRef(0);
 
   const loadData = useCallback(async (forceFullLoading = false, silent = false) => {
     const now = Date.now();
+    // Prevent background fetches if user recently clicked a toggle or mutations are pending
+    if (!forceFullLoading && (now - getLastUserActionTime() < 4000 || hasActivePendingMutations())) {
+      return;
+    }
     if (isFetchingRef.current || (!forceFullLoading && now - lastFetchedRef.current < 2500)) {
       return;
     }
 
+    const currentFetchId = ++latestFetchIdRef.current;
     isFetchingRef.current = true;
     lastFetchedRef.current = now;
 
@@ -205,14 +216,23 @@ export default function App() {
         fetchGoals(),
         fetchGroceries(),
       ]);
+
+      // If a newer fetch was launched, discard this stale response
+      if (currentFetchId !== latestFetchIdRef.current) {
+        return;
+      }
+
       if (dash) {
-        setDashboardData(dash);
+        const reconciledDash = reconcileDashboardWithPending(dash);
+        setDashboardData(reconciledDash);
       }
       if (goals) {
-        setGoalsData(goals);
+        const reconciledGoals = reconcileGoalsWithPending(goals);
+        setGoalsData(reconciledGoals);
       }
       if (groceries) {
-        setGroceriesData(groceries);
+        const reconciledGroceries = reconcileGroceriesWithPending(groceries);
+        setGroceriesData(reconciledGroceries);
       }
 
       // Check if day is completed to celebrate
@@ -235,8 +255,10 @@ export default function App() {
   // Smart auto-refresh: visibility change, window focus, Telegram WebApp viewport change, and periodic polling
   useEffect(() => {
     const handleSyncOnResume = () => {
-      // Do not interrupt active recording or modal interactions
+      // Do not interrupt active recording, modal interactions, or recent user actions
       if (isQuickAddOpenRef.current) return;
+      if (Date.now() - getLastUserActionTime() < 4000) return;
+      if (hasActivePendingMutations()) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const timeSince = Date.now() - lastFetchedRef.current;
         if (timeSince > 4000) {
@@ -247,6 +269,8 @@ export default function App() {
 
     const handleWindowFocus = () => {
       if (isQuickAddOpenRef.current) return;
+      if (Date.now() - getLastUserActionTime() < 4000) return;
+      if (hasActivePendingMutations()) return;
       const timeSince = Date.now() - lastFetchedRef.current;
       if (timeSince > 4000) {
         loadData(false, true);
@@ -265,6 +289,8 @@ export default function App() {
     // Background polling every 18 seconds while document is visible
     const pollInterval = setInterval(() => {
       if (isQuickAddOpenRef.current) return;
+      if (Date.now() - getLastUserActionTime() < 4000) return;
+      if (hasActivePendingMutations()) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         loadData(false, true);
       }

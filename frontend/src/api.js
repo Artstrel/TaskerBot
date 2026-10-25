@@ -66,7 +66,13 @@ export const isDemoMode = () => {
 export const hapticFeedback = (style = 'medium') => {
   if (typeof window !== 'undefined' && window.Telegram?.WebApp?.HapticFeedback) {
     try {
-      window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
+      if (style === 'error' || style === 'success' || style === 'warning') {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred(style);
+      } else if (style === 'selection') {
+        window.Telegram.WebApp.HapticFeedback.selectionChanged();
+      } else {
+        window.Telegram.WebApp.HapticFeedback.impactOccurred(style);
+      }
     } catch (e) {
       // Ignore if not supported in client
     }
@@ -125,9 +131,32 @@ export const setCachedGroceries = (data) => {
 };
 
 // ==============================================================================
-// Pending Sync Queue (Optimistic Offline/Online Buffer)
+// Pending Sync Queue & Optimistic Mutations Reconciliation Layer
 // ==============================================================================
 const PENDING_SYNC_KEY = `tasker_pending_sync_${currentUser.id}`;
+let lastUserActionTimestamp = 0;
+const recentCompletedMutations = new Map(); // key -> { mutation, completedAt }
+const RECENT_MUTATION_TTL = 5000; // 5 seconds grace period to prevent stale backend reads
+
+export const recordUserAction = () => {
+  lastUserActionTimestamp = Date.now();
+};
+
+export const getLastUserActionTime = () => lastUserActionTimestamp;
+
+export const hasActivePendingMutations = () => {
+  const queue = getPendingSyncQueue();
+  if (queue.length > 0) return true;
+  const now = Date.now();
+  for (const [key, item] of recentCompletedMutations.entries()) {
+    if (now - item.completedAt < RECENT_MUTATION_TTL) {
+      return true;
+    } else {
+      recentCompletedMutations.delete(key);
+    }
+  }
+  return false;
+};
 
 export const getPendingSyncQueue = () => {
   if (typeof window === 'undefined') return [];
@@ -140,6 +169,7 @@ export const getPendingSyncQueue = () => {
 
 export const addPendingMutation = (mutation) => {
   if (typeof window === 'undefined' || !mutation) return;
+  recordUserAction();
   try {
     const queue = getPendingSyncQueue();
     queue.push({ ...mutation, created_at: Date.now() });
@@ -150,9 +180,18 @@ export const addPendingMutation = (mutation) => {
 export const removePendingMutation = (mutationId) => {
   if (typeof window === 'undefined' || !mutationId) return;
   try {
-    const queue = getPendingSyncQueue().filter((m) => m.id !== mutationId);
-    if (queue.length > 0) {
-      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(queue));
+    const queue = getPendingSyncQueue();
+    const removed = queue.find((m) => m.id === mutationId);
+    if (removed) {
+      const entityKey = `${removed.type}_${removed.routineId || removed.taskId || removed.itemId || removed.goalId || removed.subtaskId || removed.tempId || removed.id}`;
+      recentCompletedMutations.set(entityKey, {
+        mutation: removed,
+        completedAt: Date.now(),
+      });
+    }
+    const filtered = queue.filter((m) => m.id !== mutationId);
+    if (filtered.length > 0) {
+      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(filtered));
     } else {
       localStorage.removeItem(PENDING_SYNC_KEY);
     }
@@ -161,9 +200,214 @@ export const removePendingMutation = (mutationId) => {
 
 export const clearPendingSyncQueue = () => {
   if (typeof window === 'undefined') return;
+  recentCompletedMutations.clear();
   try {
     localStorage.removeItem(PENDING_SYNC_KEY);
   } catch (e) {}
+};
+
+export const getAllActiveMutations = () => {
+  const now = Date.now();
+  for (const [key, item] of recentCompletedMutations.entries()) {
+    if (now - item.completedAt >= RECENT_MUTATION_TTL) {
+      recentCompletedMutations.delete(key);
+    }
+  }
+  const pending = getPendingSyncQueue();
+  const recent = Array.from(recentCompletedMutations.values()).map((item) => item.mutation);
+  return [...recent, ...pending];
+};
+
+export const reconcileDashboardWithPending = (dash) => {
+  if (!dash) return dash;
+  const mutations = getAllActiveMutations();
+  if (mutations.length === 0) return dash;
+
+  let todayTasks = dash.today_tasks ? [...dash.today_tasks] : [];
+  let overdueTasks = dash.overdue_tasks ? [...dash.overdue_tasks] : [];
+  let routineTasks = dash.routine_tasks ? [...dash.routine_tasks] : [];
+
+  for (const m of mutations) {
+    if (m.type === 'toggle_routine') {
+      routineTasks = routineTasks.map((r) => {
+        if (r.id === m.routineId) {
+          const target = r.target_value;
+          const nextVal = target ? (m.nextStatus ? target : 0) : r.current_value;
+          const currentStreak = r.current_streak || 0;
+          let newStreak = currentStreak;
+          if (m.nextStatus && !r.is_completed_today) {
+            newStreak = currentStreak + 1;
+          } else if (!m.nextStatus && r.is_completed_today) {
+            newStreak = Math.max(0, currentStreak - 1);
+          }
+          return {
+            ...r,
+            is_completed_today: m.nextStatus,
+            current_value: nextVal,
+            current_streak: newStreak,
+            best_streak: Math.max(r.best_streak || 0, newStreak),
+          };
+        }
+        return r;
+      });
+    } else if (m.type === 'edit_routine') {
+      routineTasks = routineTasks.map((r) => (r.id === m.routineId ? { ...r, title: m.title } : r));
+    } else if (m.type === 'delete_routine') {
+      routineTasks = routineTasks.filter((r) => r.id !== m.routineId);
+    } else if (m.type === 'toggle_task') {
+      const applyToggle = (t) => {
+        if (t.id === m.taskId) {
+          const target = t.target_value;
+          const nextVal = target ? (m.nextStatus ? target : 0) : t.current_value;
+          return {
+            ...t,
+            is_completed: m.nextStatus,
+            current_value: nextVal,
+          };
+        }
+        return t;
+      };
+      todayTasks = todayTasks.map(applyToggle);
+      overdueTasks = overdueTasks.map(applyToggle);
+    } else if (m.type === 'edit_task') {
+      todayTasks = todayTasks.map((t) => (t.id === m.taskId ? { ...t, title: m.title } : t));
+      overdueTasks = overdueTasks.map((t) => (t.id === m.taskId ? { ...t, title: m.title } : t));
+    } else if (m.type === 'delete_task') {
+      todayTasks = todayTasks.filter((t) => t.id !== m.taskId);
+      overdueTasks = overdueTasks.filter((t) => t.id !== m.taskId);
+    } else if (m.type === 'postpone_task') {
+      todayTasks = todayTasks.filter((t) => t.id !== m.taskId);
+      overdueTasks = overdueTasks.filter((t) => t.id !== m.taskId);
+    }
+  }
+
+  const completedToday =
+    todayTasks.filter((t) => t.is_completed).length +
+    routineTasks.filter((r) => r.is_completed_today).length;
+  const totalToday = todayTasks.length + routineTasks.length;
+
+  return {
+    ...dash,
+    today_tasks: todayTasks,
+    overdue_tasks: overdueTasks,
+    routine_tasks: routineTasks,
+    completed_count: completedToday,
+    total_count: totalToday,
+  };
+};
+
+export const reconcileGoalsWithPending = (goals) => {
+  if (!goals || !Array.isArray(goals)) return goals;
+  const mutations = getAllActiveMutations();
+  if (mutations.length === 0) return goals;
+
+  let updatedGoals = [...goals];
+
+  for (const m of mutations) {
+    if (m.type === 'delete_goal') {
+      updatedGoals = updatedGoals.filter((g) => g.id !== m.goalId);
+    } else if (m.type === 'toggle_goal') {
+      updatedGoals = updatedGoals.map((g) => {
+        if (g.id === m.goalId) {
+          return {
+            ...g,
+            is_completed: m.nextStatus,
+            completed_at: m.nextStatus ? (g.completed_at || new Date().toISOString()) : null,
+          };
+        }
+        return g;
+      });
+    } else if (m.type === 'toggle_subtask' || m.type === 'toggle_task') {
+      const subtaskId = m.subtaskId || m.taskId;
+      updatedGoals = updatedGoals.map((g) => {
+        const hasSubtask = (g.subtasks || []).some((st) => st.id === subtaskId);
+        if (!hasSubtask) return g;
+        const newSubtasks = (g.subtasks || []).map((st) =>
+          st.id === subtaskId ? { ...st, is_completed: m.nextStatus } : st
+        );
+        const total = newSubtasks.length;
+        const completed = newSubtasks.filter((st) => st.is_completed).length;
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const isDone = total > 0 && completed === total;
+        return {
+          ...g,
+          subtasks: newSubtasks,
+          total_subtasks: total,
+          completed_subtasks: completed,
+          progress_percentage: pct,
+          is_completed: isDone,
+        };
+      });
+    } else if (m.type === 'delete_task' || m.type === 'delete_subtask') {
+      const subtaskId = m.subtaskId || m.taskId;
+      updatedGoals = updatedGoals.map((g) => {
+        const hasSubtask = (g.subtasks || []).some((st) => st.id === subtaskId);
+        if (!hasSubtask) return g;
+        const newSubtasks = (g.subtasks || []).filter((st) => st.id !== subtaskId);
+        const total = newSubtasks.length;
+        const completed = newSubtasks.filter((st) => st.is_completed).length;
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const isDone = total > 0 && completed === total;
+        return {
+          ...g,
+          subtasks: newSubtasks,
+          total_subtasks: total,
+          completed_subtasks: completed,
+          progress_percentage: pct,
+          is_completed: isDone,
+        };
+      });
+    }
+  }
+
+  return updatedGoals;
+};
+
+export const reconcileGroceriesWithPending = (groceries) => {
+  if (!groceries) return groceries;
+  const mutations = getAllActiveMutations();
+  if (mutations.length === 0) return groceries;
+
+  let active = groceries.active_items ? [...groceries.active_items] : [];
+  let completed = groceries.completed_items ? [...groceries.completed_items] : [];
+
+  for (const m of mutations) {
+    if (m.type === 'toggle_grocery') {
+      if (m.is_completed) {
+        const idx = active.findIndex((i) => i.id === m.itemId);
+        if (idx !== -1) {
+          const item = { ...active[idx], is_completed: true, completed_at: new Date().toISOString() };
+          active.splice(idx, 1);
+          if (!completed.some((i) => i.id === m.itemId)) {
+            completed.unshift(item);
+          }
+        }
+      } else {
+        const idx = completed.findIndex((i) => i.id === m.itemId);
+        if (idx !== -1) {
+          const item = { ...completed[idx], is_completed: false, completed_at: null };
+          completed.splice(idx, 1);
+          if (!active.some((i) => i.id === m.itemId)) {
+            active.unshift(item);
+          }
+        }
+      }
+    } else if (m.type === 'edit_grocery') {
+      active = active.map((i) => (i.id === m.itemId ? { ...i, title: m.title } : i));
+      completed = completed.map((i) => (i.id === m.itemId ? { ...i, title: m.title } : i));
+    } else if (m.type === 'delete_grocery') {
+      active = active.filter((i) => i.id !== m.itemId);
+      completed = completed.filter((i) => i.id !== m.itemId);
+    }
+  }
+
+  return {
+    ...groceries,
+    active_items: active,
+    completed_items: completed,
+    completed_count: completed.length,
+    total_count: active.length + completed.length,
+  };
 };
 
 // ==============================================================================
@@ -318,8 +562,9 @@ export const fetchDashboard = async () => {
     if (res.ok) {
       if (typeof window !== 'undefined') window.__tasker_is_demo = false;
       const data = await res.json();
-      setCachedDashboard(data);
-      return data;
+      const reconciled = reconcileDashboardWithPending(data);
+      setCachedDashboard(reconciled);
+      return reconciled;
     }
   } catch (e) {
     // Fall back to local DB
@@ -358,8 +603,9 @@ export const fetchDashboard = async () => {
     current_streak: 5,
     is_demo: true,
   };
-  setCachedDashboard(fallbackData);
-  return fallbackData;
+  const reconciledFallback = reconcileDashboardWithPending(fallbackData);
+  setCachedDashboard(reconciledFallback);
+  return reconciledFallback;
 };
 
 export const fetchGoals = async () => {
@@ -367,15 +613,17 @@ export const fetchGoals = async () => {
     const res = await fetch(`${API_BASE}/goals?telegram_id=${currentUser.id}`);
     if (res.ok) {
       const data = await res.json();
-      setCachedGoals(data);
-      return data;
+      const reconciled = reconcileGoalsWithPending(data);
+      setCachedGoals(reconciled);
+      return reconciled;
     }
   } catch (e) {}
 
   const db = getLocalDb();
   const goals = db.goals || [];
-  setCachedGoals(goals);
-  return goals;
+  const reconciled = reconcileGoalsWithPending(goals);
+  setCachedGoals(reconciled);
+  return reconciled;
 };
 
 export const fetchGroceries = async () => {
@@ -383,15 +631,17 @@ export const fetchGroceries = async () => {
     const res = await fetch(`${API_BASE}/groceries?telegram_id=${currentUser.id}`);
     if (res.ok) {
       const data = await res.json();
-      setCachedGroceries(data);
-      return data;
+      const reconciled = reconcileGroceriesWithPending(data);
+      setCachedGroceries(reconciled);
+      return reconciled;
     }
   } catch (e) {}
 
   const db = getLocalDb();
   const groceries = db.groceries || { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
-  setCachedGroceries(groceries);
-  return groceries;
+  const reconciled = reconcileGroceriesWithPending(groceries);
+  setCachedGroceries(reconciled);
+  return reconciled;
 };
 
 export const createGroceryItem = async (groceryData) => {
@@ -427,6 +677,7 @@ export const createGroceryItem = async (groceryData) => {
 
 export const updateGroceryItem = async (itemId, updateData) => {
   hapticFeedback('light');
+  recordUserAction();
   try {
     const res = await fetch(`${API_BASE}/groceries/${itemId}?telegram_id=${currentUser.id}`, {
       method: 'PATCH',
@@ -434,7 +685,14 @@ export const updateGroceryItem = async (itemId, updateData) => {
       body: JSON.stringify(updateData),
     });
     if (res.ok) return await res.json();
-  } catch (e) {}
+    if (res.status >= 400 && typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw new Error(`Failed to update grocery item: HTTP ${res.status}`);
+    }
+  } catch (e) {
+    if (typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw e;
+    }
+  }
 
   const db = getLocalDb();
   if (!db.groceries) db.groceries = { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
@@ -548,13 +806,21 @@ export const sendTestNotification = async () => {
 
 export const toggleTask = async (taskId, completed = null) => {
   hapticFeedback('light');
+  recordUserAction();
   try {
     const url = `${API_BASE}/tasks/${taskId}/toggle?telegram_id=${currentUser.id}${
       completed !== null ? `&completed=${completed}` : ''
     }`;
     const res = await fetch(url, { method: 'PATCH' });
     if (res.ok) return await res.json();
-  } catch (e) {}
+    if (res.status >= 400 && typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw new Error(`Failed to toggle task: HTTP ${res.status}`);
+    }
+  } catch (e) {
+    if (typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw e;
+    }
+  }
 
   const db = getLocalDb();
   const task = db.tasks.find((t) => t.id === taskId);
@@ -737,13 +1003,21 @@ export const updateRoutineProgress = async (routineId, { current_value, delta })
 
 export const toggleRoutine = async (routineId, completed = null) => {
   hapticFeedback('light');
+  recordUserAction();
   try {
     const url = `${API_BASE}/routines/${routineId}/toggle?telegram_id=${currentUser.id}${
       completed !== null ? `&completed=${completed}` : ''
     }`;
     const res = await fetch(url, { method: 'PATCH' });
     if (res.ok) return await res.json();
-  } catch (e) {}
+    if (res.status >= 400 && typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw new Error(`Failed to toggle routine: HTTP ${res.status}`);
+    }
+  } catch (e) {
+    if (typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw e;
+    }
+  }
 
   const db = getLocalDb();
   const r = db.routines.find((item) => item.id === routineId);
@@ -865,6 +1139,7 @@ export const addGoalSubtask = async (goalId, title, scheduledDate = null) => {
 
 export const toggleGoal = async (goalId, isCompleted = null) => {
   hapticFeedback('medium');
+  recordUserAction();
   try {
     let url = `${API_BASE}/goals/${goalId}/toggle?telegram_id=${currentUser.id}`;
     if (isCompleted !== null && isCompleted !== undefined) {
@@ -872,7 +1147,14 @@ export const toggleGoal = async (goalId, isCompleted = null) => {
     }
     const res = await fetch(url, { method: 'PATCH' });
     if (res.ok) return await res.json();
-  } catch (e) {}
+    if (res.status >= 400 && typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw new Error(`Failed to toggle goal: HTTP ${res.status}`);
+    }
+  } catch (e) {
+    if (typeof window !== 'undefined' && window.__tasker_is_demo === false) {
+      throw e;
+    }
+  }
 
   const db = getLocalDb();
   const goal = (db.goals || []).find((g) => g.id === goalId);

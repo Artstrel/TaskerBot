@@ -105,6 +105,7 @@ export default function GroceriesTab({
       })
       .catch((err) => {
         console.error('Failed to toggle grocery item:', err);
+        hapticFeedback('error');
         removePendingMutation(mutationId);
         if (onRefresh) onRefresh();
       });

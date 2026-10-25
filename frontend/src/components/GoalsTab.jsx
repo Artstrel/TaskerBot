@@ -249,6 +249,7 @@ export default function GoalsTab({
       })
       .catch((err) => {
         console.error('Failed to toggle subtask:', err);
+        hapticFeedback('error');
         removePendingMutation(mutationId);
         // Rollback
         if (setGoalsData) {
@@ -327,6 +328,7 @@ export default function GoalsTab({
       })
       .catch((err) => {
         console.error('Failed to toggle goal:', err);
+        hapticFeedback('error');
         removePendingMutation(mutationId);
         if (oldGoal && setGoalsData) {
           setGoalsData((prev) => {
