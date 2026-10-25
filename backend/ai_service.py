@@ -128,7 +128,7 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
     normalized_tasks = []
     for t in raw_tasks:
         if isinstance(t, str):
-            raw_title = t.strip()
+            raw_title = strip_whisper_hallucinations(t.strip())
             if not raw_title or detect_hallucination_or_noise(raw_title):
                 continue
             if is_grocery_text(raw_title):
@@ -143,7 +143,7 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                 title = capitalize_first(raw_title)
                 normalized_tasks.append(ExtractedTask(category="one_time", title=title))
         elif isinstance(t, dict):
-            raw_title = str(t.get("title") or t.get("name") or "").strip()
+            raw_title = strip_whisper_hallucinations(str(t.get("title") or t.get("name") or "").strip())
             if not raw_title or detect_hallucination_or_noise(raw_title):
                 continue
             cat = t.get("category", "one_time")
@@ -828,12 +828,16 @@ class AIService:
         except Exception as wce:
             logger.warning(f"Local whisper.cpp transcription error: {wce}")
 
-        # 2. Groq Whisper (Cloud fallback ~300ms transcription with FFmpeg noise reduction & prompt)
+        # 2. Groq Whisper (Cloud fallback ~300ms transcription with FFmpeg noise reduction, pause compression & neutral prompt)
         groq_client = self._get_groq_client()
+        clean_audio_bytes, clean_fn = await whisper_service.preprocess_audio_ffmpeg(audio_bytes, filename=fn)
+        if not clean_audio_bytes or len(clean_audio_bytes) <= 44:
+            logger.info("Audio pre-processing yielded no speech (pure silence or sub-threshold background noise).")
+            return ExtractedTaskList(tasks=[])
+
         if groq_client:
             transcription = None
-            clean_audio_bytes, clean_fn = await whisper_service.preprocess_audio_ffmpeg(audio_bytes, filename=fn)
-            prompt_anchor = "Задачи, список дел, покупки, рутины, напоминания на день. Запиши точно без лишних слов."
+            prompt_anchor = "Разговорная русская речь без субтитров. Запись повседневных дел и покупок."
             for whisper_model in ["whisper-large-v3-turbo", "whisper-large-v3"]:
                 try:
                     transcription = await groq_client.audio.transcriptions.create(
@@ -874,8 +878,10 @@ class AIService:
 
         # 3. Fallback to Gemini multimodal audio if Groq client not available or returned hallucination
         if self._get_gemini_client():
+            gemini_payload = clean_audio_bytes if (clean_audio_bytes and len(clean_audio_bytes) > 44) else audio_bytes
+            gemini_mime = "audio/wav" if (clean_audio_bytes and len(clean_audio_bytes) > 44) else mime_type
             res = await self._parse_audio_gemini(
-                audio_bytes, current_date, mime_type, existing_goals=existing_goals
+                gemini_payload, current_date, gemini_mime, existing_goals=existing_goals
             )
             if res and res.tasks:
                 return res

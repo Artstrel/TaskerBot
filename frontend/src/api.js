@@ -1366,9 +1366,27 @@ export const HALLUCINATION_PATTERNS = [
   /like\s+and\s+subscribe.*/i,
 ];
 
+const BRACKET_NOISE_RE = /\s*(?:\[|\()(?:\s*|\.{1,3}|тишина|музыка|звук\w*|вздох|кашель|покашливание|смех|пауза|шепот|звонок|аплодисменты|помехи|silence|music(?:\s+playing)?|cough|laughter|applause|sigh|clears\s+throat|bell|snicker|crying|pant|gasp|whisper|murmuring)(?:\]|\))\s*/gi;
+const EMPTY_BRACKETS_RE = /\s*(?:\[\s*\]|\(\s*\)|\{\s*\})\s*/g;
+const PROMPT_ECHO_FULL_RE = /^(?:task|tasks|задач[аи]|список\s+дел|напоминани[яе])\s*:\s*(?:\(\s*\)|\[\s*\]|\{\s*\}|\.{1,3}|-)?\s*$/i;
+const PROMPT_ECHO_PREFIX_RE = /^(?:task|tasks|задач[аи]|список\s+дел|напоминани[яе])\s*:\s*/i;
+
 export const stripWhisperHallucinations = (text) => {
   if (!text || typeof text !== 'string') return '';
   let cleaned = text.trim();
+
+  // 1. Check if string is purely a prompt echo / empty task container (e.g. 'Task: ()')
+  if (PROMPT_ECHO_FULL_RE.test(cleaned)) {
+    return '';
+  }
+
+  // 2. Strip acoustic tags and empty brackets
+  cleaned = cleaned.replace(BRACKET_NOISE_RE, ' ');
+  cleaned = cleaned.replace(EMPTY_BRACKETS_RE, ' ');
+
+  // 3. Strip prompt echo prefix if followed by real words
+  cleaned = cleaned.replace(PROMPT_ECHO_PREFIX_RE, '').trim();
+
   for (const pat of HALLUCINATION_PATTERNS) {
     if (/(?:написать|сделать|подготовить|добавить|исправить|отредактировать|вставить)\s+субтитр/i.test(cleaned)) {
       continue;
@@ -1378,23 +1396,34 @@ export const stripWhisperHallucinations = (text) => {
     const leadingRe = new RegExp(`^[.,!?;\\s]*${pat.source}(?:[.,!?;\\s]|$)`, 'iu');
     cleaned = cleaned.replace(leadingRe, '').trim();
   }
+
+  // Strip dangling punctuation
+  cleaned = cleaned.replace(/^[.,!?;:\s—\-]+|[.,!?;:\s—\-]+$/gu, '');
   return cleaned.trim();
 };
 
 export const isHallucinationOrNoise = (text) => {
   if (!text || typeof text !== 'string') return true;
   const trimmed = text.trim();
-  const meaningful = trimmed.replace(/[^\p{L}\p{N}]/gu, '');
-  if (meaningful.length < 2) return true;
+  if (PROMPT_ECHO_FULL_RE.test(trimmed) || EMPTY_BRACKETS_RE.test(trimmed)) {
+    return true;
+  }
 
   const stripped = stripWhisperHallucinations(trimmed);
+  if (!stripped) return true;
+
   const meaningfulAfter = stripped.replace(/[^\p{L}\p{N}]/gu, '');
   if (meaningfulAfter.length < 2) {
     const isLegit = /(?:написать|сделать|подготовить|добавить|исправить|отредактировать|вставить)\s+субтитр/i.test(trimmed);
     if (!isLegit) return true;
   }
 
-  const words = trimmed.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  const cleanLower = stripped.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+  if (['task', 'tasks', 'задача', 'задачи', 'список дел', 'напоминания', 'дело', 'дела'].includes(cleanLower)) {
+    return true;
+  }
+
+  const words = stripped.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
   if (words.length >= 4) {
     const counts = {};
     for (const w of words) counts[w] = (counts[w] || 0) + 1;
@@ -1752,7 +1781,7 @@ export const transcribeWithDirectGroqWhisper = async (audioBlob) => {
       gFormData.append('model', whisperModel);
       gFormData.append('language', 'ru');
       gFormData.append('temperature', '0.0');
-      gFormData.append('prompt', 'Задачи, список дел, покупки, рутины, напоминания на день. Запиши точно без лишних слов.');
+      gFormData.append('prompt', 'Разговорная русская речь без субтитров. Запись повседневных дел и покупок.');
       gFormData.append('response_format', 'json');
 
       const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {

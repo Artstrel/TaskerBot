@@ -260,10 +260,12 @@ export default function QuickAddModal({
   // Helper to validate extracted task title
   const isValidTaskTitle = (title) => {
     if (!title || typeof title !== 'string') return false;
-    const clean = title.replace(/[^\p{L}\d]/gu, '').trim();
+    const stripped = stripWhisperHallucinations(title);
+    if (!stripped) return false;
+    const clean = stripped.replace(/[^\p{L}\d]/gu, '').trim();
     if (clean.length < 2) return false;
-    if (/^[\s\.\,\!\?\-—\:\;]+$/.test(title)) return false;
-    if (isHallucinationOrNoise(title)) return false;
+    if (/^[\s\.\,\!\?\-—\:\;]+$/.test(stripped)) return false;
+    if (isHallucinationOrNoise(stripped)) return false;
     return true;
   };
 
