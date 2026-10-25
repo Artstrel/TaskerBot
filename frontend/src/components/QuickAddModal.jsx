@@ -92,6 +92,7 @@ export default function QuickAddModal({
   const speechRecognitionRef = useRef(null);
   const speechTranscriptRef = useRef('');
   const inputRef = useRef(null);
+  const stopRecordingRef = useRef(null);
 
   const loadProviders = useCallback(async () => {
     try {
@@ -112,12 +113,18 @@ export default function QuickAddModal({
     }
   }, [loadProviders]);
 
-  // Dedicated timer effect that starts/stops with isRecording
+  // Dedicated timer effect that starts/stops with isRecording and enforces 60s mobile limit
   useEffect(() => {
     let interval = null;
     if (isRecording) {
       interval = setInterval(() => {
-        setRecordSeconds((prev) => prev + 1);
+        setRecordSeconds((prev) => {
+          if (prev >= 59) {
+            if (stopRecordingRef.current) stopRecordingRef.current();
+            return 60;
+          }
+          return prev + 1;
+        });
       }, 1000);
     } else {
       setRecordSeconds(0);
@@ -246,13 +253,28 @@ export default function QuickAddModal({
     return true;
   };
 
-  // Process audio: Priority #1 Device SpeechRecognition (0 tokens, instant), Priority #2 Server/Whisper audio upload
+  // Process audio: Priority #1 Server/Whisper.cpp audio upload (with FFT noise filtering & VAD), Priority #2 Fallback to Web Speech API
   const handleAudioProcess = async (audioBlob) => {
     setIsProcessing(true);
     setErrorMsg('');
 
-    // 1. Приоритет №1: Системный диктант устройства (Web Speech API - iOS Siri / Android Google Speech)
-    // 0 токенов, мгновенно, не расходует трафик на выгрузку аудиофайла
+    // 1. Приоритет №1: Серверный whisper.cpp с аппаратным VAD и шумоподавлением FFmpeg (afftdn)
+    if (audioBlob && audioBlob.size > 0) {
+      try {
+        const res = await parseSmartAudio(audioBlob, selectedProvider);
+        const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
+        if (validTasks.length > 0) {
+          hapticFeedback('success');
+          setExtractedTasks(validTasks.map(mapExtractedTask));
+          setIsProcessing(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('Backend whisper.cpp / Whisper audio parse failed:', err);
+      }
+    }
+
+    // 2. Резервный Fallback: Системный диктант устройства (Web Speech API - iOS Siri / Android Google Speech)
     const clientText = speechTranscriptRef.current && speechTranscriptRef.current.trim();
     const cleanSpeech = clientText ? clientText.replace(/[^\p{L}\d]/gu, '').trim() : '';
 
@@ -261,31 +283,18 @@ export default function QuickAddModal({
         const res = await parseSmartText(clientText, selectedProvider);
         const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
         if (validTasks.length > 0) {
+          hapticFeedback('success');
           setExtractedTasks(validTasks.map(mapExtractedTask));
           setIsProcessing(false);
           return;
         }
       } catch (speechErr) {
-        console.warn('Direct parse of device speech failed, falling back to audio upload:', speechErr);
+        console.warn('Fallback parse of device speech failed:', speechErr);
       }
     }
 
-    // 2. Fallback: Серверный / облачный Whisper (если Web Speech API недоступен на клиенте или вернул пустую строку)
-    if (audioBlob && audioBlob.size > 0) {
-      try {
-        const res = await parseSmartAudio(audioBlob, selectedProvider);
-        const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
-        if (validTasks.length > 0) {
-          setExtractedTasks(validTasks.map(mapExtractedTask));
-          setIsProcessing(false);
-          return;
-        }
-      } catch (err) {
-        console.warn('Backend/Whisper audio parse failed:', err);
-      }
-    }
-
-    setErrorMsg('🎙 Речь не распознана. Попробуйте сказать чуть громче или напишите задачу текстом.');
+    hapticFeedback('warning');
+    setErrorMsg('🎙 Речь не распознана (возможно, слишком шумно). Попробуйте сказать чуть ближе к микрофону или напишите задачу текстом.');
     setIsProcessing(false);
   };
 
@@ -294,7 +303,15 @@ export default function QuickAddModal({
     try {
       setErrorMsg('');
       hapticFeedback('medium');
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Hardware mobile audio constraints for iOS & Android
+      const constraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       audioChunksRef.current = [];
 
@@ -323,10 +340,10 @@ export default function QuickAddModal({
       let mimeType = 'audio/webm';
       if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
         mimeType = 'audio/webm;codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-        mimeType = 'audio/ogg;codecs=opus';
       } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
         mimeType = 'audio/mp4';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        mimeType = 'audio/ogg;codecs=opus';
       }
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
@@ -348,7 +365,7 @@ export default function QuickAddModal({
       setIsRecording(true);
     } catch (err) {
       console.error('Audio recording failed:', err);
-      setErrorMsg('Нет доступа к микрофону. Разрешите микрофон в браузере.');
+      setErrorMsg('Нет доступа к микрофону. Разрешите микрофон в настройках браузера или приложения.');
     }
   };
 
@@ -365,6 +382,7 @@ export default function QuickAddModal({
       setIsRecording(false);
     }
   };
+  stopRecordingRef.current = stopRecording;
 
   // Cancel voice recording without submitting
   const cancelRecording = () => {

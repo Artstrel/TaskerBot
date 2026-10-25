@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     OPENROUTER_API_KEY: str = ""
     DEFAULT_AI_PROVIDER: str = "auto"
+    WHISPER_CPP_URL: str = "http://127.0.0.1:8080"
+    WHISPER_CPP_ENABLED: bool = True
     DATABASE_URL: str = f"sqlite+aiosqlite:///{DATA_DIR}/taskerbot.db"
     WEBAPP_URL: str = "https://taskerbot-plp5.onrender.com"  # Telegram WebApp HTTPS URL
     HOST: str = "0.0.0.0"

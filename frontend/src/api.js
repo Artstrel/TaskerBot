@@ -1631,8 +1631,12 @@ export const parseSmartText = async (text, provider = null) => {
 export const parseSmartAudio = async (audioBlob, provider = null) => {
   // 1. Try Backend API first if reachable
   try {
-    const formData = new FormData();
-    const ext = audioBlob.type && audioBlob.type.includes('webm') ? 'voice.webm' : 'voice.ogg';
+    let ext = 'voice.webm';
+    if (audioBlob.type) {
+      if (audioBlob.type.includes('mp4') || audioBlob.type.includes('m4a')) ext = 'voice.mp4';
+      else if (audioBlob.type.includes('ogg')) ext = 'voice.ogg';
+      else if (audioBlob.type.includes('wav')) ext = 'voice.wav';
+    }
     formData.append('audio', audioBlob, ext);
     if (provider) {
       formData.append('provider', provider);

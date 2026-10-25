@@ -9,6 +9,7 @@ from typing import Optional, List, Dict, Any
 import httpx
 from backend.config import settings
 from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AIProvidersResponse, capitalize_first
+from backend.whisper_service import whisper_service
 
 logger = logging.getLogger(__name__)
 
@@ -792,7 +793,23 @@ class AIService:
         mime_type, detected_fn = detect_audio_mime_and_filename(audio_bytes)
         fn = detected_fn or filename or "audio.webm"
 
-        # 1. Groq Whisper (lightning fast ~300ms transcription)
+        # 1. Local whisper.cpp (Primary engine with VAD & noise filtering)
+        try:
+            if await whisper_service.is_available():
+                whisper_cpp_text = await whisper_service.transcribe(audio_bytes, filename=fn)
+                if whisper_cpp_text and whisper_cpp_text.strip():
+                    raw_text = whisper_cpp_text.strip()
+                    logger.info(f"Audio transcribed successfully via local whisper.cpp: {raw_text[:100]}")
+                    res = await self.parse_text_tasks(
+                        raw_text, current_date, provider=chosen, existing_goals=existing_goals
+                    )
+                    if res and res.tasks:
+                        return res
+                    return _fallback_parse(raw_text, current_date, existing_goals)
+        except Exception as wce:
+            logger.warning(f"Local whisper.cpp transcription error: {wce}")
+
+        # 2. Groq Whisper (Cloud fallback ~300ms transcription)
         groq_client = self._get_groq_client()
         if groq_client:
             transcription = None

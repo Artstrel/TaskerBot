@@ -70,3 +70,11 @@ uploads/
 *.wav
 *.mp3
 *.ogg
+*.oga
+*.m4a
+*.webm
+
+# whisper.cpp local build & models
+whisper.cpp/
+models/
+*.bin
