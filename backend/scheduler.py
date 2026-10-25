@@ -4,11 +4,11 @@ from datetime import datetime, date, timedelta
 from typing import Dict, Set, List, Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, and_, update, delete
 from sqlalchemy.orm import selectinload
 
 from backend.database import AsyncSessionLocal
-from backend.models import User, RoutineTask, RoutineLog, OneTimeTask, SentNotification
+from backend.models import User, RoutineTask, RoutineLog, Goal, OneTimeTask, SentNotification
 from backend.crud import (
     get_user_now,
     get_user_effective_date_and_urgency,
@@ -320,6 +320,32 @@ async def check_user_reminders_and_rollover():
                     elif not user.last_active_date:
                         user.last_active_date = effective_date
                         await session.commit()
+
+                    # --- 1b. Auto-cleanup completed goals past retention period ---
+                    retention_days = getattr(user, "goal_cleanup_days", 3)
+                    if retention_days is None:
+                        retention_days = 3
+                    if retention_days >= 0:
+                        cleanup_cutoff = datetime.utcnow() - timedelta(days=retention_days)
+                        exp_stmt = select(Goal.id).where(
+                            and_(
+                                Goal.user_id == user.telegram_id,
+                                Goal.is_completed == True,
+                                Goal.completed_at != None,
+                                Goal.completed_at <= cleanup_cutoff,
+                            )
+                        )
+                        exp_res = await session.execute(exp_stmt)
+                        expired_goal_ids = exp_res.scalars().all()
+                        if expired_goal_ids:
+                            await session.execute(
+                                delete(OneTimeTask).where(OneTimeTask.goal_id.in_(expired_goal_ids))
+                            )
+                            await session.execute(
+                                delete(Goal).where(Goal.id.in_(expired_goal_ids))
+                            )
+                            await session.commit()
+                            logger.info(f"Auto-cleaned {len(expired_goal_ids)} expired goals for user {user.telegram_id}")
 
                     # --- 2. Morning Digest (Configurable time, default 09:00) ---
                     if user.morning_digest_enabled:

@@ -158,6 +158,16 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
     if (onRefresh) onRefresh();
   };
 
+  const handleGoalCleanupChange = async (days) => {
+    if (!settings) return;
+    hapticFeedback('selection');
+    const newSettings = { ...settings, goal_cleanup_days: days };
+    setSettings(newSettings);
+    await updateUserSettings({ goal_cleanup_days: days });
+    triggerSaved();
+    if (onRefresh) onRefresh();
+  };
+
   const handleMorningTimeChange = async (val) => {
     if (!settings) return;
     hapticFeedback('selection');
@@ -246,8 +256,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
 
       <div className="settings-content-wrap">
         {/* Mobile Sub-Header Bar */}
-        <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', width: '100%' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+        <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', width: '100%' }}>
+          <div className="mobile-subheader-text">
             Уведомления, время и AI-интеграция
           </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -496,6 +506,44 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                 </div>
               </div>
 
+              {/* SECTION: Goals retention */}
+              <div className="settings-section-title">
+                Автоудаление выполненных целей
+              </div>
+              <div className="settings-group" style={{ padding: '14px 16px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                  Срок хранения закрытых целей перед их окончательным удалением из списка.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
+                  {[
+                    { label: 'Сразу', days: 0 },
+                    { label: '1 дн.', days: 1 },
+                    { label: '2 дн.', days: 2 },
+                    { label: '3 дн.', days: 3 },
+                    { label: '7 дн.', days: 7 },
+                  ].map((item) => {
+                    const currentDays = settings.goal_cleanup_days !== undefined ? settings.goal_cleanup_days : 3;
+                    const isSelected = currentDays === item.days;
+                    return (
+                      <button
+                        key={item.days}
+                        type="button"
+                        className={`filter-chip ${isSelected ? 'active' : ''}`}
+                        onClick={() => handleGoalCleanupChange(item.days)}
+                        style={{
+                          justifyContent: 'center',
+                          padding: '8px 4px',
+                          fontSize: '12px',
+                          borderRadius: 'var(--radius-sm)',
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* SECTION: Timezone */}
               <div className="settings-section-title">
                 Часовой пояс
@@ -600,14 +648,15 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                   )}
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <input
                     type="url"
                     placeholder="https://taskerbot-api.onrender.com"
                     value={backendInput}
                     onChange={(e) => setBackendInput(e.target.value)}
                     style={{
-                      flex: 1,
+                      flex: '1 1 180px',
+                      minWidth: 0,
                       fontSize: '12px',
                       padding: '8px 10px',
                       background: 'var(--bg-surface)',
@@ -616,27 +665,30 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                       color: 'var(--text-primary)',
                       outline: 'none',
                       fontFamily: 'inherit',
+                      boxSizing: 'border-box',
                     }}
                   />
-                  <button
-                    type="button"
-                    className="filter-chip active"
-                    onClick={handleSaveBackend}
-                    style={{ padding: '0 12px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
-                  >
-                    Сохранить
-                  </button>
-                  {customBackend && (
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                     <button
                       type="button"
-                      className="filter-chip"
-                      onClick={handleResetBackend}
-                      style={{ padding: '0 10px', fontSize: '12px', cursor: 'pointer', flexShrink: 0 }}
-                      title="Сбросить на демо-режим"
+                      className="filter-chip active"
+                      onClick={handleSaveBackend}
+                      style={{ padding: '0 12px', fontSize: '12px', cursor: 'pointer' }}
                     >
-                      Сброс
+                      Сохранить
                     </button>
-                  )}
+                    {customBackend && (
+                      <button
+                        type="button"
+                        className="filter-chip"
+                        onClick={handleResetBackend}
+                        style={{ padding: '0 10px', fontSize: '12px', cursor: 'pointer' }}
+                        title="Сбросить на демо-режим"
+                      >
+                        Сброс
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -821,6 +873,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                       cursor: 'pointer',
                       alignSelf: 'flex-start',
                       marginTop: '4px',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
                     }}
                   >
                     Сохранить ключи API

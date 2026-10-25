@@ -26,6 +26,7 @@ from backend.crud import (
     update_routine_progress,
     create_goal,
     add_subtask_to_goal,
+    toggle_goal,
     delete_goal,
     update_user,
     get_user_groceries,
@@ -888,6 +889,56 @@ async def cb_routine_delete(query: CallbackQuery):
         await query.message.delete()
     else:
         await query.answer("Не удалось удалить рутину.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("goal_toggle:"))
+async def cb_goal_toggle(query: CallbackQuery):
+    goal_id = int(query.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        goal = await toggle_goal(session, goal_id=goal_id, user_id=query.from_user.id)
+
+    if not goal:
+        await query.answer("Цель не найдена.", show_alert=True)
+        return
+
+    status = "завершена! 🎉" if goal.is_completed else "возобновлена 🎯"
+    await query.answer(f"Цель {status}")
+    try:
+        bar = render_progress_bar(goal.progress_percentage)
+        deadline_text = f" • Дедлайн: {goal.target_date.strftime('%d.%m.%Y')}" if goal.target_date else ""
+        text = (
+            f"🎯 <b>{goal.title}</b>\n"
+            f"Прогресс: <code>[{bar}]</code> <b>{goal.progress_percentage}%</b> "
+            f"({goal.completed_subtasks}/{goal.total_subtasks} шагов){deadline_text}\n"
+        )
+        if goal.description:
+            text += f"<i>{goal.description}</i>\n"
+
+        if goal.subtasks:
+            text += "\n<b>Шаги цели:</b>\n"
+            for st in goal.subtasks:
+                icon = "✅" if st.is_completed else "▫️"
+                text += f"{icon} {st.title}\n"
+
+        if goal.is_completed:
+            text += "\n✅ <i>Цель выполнена и будет автоматически удалена через несколько дней.</i>\n"
+
+        await query.message.edit_text(text, reply_markup=get_goal_actions_kb(goal.id, goal.is_completed))
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("goal_delete:"))
+async def cb_goal_delete(query: CallbackQuery):
+    goal_id = int(query.data.split(":")[1])
+    async with AsyncSessionLocal() as session:
+        success = await delete_goal(session, goal_id=goal_id, user_id=query.from_user.id)
+
+    if success:
+        await query.answer("Цель удалена.")
+        await query.message.delete()
+    else:
+        await query.answer("Не удалось удалить цель.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("toggle_setting:"))

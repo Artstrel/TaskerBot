@@ -863,6 +863,33 @@ export const addGoalSubtask = async (goalId, title, scheduledDate = null) => {
   return { success: true };
 };
 
+export const toggleGoal = async (goalId, isCompleted = null) => {
+  hapticFeedback('medium');
+  try {
+    let url = `${API_BASE}/goals/${goalId}/toggle?telegram_id=${currentUser.id}`;
+    if (isCompleted !== null && isCompleted !== undefined) {
+      url += `&completed=${isCompleted}`;
+    }
+    const res = await fetch(url, { method: 'PATCH' });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+
+  const db = getLocalDb();
+  const goal = (db.goals || []).find((g) => g.id === goalId);
+  if (goal) {
+    goal.is_completed = isCompleted !== null ? isCompleted : !goal.is_completed;
+    goal.completed_at = goal.is_completed ? new Date().toISOString() : null;
+    if (goal.is_completed && goal.subtasks) {
+      goal.subtasks.forEach((st) => {
+        st.is_completed = true;
+      });
+    }
+    saveLocalDb(db);
+    return goal;
+  }
+  return { success: true };
+};
+
 export const deleteGoal = async (goalId) => {
   hapticFeedback('warning');
   try {

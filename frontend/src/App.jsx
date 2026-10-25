@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Calendar,
   Target,
@@ -169,11 +169,24 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isQuickAddOpen, activeTab]);
 
-  const loadData = async (forceFullLoading = false) => {
+  const lastFetchedRef = useRef(0);
+  const isFetchingRef = useRef(false);
+
+  const loadData = useCallback(async (forceFullLoading = false, silent = false) => {
+    const now = Date.now();
+    if (isFetchingRef.current || (!forceFullLoading && now - lastFetchedRef.current < 2500)) {
+      return;
+    }
+
+    isFetchingRef.current = true;
+    lastFetchedRef.current = now;
+
     if (forceFullLoading || !dashboardData) {
       setIsLoading(true);
     }
-    setIsSyncing(true);
+    if (!silent) {
+      setIsSyncing(true);
+    }
 
     const timer = setTimeout(() => {
       setWarmupTimerElapsed(true);
@@ -208,8 +221,55 @@ export default function App() {
       setWarmupTimerElapsed(false);
       setIsLoading(false);
       setIsSyncing(false);
+      isFetchingRef.current = false;
     }
-  };
+  }, [dashboardData]);
+
+  // Smart auto-refresh: visibility change, window focus, Telegram WebApp viewport change, and periodic polling
+  useEffect(() => {
+    const handleSyncOnResume = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const timeSince = Date.now() - lastFetchedRef.current;
+        if (timeSince > 4000) {
+          loadData(false, true);
+        }
+      }
+    };
+
+    const handleWindowFocus = () => {
+      const timeSince = Date.now() - lastFetchedRef.current;
+      if (timeSince > 4000) {
+        loadData(false, true);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleSyncOnResume);
+    window.addEventListener('focus', handleWindowFocus);
+
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      try {
+        window.Telegram.WebApp.onEvent('viewportChanged', handleSyncOnResume);
+      } catch (_) {}
+    }
+
+    // Background polling every 18 seconds while document is visible
+    const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadData(false, true);
+      }
+    }, 18000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleSyncOnResume);
+      window.removeEventListener('focus', handleWindowFocus);
+      clearInterval(pollInterval);
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        try {
+          window.Telegram.WebApp.offEvent('viewportChanged', handleSyncOnResume);
+        } catch (_) {}
+      }
+    };
+  }, [loadData]);
 
   const handleTaskCelebration = () => {
     // Trigger mascot happy reaction
@@ -227,6 +287,10 @@ export default function App() {
   const handleTabSwitch = (tab) => {
     hapticFeedback('selection');
     setActiveTab(tab);
+    // Silent auto-refresh on tab switch if last fetch was > 4 seconds ago
+    if (Date.now() - lastFetchedRef.current > 4000) {
+      loadData(false, true);
+    }
   };
 
   const overdueCount = dashboardData?.overdue_tasks?.length || 0;

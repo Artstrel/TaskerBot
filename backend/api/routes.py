@@ -45,6 +45,7 @@ from backend.crud import (
     delete_one_time_task,
     create_goal,
     get_user_goals,
+    toggle_goal,
     add_subtask_to_goal,
     delete_goal,
     get_user_groceries,
@@ -391,6 +392,19 @@ async def add_goal_subtask(
     if not subtask:
         raise HTTPException(status_code=404, detail="Goal not found")
     return subtask
+
+
+@router.patch("/goals/{goal_id}/toggle", response_model=GoalWithProgress)
+async def toggle_goal_endpoint(
+    goal_id: int,
+    completed: Optional[bool] = Query(None),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    goal = await toggle_goal(session, goal_id, user.telegram_id, completed)
+    if not goal:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return goal
 
 
 @router.delete("/goals/{goal_id}")

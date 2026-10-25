@@ -371,7 +371,7 @@ body.is-tg-fullscreen .header-actions {
   font-weight: 700;
   letter-spacing: -0.025em;
   color: var(--text-primary);
-  margin: 16px 16px 12px 16px;
+  margin: 14px 20px 4px 20px;
   line-height: 1.2;
 }
 
@@ -619,7 +619,7 @@ body.is-tg-fullscreen .header-actions {
 
 /* Minimalist Cards and Sections (Apple HIG Grouped Lists on Mobile) */
 .linear-section {
-  margin: 22px 16px 12px 16px;
+  margin: 0 16px 12px 16px;
 }
 
 .linear-section-header {
@@ -648,8 +648,8 @@ body.is-tg-fullscreen .header-actions {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 8px;
-  margin-top: 16px;
+  margin-bottom: 6px;
+  margin-top: 12px;
   padding-left: 2px;
 }
 
@@ -658,7 +658,7 @@ body.is-tg-fullscreen .header-actions {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
   overflow: hidden;
-  margin: 0 0 16px 0 !important;
+  margin: 0 0 12px 0 !important;
   transition: border-color 0.15s ease;
 }
 
@@ -892,7 +892,7 @@ body.is-tg-fullscreen .header-actions {
 
 /* Minimalist Day Header / Status Pill */
 .day-status-card {
-  margin: 14px 16px 8px 16px;
+  margin: 8px 16px 12px 16px;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -2100,7 +2100,7 @@ body.is-tg-fullscreen .header-actions {
 
 .today-quick-add-wrap {
   order: 2;
-  margin: 0 16px 14px 16px;
+  margin: 0 16px 12px 16px;
 }
 
 .today-tab-container .empty-state-mascot-card {
@@ -2142,8 +2142,14 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   width: 100%;
+}
+
+.mobile-subheader-text {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  padding-left: 4px;
 }
 
 /* SettingsTab Layout */

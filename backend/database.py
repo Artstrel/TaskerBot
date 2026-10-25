@@ -54,6 +54,7 @@ async def init_db() -> None:
             ("users", "morning_digest_time", "VARCHAR(5) DEFAULT '09:00'"),
             ("users", "evening_digest_enabled", "BOOLEAN DEFAULT TRUE"),
             ("users", "praise_notifications_enabled", "BOOLEAN DEFAULT TRUE"),
+            ("users", "goal_cleanup_days", "INTEGER DEFAULT 3"),
             ("routine_tasks", "target_value", "FLOAT"),
             ("routine_tasks", "step", "FLOAT DEFAULT 1.0"),
             ("routine_tasks", "unit", "VARCHAR(32)"),

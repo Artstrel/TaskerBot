@@ -110,6 +110,7 @@ class UserBase(BaseModel):
     morning_digest_time: str = "09:00"
     evening_digest_enabled: bool = True
     ai_provider: str = "groq"
+    goal_cleanup_days: int = 3
 
 
 class UserRead(UserBase):
@@ -130,6 +131,7 @@ class UserUpdate(BaseModel):
     morning_digest_time: Optional[str] = None
     evening_digest_enabled: Optional[bool] = None
     ai_provider: Optional[str] = None
+    goal_cleanup_days: Optional[int] = None
 
 
 # --- Routine Schemas ---

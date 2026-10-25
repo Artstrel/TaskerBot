@@ -587,6 +587,25 @@ async def get_day_tasks(
     return overdue, today
 
 
+async def _sync_goal_completion_from_subtasks(session: AsyncSession, goal_id: int):
+    goal_stmt = (
+        select(Goal)
+        .options(selectinload(Goal.subtasks))
+        .where(Goal.id == goal_id)
+    )
+    goal_res = await session.execute(goal_stmt)
+    goal = goal_res.scalar_one_or_none()
+    if not goal or not goal.subtasks:
+        return
+    all_done = all(st.is_completed for st in goal.subtasks)
+    if all_done and not goal.is_completed:
+        goal.is_completed = True
+        goal.completed_at = datetime.utcnow()
+    elif not all_done and goal.is_completed:
+        goal.is_completed = False
+        goal.completed_at = None
+
+
 async def toggle_one_time_task(
     session: AsyncSession, task_id: int, user_id: int, completed: Optional[bool] = None
 ) -> Optional[OneTimeTaskRead]:
@@ -613,6 +632,9 @@ async def toggle_one_time_task(
             task.current_value = task.target_value
         elif not task.is_completed and (task.current_value or 0.0) >= task.target_value:
             task.current_value = 0.0
+
+    if task.goal_id:
+        await _sync_goal_completion_from_subtasks(session, task.goal_id)
 
     await session.commit()
     await session.refresh(task)
@@ -656,6 +678,9 @@ async def update_task_progress(
         elif new_val < task.target_value and task.is_completed:
             task.is_completed = False
             task.completed_at = None
+
+    if task.goal_id:
+        await _sync_goal_completion_from_subtasks(session, task.goal_id)
 
     await session.commit()
     await session.refresh(task)
@@ -836,6 +861,10 @@ async def add_subtask_to_goal(
         user_now = get_user_now("Europe/Moscow")
         scheduled_date = user_now.date()
 
+    if goal.is_completed:
+        goal.is_completed = False
+        goal.completed_at = None
+
     task = OneTimeTask(
         user_id=user_id,
         goal_id=goal_id,
@@ -849,7 +878,61 @@ async def add_subtask_to_goal(
     return _task_to_read(task, goal.title)
 
 
+async def toggle_goal(
+    session: AsyncSession, goal_id: int, user_id: int, completed: Optional[bool] = None
+) -> Optional[GoalWithProgress]:
+    stmt = (
+        select(Goal)
+        .options(selectinload(Goal.subtasks))
+        .where(and_(Goal.id == goal_id, Goal.user_id == user_id))
+    )
+    res = await session.execute(stmt)
+    goal = res.scalar_one_or_none()
+    if not goal:
+        return None
+
+    if completed is None:
+        goal.is_completed = not goal.is_completed
+    else:
+        goal.is_completed = completed
+
+    goal.completed_at = datetime.utcnow() if goal.is_completed else None
+
+    # When marking goal as completed, mark all its subtasks completed as well
+    if goal.is_completed and goal.subtasks:
+        now_dt = datetime.utcnow()
+        for st in goal.subtasks:
+            if not st.is_completed:
+                st.is_completed = True
+                st.completed_at = now_dt
+
+    await session.commit()
+    await session.refresh(goal)
+
+    completed_count = sum(1 for st in goal.subtasks if st.is_completed)
+    total_count = len(goal.subtasks)
+    pct = int((completed_count / total_count * 100)) if total_count > 0 else (100 if goal.is_completed else 0)
+
+    subtasks_dto = [_task_to_read(st, goal.title) for st in goal.subtasks]
+    return GoalWithProgress(
+        id=goal.id,
+        title=goal.title,
+        description=goal.description,
+        target_date=goal.target_date,
+        is_completed=goal.is_completed,
+        completed_at=goal.completed_at,
+        total_subtasks=total_count,
+        completed_subtasks=completed_count,
+        progress_percentage=pct,
+        subtasks=subtasks_dto,
+    )
+
+
 async def delete_goal(session: AsyncSession, goal_id: int, user_id: int) -> bool:
+    # First delete subtasks of this goal
+    await session.execute(
+        delete(OneTimeTask).where(and_(OneTimeTask.goal_id == goal_id, OneTimeTask.user_id == user_id))
+    )
     stmt = delete(Goal).where(and_(Goal.id == goal_id, Goal.user_id == user_id))
     res = await session.execute(stmt)
     await session.commit()
