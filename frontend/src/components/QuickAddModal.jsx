@@ -249,7 +249,7 @@ export default function QuickAddModal({
     const clean = title.replace(/[^\p{L}\d]/gu, '').trim();
     if (clean.length < 2) return false;
     if (/^[\s\.\,\!\?\-—\:\;]+$/.test(title)) return false;
-    if (/не удалось расшифровать|голосовая заметка \(не удалось/i.test(title)) return false;
+    if (/не удалось расшифровать|голосовая заметка \(не удалось|продолжение следует|субтитр|спасибо за просмотр|подписывайтесь|до новых встреч|всем пока/i.test(title)) return false;
     return true;
   };
 
@@ -294,7 +294,7 @@ export default function QuickAddModal({
     }
 
     hapticFeedback('warning');
-    setErrorMsg('🎙 Речь не распознана (возможно, слишком шумно). Попробуйте сказать чуть ближе к микрофону или напишите задачу текстом.');
+    setErrorMsg('🎙 Слишком много фонового шума. Попробуйте надиктовать ближе к микрофону или введите текстом.');
     setIsProcessing(false);
   };
 

@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 import httpx
 from backend.config import settings
 from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AIProvidersResponse, capitalize_first
-from backend.whisper_service import whisper_service
+from backend.whisper_service import whisper_service, detect_hallucination_or_noise
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
     for t in raw_tasks:
         if isinstance(t, str):
             raw_title = t.strip()
-            if not raw_title:
+            if not raw_title or detect_hallucination_or_noise(raw_title):
                 continue
             if is_grocery_text(raw_title):
                 normalized_tasks.append(
@@ -139,7 +139,9 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                 title = capitalize_first(raw_title)
                 normalized_tasks.append(ExtractedTask(category="one_time", title=title))
         elif isinstance(t, dict):
-            raw_title = str(t.get("title") or t.get("name") or "Новая задача").strip()
+            raw_title = str(t.get("title") or t.get("name") or "").strip()
+            if not raw_title or detect_hallucination_or_noise(raw_title):
+                continue
             cat = t.get("category", "one_time")
             if cat not in ["routine", "one_time", "goal", "subtask", "grocery"]:
                 cat = "one_time"
@@ -245,6 +247,9 @@ def _parse_json_tasks(raw: str) -> Optional[ExtractedTaskList]:
 def _fallback_parse(
     text: str, current_date: date, existing_goals: Optional[List[str]] = None
 ) -> ExtractedTaskList:
+    if detect_hallucination_or_noise(text):
+        return ExtractedTaskList(tasks=[])
+
     # Protect phrases like "по вторникам и четвергам" from splitting by " и "
     protected_text = re.sub(
         r"(понедельник\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*)\s+и\s+(понедельник\w*|вторник\w*|сред\w*|четверг\w*|пятниц\w*|суббот\w*|воскресень\w*)",
@@ -257,6 +262,8 @@ def _fallback_parse(
     current_goal: Optional[str] = None
 
     for line in lines:
+        if detect_hallucination_or_noise(line):
+            continue
         lower = line.lower()
 
         # Check numeric quantity patterns
@@ -811,18 +818,21 @@ class AIService:
         except Exception as wce:
             logger.warning(f"Local whisper.cpp transcription error: {wce}")
 
-        # 2. Groq Whisper (Cloud fallback ~300ms transcription)
+        # 2. Groq Whisper (Cloud fallback ~300ms transcription with FFmpeg noise reduction & prompt)
         groq_client = self._get_groq_client()
         if groq_client:
             transcription = None
+            clean_audio_bytes, clean_fn = await whisper_service.preprocess_audio_ffmpeg(audio_bytes, filename=fn)
+            prompt_anchor = "Задачи, список дел, покупки, рутины, напоминания на день."
             for whisper_model in ["whisper-large-v3-turbo", "whisper-large-v3"]:
                 try:
                     transcription = await groq_client.audio.transcriptions.create(
-                        file=(fn, audio_bytes),
+                        file=(clean_fn, clean_audio_bytes),
                         model=whisper_model,
                         response_format="text",
                         temperature=0.0,
                         language="ru",
+                        prompt=prompt_anchor,
                     )
                     if transcription:
                         break
@@ -831,21 +841,28 @@ class AIService:
 
             if transcription and str(transcription).strip():
                 raw_text = str(transcription).strip()
-                # Check that transcription contains actual words/numbers, not just noise, dots or punctuation
-                clean_speech = re.sub(r"[^\wа-яА-ЯёЁ\d]+", "", raw_text)
-                if len(clean_speech) >= 2:
-                    logger.info(f"Audio transcribed successfully via Whisper: {raw_text[:100]}")
-                    # Parse through Auto-Fast cascade (Groq -> OpenRouter -> Gemini)
-                    res = await self.parse_text_tasks(
-                        raw_text, current_date, provider=chosen, existing_goals=existing_goals
-                    )
-                    if res and res.tasks:
-                        return res
-                    return _fallback_parse(raw_text, current_date, existing_goals)
+                if detect_hallucination_or_noise(raw_text):
+                    logger.info(f"Groq Whisper transcription discarded as hallucination or noise: {raw_text!r}")
                 else:
-                    logger.info(f"Whisper transcription discarded as noise or punctuation: {raw_text!r}")
+                    clean_speech = re.sub(r"[^\wа-яА-ЯёЁ\d]+", "", raw_text)
+                    if len(clean_speech) >= 2:
+                        logger.info(f"Audio transcribed successfully via Groq Whisper: {raw_text[:100]}")
+                        # Parse through Auto-Fast cascade (Groq -> OpenRouter -> Gemini)
+                        res = await self.parse_text_tasks(
+                            raw_text, current_date, provider=chosen, existing_goals=existing_goals
+                        )
+                        if res and res.tasks:
+                            valid_tasks = [t for t in res.tasks if not detect_hallucination_or_noise(t.title)]
+                            if valid_tasks:
+                                return ExtractedTaskList(tasks=valid_tasks)
+                        fallback_res = _fallback_parse(raw_text, current_date, existing_goals)
+                        valid_fallback = [t for t in fallback_res.tasks if not detect_hallucination_or_noise(t.title)]
+                        if valid_fallback:
+                            return ExtractedTaskList(tasks=valid_fallback)
+                    else:
+                        logger.info(f"Whisper transcription discarded as noise or punctuation: {raw_text!r}")
 
-        # 2. Fallback to Gemini multimodal audio if Groq client not available or returned no speech
+        # 3. Fallback to Gemini multimodal audio if Groq client not available or returned hallucination
         if self._get_gemini_client():
             res = await self._parse_audio_gemini(
                 audio_bytes, current_date, mime_type, existing_goals=existing_goals
