@@ -10,6 +10,7 @@ import {
   Mic,
   RotateCw,
   RotateCcw,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   createGoal,
@@ -800,20 +801,11 @@ export default function GoalsTab({
 
                         {(!goal.subtasks || goal.subtasks.length === 0) && (
                           <div
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '5px',
-                              padding: '3px 8px',
-                              borderRadius: '6px',
-                              background: 'rgba(245, 158, 11, 0.12)',
-                              color: 'var(--accent-warning, #f59e0b)',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              marginTop: '8px',
-                            }}
+                            className="ui-monochrome-badge-warning"
+                            style={{ marginTop: '8px' }}
                           >
-                            <span>⚠️ 0 шагов — цель не отслеживается</span>
+                            <AlertTriangle size={12} strokeWidth={2.5} />
+                            <span>0 шагов — цель не отслеживается</span>
                           </div>
                         )}
                       </div>
@@ -866,19 +858,9 @@ export default function GoalsTab({
                               })}
                             </div>
                           ) : (
-                            <div
-                              style={{
-                                padding: '10px 12px',
-                                borderRadius: '8px',
-                                background: 'rgba(245, 158, 11, 0.08)',
-                                border: '1px dashed rgba(245, 158, 11, 0.3)',
-                                color: 'var(--accent-warning, #f59e0b)',
-                                fontSize: '12px',
-                                lineHeight: 1.4,
-                                margin: '4px 0 10px 0',
-                              }}
-                            >
-                              ⚠️ В этой цели пока нет шагов. Добавьте первый шаг ниже, чтобы цель начала отслеживаться!
+                            <div className="ui-monochrome-box-warning" style={{ margin: '4px 0 10px 0' }}>
+                              <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                              <span>В этой цели пока нет шагов. Добавьте первый шаг ниже, чтобы цель начала отслеживаться!</span>
                             </div>
                           )}
 

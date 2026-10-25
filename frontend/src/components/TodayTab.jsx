@@ -969,7 +969,7 @@ export default function TodayTab({
             }}
             title={`Уменьшить на ${step}`}
           >
-            <Minus size={13} strokeWidth={2.5} />
+            <Minus size={14} strokeWidth={2.5} />
           </button>
 
           {isEditing ? (
@@ -992,15 +992,14 @@ export default function TodayTab({
               />
               <button
                 type="button"
-                className="item-mini-btn btn-success"
-                style={{ width: '22px', height: '22px', padding: 0 }}
+                className="numeric-direct-btn"
                 onClick={() =>
                   type === 'routine'
                     ? handleRoutineDirectValue(item.id, directNumericVal)
                     : handleTaskDirectValue(item.id, directNumericVal)
                 }
               >
-                <Check size={11} />
+                <Check size={13} strokeWidth={2.5} />
               </button>
             </div>
           ) : (
@@ -1026,7 +1025,7 @@ export default function TodayTab({
             }}
             title={`Добавить ${step}`}
           >
-            <Plus size={13} strokeWidth={2.5} />
+            <Plus size={14} strokeWidth={2.5} />
           </button>
         </div>
 

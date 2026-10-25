@@ -298,7 +298,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
         style={{
           background: 'var(--bg-surface)',
           border: 'none',
-          borderRadius: 'var(--radius-md)',
+          borderRadius: 'var(--radius-lg)',
           padding: '12px 14px',
           display: 'flex',
           alignItems: 'center',
@@ -421,7 +421,6 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                                     justifyContent: 'center',
                                     padding: '6px 2px',
                                     fontSize: '12px',
-                                    borderRadius: 'var(--radius-sm)',
                                   }}
                                 >
                                   {time}
@@ -446,12 +445,12 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '8px',
-                      padding: '9px 14px',
+                      padding: '10px 16px',
                       fontSize: '13px',
                       fontWeight: '500',
-                      borderRadius: 'var(--radius-sm)',
-                      backgroundColor: 'var(--bg-tertiary)',
-                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-full)',
+                      backgroundColor: 'var(--bg-elevated)',
+                      border: '1px solid var(--border-subtle)',
                       color: 'var(--text-primary)',
                       cursor: isSendingTest ? 'default' : 'pointer',
                       transition: 'all 0.15s ease',
@@ -496,7 +495,6 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                         style={{
                           justifyContent: 'center',
                           padding: '8px 4px',
-                          borderRadius: 'var(--radius-sm)',
                         }}
                       >
                         {time}
@@ -534,7 +532,6 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                           justifyContent: 'center',
                           padding: '8px 4px',
                           fontSize: '12px',
-                          borderRadius: 'var(--radius-sm)',
                         }}
                       >
                         {item.label}
@@ -654,18 +651,10 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                     placeholder="https://taskerbot-api.onrender.com"
                     value={backendInput}
                     onChange={(e) => setBackendInput(e.target.value)}
+                    className="settings-input"
                     style={{
                       flex: '1 1 180px',
                       minWidth: 0,
-                      fontSize: '12px',
-                      padding: '8px 10px',
-                      background: 'var(--bg-surface)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      color: 'var(--text-primary)',
-                      outline: 'none',
-                      fontFamily: 'inherit',
-                      boxSizing: 'border-box',
                     }}
                   />
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
@@ -731,7 +720,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                         onClick={() => handleProviderSelect(prov.id)}
                         style={{
                           padding: '11px 13px',
-                          borderRadius: 'var(--radius-sm)',
+                          borderRadius: 'var(--radius-md)',
                           background: isSelected ? 'var(--bg-elevated)' : 'transparent',
                           border: 'none',
                           cursor: 'pointer',
@@ -752,7 +741,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                                 fontSize: '10px',
                                 fontWeight: 600,
                                 padding: '1px 6px',
-                                borderRadius: '4px',
+                                borderRadius: 'var(--radius-full)',
                                 background: 'rgba(255, 255, 255, 0.06)',
                                 color: 'var(--text-secondary)',
                               }}
@@ -800,18 +789,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                       placeholder="Вставьте ваш OpenRouter API Key (sk-or-v1-...)"
                       value={openRouterKeyInput}
                       onChange={(e) => setOpenRouterKeyInput(e.target.value)}
-                      style={{
-                        width: '100%',
-                        fontSize: '12px',
-                        padding: '8px 10px',
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-sm)',
-                        color: 'var(--text-primary)',
-                        outline: 'none',
-                        fontFamily: 'monospace',
-                        boxSizing: 'border-box',
-                      }}
+                      className="settings-input"
+                      style={{ fontFamily: 'monospace' }}
                     />
                   </div>
 
@@ -824,18 +803,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                       placeholder="Вставьте ваш Google Gemini API Key"
                       value={geminiKeyInput}
                       onChange={(e) => setGeminiKeyInput(e.target.value)}
-                      style={{
-                        width: '100%',
-                        fontSize: '12px',
-                        padding: '8px 10px',
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-sm)',
-                        color: 'var(--text-primary)',
-                        outline: 'none',
-                        fontFamily: 'monospace',
-                        boxSizing: 'border-box',
-                      }}
+                      className="settings-input"
+                      style={{ fontFamily: 'monospace' }}
                     />
                   </div>
 
@@ -848,18 +817,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                       placeholder="Вставьте ваш Groq API Key (gsk_...)"
                       value={groqKeyInput}
                       onChange={(e) => setGroqKeyInput(e.target.value)}
-                      style={{
-                        width: '100%',
-                        fontSize: '12px',
-                        padding: '8px 10px',
-                        background: 'var(--bg-surface)',
-                        border: '1px solid var(--border-subtle)',
-                        borderRadius: 'var(--radius-sm)',
-                        color: 'var(--text-primary)',
-                        outline: 'none',
-                        fontFamily: 'monospace',
-                        boxSizing: 'border-box',
-                      }}
+                      className="settings-input"
+                      style={{ fontFamily: 'monospace' }}
                     />
                   </div>
 

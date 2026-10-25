@@ -371,7 +371,7 @@ export default function GroceriesTab({
             onClick={() => handleProgress(item.id, -step)}
             title={`Уменьшить на ${step}`}
           >
-            <Minus size={13} strokeWidth={2.5} />
+            <Minus size={14} strokeWidth={2.5} />
           </button>
 
           {isEditing ? (
@@ -393,12 +393,12 @@ export default function GroceriesTab({
                 className="numeric-direct-btn btn-save"
                 onClick={() => handleDirectValue(item.id, directNumericVal)}
               >
-                <Check size={11} strokeWidth={3} />
+                <Check size={13} strokeWidth={2.5} />
               </button>
             </div>
           ) : (
             <span
-              className="numeric-value-badge"
+              className="numeric-val-badge"
               onClick={() => {
                 hapticFeedback('selection');
                 setEditingNumericId(item.id);
@@ -417,7 +417,7 @@ export default function GroceriesTab({
             onClick={() => handleProgress(item.id, step)}
             title={`Увеличить на ${step}`}
           >
-            <Plus size={13} strokeWidth={2.5} />
+            <Plus size={14} strokeWidth={2.5} />
           </button>
         </div>
       </div>
