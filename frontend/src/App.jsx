@@ -29,6 +29,7 @@ import GoalsTab from './components/GoalsTab';
 import GroceriesTab from './components/GroceriesTab';
 import SettingsTab from './components/SettingsTab';
 import QuickAddModal from './components/QuickAddModal';
+import { initTheme } from './theme';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -154,6 +155,9 @@ export default function App() {
         tg.onEvent('viewportChanged', updateTelegramMetrics);
       } catch (_) {}
     }
+
+    // Initialize Theme
+    initTheme();
 
     // Auto-sync timezone
     syncUserTimezone();

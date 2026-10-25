@@ -33,6 +33,10 @@ class User(Base):
     evening_digest_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     ai_provider: Mapped[str] = mapped_column(String(32), default="groq")
     goal_cleanup_days: Mapped[int] = mapped_column(Integer, default=3)
+    theme_mode: Mapped[str] = mapped_column(String(16), default="auto")
+    theme_schedule_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    theme_schedule_start: Mapped[str] = mapped_column(String(5), default="07:00")
+    theme_schedule_end: Mapped[str] = mapped_column(String(5), default="20:00")
     last_active_date: Mapped[Optional[dt_date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
 

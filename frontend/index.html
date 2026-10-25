@@ -8,6 +8,37 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      (function() {
+        try {
+          var mode = localStorage.getItem('tasker_theme_mode') || 'auto';
+          var theme = 'dark';
+          if (mode === 'light') {
+            theme = 'light';
+          } else if (mode === 'dark') {
+            theme = 'dark';
+          } else {
+            var sched = localStorage.getItem('tasker_theme_schedule_enabled') === 'true';
+            if (sched) {
+              var start = localStorage.getItem('tasker_theme_schedule_start') || '07:00';
+              var end = localStorage.getItem('tasker_theme_schedule_end') || '20:00';
+              var d = new Date();
+              var h = String(d.getHours()).padStart(2, '0');
+              var m = String(d.getMinutes()).padStart(2, '0');
+              var cur = h + ':' + m;
+              var isDay = start <= end ? (cur >= start && cur < end) : (cur >= start || cur < end);
+              theme = isDay ? 'light' : 'dark';
+            } else if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.colorScheme) {
+              theme = window.Telegram.WebApp.colorScheme === 'light' ? 'light' : 'dark';
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+              theme = 'light';
+            }
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

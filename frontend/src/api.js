@@ -486,6 +486,10 @@ const getLocalDb = () => {
       morning_digest_time: '09:00',
       evening_digest_enabled: true,
       ai_provider: 'groq',
+      theme_mode: 'auto',
+      theme_schedule_enabled: false,
+      theme_schedule_start: '07:00',
+      theme_schedule_end: '20:00',
     },
   };
 };

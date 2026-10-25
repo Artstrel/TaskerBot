@@ -111,6 +111,10 @@ class UserBase(BaseModel):
     evening_digest_enabled: bool = True
     ai_provider: str = "groq"
     goal_cleanup_days: int = 3
+    theme_mode: str = "auto"
+    theme_schedule_enabled: bool = False
+    theme_schedule_start: str = "07:00"
+    theme_schedule_end: str = "20:00"
 
 
 class UserRead(UserBase):
@@ -132,6 +136,10 @@ class UserUpdate(BaseModel):
     evening_digest_enabled: Optional[bool] = None
     ai_provider: Optional[str] = None
     goal_cleanup_days: Optional[int] = None
+    theme_mode: Optional[str] = None
+    theme_schedule_enabled: Optional[bool] = None
+    theme_schedule_start: Optional[str] = None
+    theme_schedule_end: Optional[str] = None
 
 
 # --- Routine Schemas ---

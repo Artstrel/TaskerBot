@@ -1,4 +1,33 @@
 :root {
+  /* Common geometry, radii & insets */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 26px;
+  --radius-full: 9999px;
+
+  /* Telegram Safe Areas & Adaptive Insets */
+  --safe-top: max(var(--tg-content-safe-area-inset-top, 0px),
+      var(--tg-safe-area-inset-top, 0px),
+      var(--tg-safe-top, 0px),
+      env(safe-area-inset-top, 0px));
+  --safe-bottom: max(var(--tg-content-safe-area-inset-bottom, 0px),
+      var(--tg-safe-area-inset-bottom, 0px),
+      var(--tg-safe-bottom, 0px),
+      env(safe-area-inset-bottom, 0px));
+  --safe-left: max(var(--tg-content-safe-area-inset-left, 0px),
+      var(--tg-safe-area-inset-left, 0px),
+      var(--tg-safe-left, 0px),
+      env(safe-area-inset-left, 0px));
+  --safe-right: max(var(--tg-content-safe-area-inset-right, 0px),
+      var(--tg-safe-area-inset-right, 0px),
+      var(--tg-safe-right, 0px),
+      env(safe-area-inset-right, 0px));
+
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+:root,
+[data-theme="dark"] {
   /* Linear Graphite Monochrome Dark Palette (No blue tint) */
   --bg-app: #0d0d0d;
   --bg-surface: #141414;
@@ -35,37 +64,91 @@
 
   --accent-streak: #ffffff;
 
-  /* Radii - Super-Rounded Pill/Capsule UI-Kit */
-  --radius-sm: 12px;
-  --radius-md: 18px;
-  --radius-lg: 26px;
-  --radius-full: 9999px;
-
   /* Shadows */
   --shadow-dock: 0 -4px 24px rgba(0, 0, 0, 0.55);
   --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.35);
   --shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.8);
 
-  /* Telegram Safe Areas & Adaptive Insets */
-  --safe-top: max(var(--tg-content-safe-area-inset-top, 0px),
-      var(--tg-safe-area-inset-top, 0px),
-      var(--tg-safe-top, 0px),
-      env(safe-area-inset-top, 0px));
-  --safe-bottom: max(var(--tg-content-safe-area-inset-bottom, 0px),
-      var(--tg-safe-area-inset-bottom, 0px),
-      var(--tg-safe-bottom, 0px),
-      env(safe-area-inset-bottom, 0px));
-  --safe-left: max(var(--tg-content-safe-area-inset-left, 0px),
-      var(--tg-safe-area-inset-left, 0px),
-      var(--tg-safe-left, 0px),
-      env(safe-area-inset-left, 0px));
-  --safe-right: max(var(--tg-content-safe-area-inset-right, 0px),
-      var(--tg-safe-area-inset-right, 0px),
-      var(--tg-safe-right, 0px),
-      env(safe-area-inset-right, 0px));
+  /* Component specific adaptations */
+  --dock-scrim-stop1: rgba(13, 13, 13, 0.96);
+  --dock-scrim-stop2: rgba(13, 13, 13, 0.72);
+  --dock-scrim-stop3: rgba(13, 13, 13, 0.25);
+  --dock-card-bg: rgba(22, 22, 22, 0.94);
+  --dock-item-active-bg: rgba(255, 255, 255, 0.08);
 
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --chip-active-bg: rgba(255, 255, 255, 0.18);
+  --chip-active-text: #ffffff;
+  --chip-active-border: rgba(255, 255, 255, 0.45);
+
+  --toggle-track-off: var(--bg-card);
+  --toggle-track-off-border: var(--border-subtle);
+  --toggle-knob-off: #ffffff;
+  --toggle-track-on: #ffffff;
+  --toggle-knob-on: #000000;
+
   color-scheme: dark;
+}
+
+[data-theme="light"] {
+  /* Linear / Apple Monochrome Light Palette */
+  --bg-app: #f4f4f6;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8f8fa;
+  --bg-input: #f0f0f3;
+  --bg-input-focus: #ffffff;
+  --bg-elevated: #ffffff;
+
+  /* Hairline and Subtle Monochrome Borders */
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.16);
+  --border-focus: rgba(0, 0, 0, 0.38);
+
+  /* Typography Colors */
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-tertiary: #71717a;
+  --text-muted: #a1a1aa;
+
+  /* Pure Monochrome Functional Accents */
+  --accent-primary: #09090b;
+  --accent-primary-hover: #27272a;
+  --accent-primary-dim: rgba(0, 0, 0, 0.06);
+
+  --accent-success: #09090b;
+  --accent-success-dim: rgba(0, 0, 0, 0.06);
+
+  --accent-warning: #71717a;
+  --accent-warning-dim: rgba(0, 0, 0, 0.05);
+
+  --accent-danger: #09090b;
+  --accent-danger-dim: rgba(0, 0, 0, 0.06);
+
+  --accent-streak: #09090b;
+
+  /* Shadows */
+  --shadow-dock: 0 -4px 24px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 2px 10px rgba(0, 0, 0, 0.05);
+  --shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.15);
+
+  /* Component specific adaptations */
+  --dock-scrim-stop1: rgba(244, 244, 246, 0.96);
+  --dock-scrim-stop2: rgba(244, 244, 246, 0.72);
+  --dock-scrim-stop3: rgba(244, 244, 246, 0.25);
+  --dock-card-bg: rgba(255, 255, 255, 0.92);
+  --dock-item-active-bg: rgba(0, 0, 0, 0.06);
+
+  --chip-active-bg: #09090b;
+  --chip-active-text: #ffffff;
+  --chip-active-border: #09090b;
+
+  --toggle-track-off: rgba(0, 0, 0, 0.10);
+  --toggle-track-off-border: rgba(0, 0, 0, 0.12);
+  --toggle-knob-off: #ffffff;
+  --toggle-track-on: #09090b;
+  --toggle-knob-on: #ffffff;
+
+  color-scheme: light;
 }
 
 body.is-tg-fullscreen.is-ios,
@@ -532,9 +615,9 @@ body.is-tg-fullscreen .header-actions {
   height: calc(110px + var(--safe-bottom));
   background: linear-gradient(to top,
       var(--bg-app) 0%,
-      rgba(13, 13, 13, 0.96) 35%,
-      rgba(13, 13, 13, 0.72) 65%,
-      rgba(13, 13, 13, 0.25) 88%,
+      var(--dock-scrim-stop1) 35%,
+      var(--dock-scrim-stop2) 65%,
+      var(--dock-scrim-stop3) 88%,
       transparent 100%);
   pointer-events: none;
   z-index: -1;
@@ -544,7 +627,7 @@ body.is-tg-fullscreen .header-actions {
   pointer-events: auto;
   max-width: 360px;
   width: 100%;
-  background: rgba(22, 22, 22, 0.94);
+  background: var(--dock-card-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--border-subtle);
@@ -580,12 +663,12 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .dock-nav-item.active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  background: var(--dock-item-active-bg);
 }
 
 .dock-nav-item.active svg {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .dock-badge-dot {
@@ -1308,9 +1391,9 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .filter-chip.active {
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.45);
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text);
+  border-color: var(--chip-active-border);
 }
 
 /* Universal Quick Add Inputs and Action Buttons (Today, Groceries, Goals) */
@@ -1425,8 +1508,8 @@ body.is-tg-fullscreen .header-actions {
   position: relative;
   width: 44px;
   height: 24px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--toggle-track-off);
+  border: 1px solid var(--toggle-track-off-border);
   border-radius: var(--radius-full);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -1435,8 +1518,8 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .linear-toggle.active {
-  background: #ffffff;
-  border-color: #ffffff;
+  background: var(--toggle-track-on);
+  border-color: var(--toggle-track-on);
 }
 
 .linear-toggle-knob {
@@ -1445,14 +1528,29 @@ body.is-tg-fullscreen .header-actions {
   left: 2px;
   width: 18px;
   height: 18px;
-  background: #ffffff;
+  background: var(--toggle-knob-off);
   border-radius: 50%;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease;
 }
 
 .linear-toggle.active .linear-toggle-knob {
   transform: translateX(20px);
-  background: #000000;
+  background: var(--toggle-knob-on);
+}
+
+/* Smooth Theme Transitions */
+body,
+.linear-card,
+.linear-section,
+.settings-group,
+.dock-card,
+.bottom-sheet-content,
+.quick-bar-input,
+.filter-chip,
+.settings-input,
+.header-profile-bubble {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
 }
 
 /* Animations */

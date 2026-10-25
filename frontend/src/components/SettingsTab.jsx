@@ -9,6 +9,11 @@ import {
   Cpu,
   ChevronDown,
   ChevronUp,
+  Sun,
+  Moon,
+  SunMoon,
+  Sunrise,
+  Sunset,
 } from 'lucide-react';
 import {
   fetchUserSettings,
@@ -26,6 +31,7 @@ import {
   sendTestNotification,
 } from '../api';
 import Mascot from './Mascot';
+import { applyTheme, getStoredThemeConfig } from '../theme';
 
 export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   const [settings, setSettings] = useState(null);
@@ -42,10 +48,25 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
     const saved = localStorage.getItem('settings_notifications_open');
     return saved !== null ? saved === 'true' : true;
   });
+  const [isAppearanceOpen, setIsAppearanceOpen] = useState(() => {
+    const saved = localStorage.getItem('settings_appearance_open');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [isAiOpen, setIsAiOpen] = useState(() => {
     const saved = localStorage.getItem('settings_ai_open');
     return saved !== null ? saved === 'true' : false;
   });
+
+  const toggleAppearance = () => {
+    hapticFeedback('selection');
+    setIsAppearanceOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('settings_appearance_open', String(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   const handleSendTestNotification = async () => {
     setIsSendingTest(true);
@@ -97,10 +118,66 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
     try {
       const data = await fetchUserSettings();
       setSettings(data);
+      if (data) {
+        applyTheme(
+          {
+            mode: data.theme_mode,
+            scheduleEnabled: data.theme_schedule_enabled,
+            scheduleStart: data.theme_schedule_start,
+            scheduleEnd: data.theme_schedule_end,
+          },
+          data.timezone
+        );
+      }
     } catch (e) {
       console.error('Failed to load settings:', e);
     }
   }, []);
+
+  const handleThemeModeChange = async (mode) => {
+    hapticFeedback('selection');
+    const newSettings = { ...settings, theme_mode: mode };
+    setSettings(newSettings);
+    applyTheme({ mode }, settings?.timezone);
+    triggerSaved();
+    try {
+      await updateUserSettings({ theme_mode: mode });
+    } catch (e) {}
+  };
+
+  const handleToggleThemeSchedule = async () => {
+    hapticFeedback('selection');
+    const nextVal = !settings?.theme_schedule_enabled;
+    const newSettings = { ...settings, theme_schedule_enabled: nextVal };
+    setSettings(newSettings);
+    applyTheme({ scheduleEnabled: nextVal }, settings?.timezone);
+    triggerSaved();
+    try {
+      await updateUserSettings({ theme_schedule_enabled: nextVal });
+    } catch (e) {}
+  };
+
+  const handleThemeScheduleStartChange = async (start) => {
+    hapticFeedback('selection');
+    const newSettings = { ...settings, theme_schedule_start: start };
+    setSettings(newSettings);
+    applyTheme({ scheduleStart: start }, settings?.timezone);
+    triggerSaved();
+    try {
+      await updateUserSettings({ theme_schedule_start: start });
+    } catch (e) {}
+  };
+
+  const handleThemeScheduleEndChange = async (end) => {
+    hapticFeedback('selection');
+    const newSettings = { ...settings, theme_schedule_end: end };
+    setSettings(newSettings);
+    applyTheme({ scheduleEnd: end }, settings?.timezone);
+    triggerSaved();
+    try {
+      await updateUserSettings({ theme_schedule_end: end });
+    } catch (e) {}
+  };
 
   useEffect(() => {
     loadSettings();
@@ -325,6 +402,163 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       </div>
 
       <div className="settings-desktop-grid">
+        {/* ========================================================
+            ACCORDION 0: Оформление и тема (Open by default)
+            ======================================================== */}
+        <section className="linear-section settings-accordion-section">
+          <div
+            className="settings-accordion-header"
+            onClick={toggleAppearance}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleAppearance();
+              }
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <SunMoon size={16} style={{ color: 'var(--text-primary)' }} />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Оформление и тема
+              </span>
+            </div>
+            {isAppearanceOpen ? (
+              <ChevronUp size={16} style={{ color: 'var(--text-tertiary)' }} />
+            ) : (
+              <ChevronDown size={16} style={{ color: 'var(--text-tertiary)' }} />
+            )}
+          </div>
+
+          {isAppearanceOpen && (
+            <div className="settings-accordion-content">
+              {/* SECTION: Theme selector */}
+              <div className="settings-section-title">
+                Тема интерфейса
+              </div>
+              <div className="settings-group" style={{ padding: '12px 14px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                  Выберите визуальную тему оформления или автоматическую синхронизацию.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {[
+                    { id: 'auto', label: 'Авто', icon: SunMoon },
+                    { id: 'light', label: 'Светлая', icon: Sun },
+                    { id: 'dark', label: 'Тёмная', icon: Moon },
+                  ].map((t) => {
+                    const isSelected = (settings?.theme_mode || 'auto') === t.id;
+                    const IconComp = t.icon;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`filter-chip ${isSelected ? 'active' : ''}`}
+                        onClick={() => handleThemeModeChange(t.id)}
+                        style={{
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          padding: '12px 6px',
+                          height: 'auto',
+                          borderRadius: 'var(--radius-md)',
+                          gap: '6px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <IconComp size={18} />
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{t.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION: Sunrise / Sunset schedule */}
+              <div className="settings-section-title">
+                Расписание дня и ночи
+              </div>
+              <div className="settings-group">
+                <div
+                  className="settings-row"
+                  onClick={handleToggleThemeSchedule}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div>
+                    <div className="settings-row-label">Автосмена по времени суток</div>
+                    <div className="settings-row-desc">
+                      Включает светлую тему днём и тёмную ночью по вашему часовому поясу
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`linear-toggle ${settings?.theme_schedule_enabled ? 'active' : ''}`}
+                    aria-label="Автосмена по времени суток"
+                  >
+                    <div className="linear-toggle-knob" />
+                  </button>
+                </div>
+
+                {settings?.theme_schedule_enabled && (
+                  <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                          <Sunrise size={14} style={{ color: 'var(--text-tertiary)' }} />
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                            Начало дня (светлая тема)
+                          </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                          {['06:00', '07:00', '08:00', '09:00'].map((time) => {
+                            const isSelected = (settings?.theme_schedule_start || '07:00') === time;
+                            return (
+                              <button
+                                key={time}
+                                type="button"
+                                className={`filter-chip ${isSelected ? 'active' : ''}`}
+                                onClick={() => handleThemeScheduleStartChange(time)}
+                                style={{ justifyContent: 'center', padding: '6px 4px', fontSize: '12px' }}
+                              >
+                                {time}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                          <Sunset size={14} style={{ color: 'var(--text-tertiary)' }} />
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                            Конец дня / закат (тёмная тема)
+                          </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                          {['19:00', '20:00', '21:00', '22:00'].map((time) => {
+                            const isSelected = (settings?.theme_schedule_end || '20:00') === time;
+                            return (
+                              <button
+                                key={time}
+                                type="button"
+                                className={`filter-chip ${isSelected ? 'active' : ''}`}
+                                onClick={() => handleThemeScheduleEndChange(time)}
+                                style={{ justifyContent: 'center', padding: '6px 4px', fontSize: '12px' }}
+                              >
+                                {time}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+
         {/* ========================================================
             ACCORDION 1: Уведомления и расписание (Open by default)
             ======================================================== */}
