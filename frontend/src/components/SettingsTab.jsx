@@ -347,25 +347,11 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                 Уведомления и расписание
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span
-                style={{
-                  fontSize: '11px',
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)',
-                  background: 'rgba(255, 255, 255, 0.06)',
-                  color: 'var(--text-secondary)',
-                  fontWeight: 500,
-                }}
-              >
-                {settings.timezone || 'Europe/Moscow'}
-              </span>
-              {isNotificationsOpen ? (
-                <ChevronUp size={16} style={{ color: 'var(--text-tertiary)' }} />
-              ) : (
-                <ChevronDown size={16} style={{ color: 'var(--text-tertiary)' }} />
-              )}
-            </div>
+            {isNotificationsOpen ? (
+              <ChevronUp size={16} style={{ color: 'var(--text-tertiary)' }} />
+            ) : (
+              <ChevronDown size={16} style={{ color: 'var(--text-tertiary)' }} />
+            )}
           </div>
 
           {isNotificationsOpen && (
@@ -402,46 +388,47 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                     </div>
                   );
                 })}
+              </div>
 
-                <div style={{ padding: '12px 16px 14px' }}>
-                  <button
-                    type="button"
-                    onClick={handleSendTestNotification}
-                    disabled={isSendingTest}
+              {/* Standalone Action: Send test notification */}
+              <div style={{ margin: '10px 0 16px 0' }}>
+                <button
+                  type="button"
+                  onClick={handleSendTestNotification}
+                  disabled={isSendingTest}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '11px 16px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    borderRadius: 'var(--radius-full)',
+                    backgroundColor: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-primary)',
+                    cursor: isSendingTest ? 'default' : 'pointer',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <Bell size={14} style={{ color: 'var(--accent-primary)' }} />
+                  {isSendingTest ? 'Отправка...' : 'Отправить тестовое уведомление в Telegram'}
+                </button>
+                {testFeedback && (
+                  <div
                     style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      padding: '10px 16px',
-                      fontSize: '13px',
+                      fontSize: '12px',
+                      color: testFeedback.error ? 'var(--color-danger, #ef4444)' : 'var(--color-success, #22c55e)',
+                      textAlign: 'center',
+                      marginTop: '8px',
                       fontWeight: '500',
-                      borderRadius: 'var(--radius-full)',
-                      backgroundColor: 'var(--bg-elevated)',
-                      border: '1px solid var(--border-subtle)',
-                      color: 'var(--text-primary)',
-                      cursor: isSendingTest ? 'default' : 'pointer',
-                      transition: 'all 0.15s ease',
                     }}
                   >
-                    <Bell size={14} style={{ color: 'var(--accent-primary)' }} />
-                    {isSendingTest ? 'Отправка...' : 'Отправить тестовое уведомление в Telegram'}
-                  </button>
-                  {testFeedback && (
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color: testFeedback.error ? 'var(--color-danger, #ef4444)' : 'var(--color-success, #22c55e)',
-                        textAlign: 'center',
-                        marginTop: '8px',
-                        fontWeight: '500',
-                      }}
-                    >
-                      {testFeedback.text}
-                    </div>
-                  )}
-                </div>
+                    {testFeedback.text}
+                  </div>
+                )}
               </div>
 
               {/* SECTION: Morning Digest */}
@@ -590,25 +577,11 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                 ИИ и API подключение
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span
-                style={{
-                  fontSize: '11px',
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)',
-                  background: customBackend ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.06)',
-                  color: customBackend ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  fontWeight: 500,
-                }}
-              >
-                {customBackend ? 'Live API' : 'Демо'}
-              </span>
-              {isAiOpen ? (
-                <ChevronUp size={16} style={{ color: 'var(--text-tertiary)' }} />
-              ) : (
-                <ChevronDown size={16} style={{ color: 'var(--text-tertiary)' }} />
-              )}
-            </div>
+            {isAiOpen ? (
+              <ChevronUp size={16} style={{ color: 'var(--text-tertiary)' }} />
+            ) : (
+              <ChevronDown size={16} style={{ color: 'var(--text-tertiary)' }} />
+            )}
           </div>
 
           {isAiOpen && (
@@ -693,25 +666,21 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                     {
                       id: 'auto',
                       name: 'Auto-Fast Cascade (Groq + OpenRouter + Gemini)',
-                      badge: 'Рекомендуется',
                       desc: 'Сверхбыстрый интеллектуальный каскад: сначала Groq (~0.2с) и бесплатные модели OpenRouter, при сбое — Google Gemini.',
                     },
                     {
                       id: 'groq',
                       name: 'Groq LPU (Llama & Whisper)',
-                      badge: 'Молниеносно ~0.2с',
                       desc: 'Молниеносная генерация и транскрипция аудио на специализированных чипах Groq LPU.',
                     },
                     {
                       id: 'openrouter',
                       name: 'OpenRouter Free Models',
-                      badge: 'Бесплатные модели',
                       desc: 'Легковесные модели (Gemma 4, Liquid 2.6B, Nemotron) через единый API OpenRouter.',
                     },
                     {
                       id: 'gemini',
                       name: 'Google Gemini (3.8 Flash / 3.5 Flash-Lite)',
-                      badge: 'Мультимодальный',
                       desc: 'Официальные модели Google: точный разбор голоса и сложных задач, декомпозиция дат.',
                     },
                   ].map((prov) => {
@@ -734,22 +703,8 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                         }}
                       >
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                              {prov.name}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: '10px',
-                                fontWeight: 600,
-                                padding: '1px 6px',
-                                borderRadius: 'var(--radius-full)',
-                                background: 'rgba(255, 255, 255, 0.06)',
-                                color: 'var(--text-secondary)',
-                              }}
-                            >
-                              {prov.badge}
-                            </span>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {prov.name}
                           </div>
                           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px', lineHeight: 1.3 }}>
                             {prov.desc}

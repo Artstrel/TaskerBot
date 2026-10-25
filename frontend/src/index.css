@@ -1129,9 +1129,9 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px 12px 18px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 12px 18px 12px 18px;
+  background: linear-gradient(to bottom, var(--bg-surface) 0%, rgba(20, 20, 20, 0) 100%);
+  border-bottom: none;
 }
 
 .sheet-title {
@@ -1144,24 +1144,34 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .sheet-close-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-tertiary);
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  border-radius: 50%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
-.sheet-close-btn:hover {
-  color: var(--text-primary);
-  background: var(--bg-card);
+.sheet-close-btn:hover:not(:disabled) {
+  color: #ffffff;
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.sheet-close-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.sheet-close-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .sheet-body {
@@ -1978,6 +1988,8 @@ body.is-tg-fullscreen .header-actions {
 .numeric-stepper-controls {
   display: inline-flex;
   align-items: center;
+  align-self: flex-start;
+  width: fit-content;
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);

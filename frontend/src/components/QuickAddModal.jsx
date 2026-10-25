@@ -1336,7 +1336,7 @@ export default function QuickAddModal({
             title="Закрыть"
             disabled={isProcessing || isTranscribingAudio}
           >
-            <X size={18} />
+            <X size={16} strokeWidth={2.2} />
           </button>
         </div>
 
