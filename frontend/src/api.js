@@ -1055,6 +1055,74 @@ export const cleanGroceryTitle = (text) => {
   return capitalizeFirst(cleaned || text);
 };
 
+export const HALLUCINATION_PATTERNS = [
+  /продолжение\s+следует.*/i,
+  /(?:(?:русские\s+)?субтитр[ыа-я]*(?:\s*(?:сделал\w*|создал\w*|создавал\w*|подготовил\w*|перевел\w*|от|:)).*|субтитр[ыа-я]*$)/i,
+  /редактор\s+субтитр[ыа-я]*.*/i,
+  /корректор\s+субтитр[ыа-я]*.*/i,
+  /автор\s+субтитр[ыа-я]*.*/i,
+  /спасибо\s+за\s+просмотр.*/i,
+  /ставьте\s+лайк[иа-я]*/i,
+  /подписывайтесь.*/i,
+  /лайк\s+и\s+подписк[а-я]*/i,
+  /колокольчик[а-я]*/i,
+  /переведено\s+сообществом.*/i,
+  /всем\s+пока.*/i,
+  /до\s+новых\s+встреч.*/i,
+  /amara\.org/i,
+  /www\.[a-z0-9\-]+\.[a-z]{2,}/i,
+  /http[s]?:\/\//i,
+  /благодарю\s+за\s+внимание.*/i,
+  /конец\s+связи/i,
+  /трансляция\s+завершена/i,
+  /не\s+забудьте\s+подписаться.*/i,
+  /смотреть\s+далее.*/i,
+  /оставайтесь\s+с\s+нами.*/i,
+  /приятного\s+просмотра.*/i,
+  /thank\s+you\s+for\s+watching.*/i,
+  /please\s+subscribe.*/i,
+  /like\s+and\s+subscribe.*/i,
+];
+
+export const stripWhisperHallucinations = (text) => {
+  if (!text || typeof text !== 'string') return '';
+  let cleaned = text.trim();
+  for (const pat of HALLUCINATION_PATTERNS) {
+    if (/(?:написать|сделать|подготовить|добавить|исправить|отредактировать|вставить)\s+субтитр/i.test(cleaned)) {
+      continue;
+    }
+    const trailingRe = new RegExp(`(?:[.,!?;\\s]|^)${pat.source}[.,!?;\\s]*$`, 'iu');
+    cleaned = cleaned.replace(trailingRe, '').trim();
+    const leadingRe = new RegExp(`^[.,!?;\\s]*${pat.source}(?:[.,!?;\\s]|$)`, 'iu');
+    cleaned = cleaned.replace(leadingRe, '').trim();
+  }
+  return cleaned.trim();
+};
+
+export const isHallucinationOrNoise = (text) => {
+  if (!text || typeof text !== 'string') return true;
+  const trimmed = text.trim();
+  const meaningful = trimmed.replace(/[^\p{L}\p{N}]/gu, '');
+  if (meaningful.length < 2) return true;
+
+  const stripped = stripWhisperHallucinations(trimmed);
+  const meaningfulAfter = stripped.replace(/[^\p{L}\p{N}]/gu, '');
+  if (meaningfulAfter.length < 2) {
+    const isLegit = /(?:написать|сделать|подготовить|добавить|исправить|отредактировать|вставить)\s+субтитр/i.test(trimmed);
+    if (!isLegit) return true;
+  }
+
+  const words = trimmed.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  if (words.length >= 4) {
+    const counts = {};
+    for (const w of words) counts[w] = (counts[w] || 0) + 1;
+    const maxCnt = Math.max(...Object.values(counts));
+    if (maxCnt >= 4 && maxCnt / words.length >= 0.5) return true;
+  }
+
+  return false;
+};
+
 export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
   if (!parsed) return null;
   let rawList = null;
@@ -1081,8 +1149,8 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
     .map((item, idx) => {
       if (!item) return null;
       if (typeof item === 'string') {
-        const rawTitle = item.trim();
-        if (!rawTitle) return null;
+        let rawTitle = stripWhisperHallucinations(item.trim());
+        if (!rawTitle || isHallucinationOrNoise(rawTitle)) return null;
         if (/не удалось расшифровать|голосовая заметка \(не удалось/i.test(rawTitle)) return null;
 
         const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(rawTitle);
@@ -1105,8 +1173,8 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
         };
       }
       if (typeof item === 'object') {
-        const rawTitle = String(item.title || item.name || item.text || '').trim();
-        if (!rawTitle) return null;
+        let rawTitle = stripWhisperHallucinations(String(item.title || item.name || item.text || '').trim());
+        if (!rawTitle || isHallucinationOrNoise(rawTitle)) return null;
         if (/не удалось расшифровать|голосовая заметка \(не удалось/i.test(rawTitle)) return null;
 
         let cat = item.category || defaultCategory;
@@ -1388,10 +1456,21 @@ export const transcribeWithDirectGroqWhisper = async (audioBlob) => {
   for (const whisperModel of ['whisper-large-v3-turbo', 'whisper-large-v3']) {
     try {
       const gFormData = new FormData();
-      const ext = audioBlob.type && audioBlob.type.includes('webm') ? 'voice.webm' : 'voice.ogg';
+      let ext = 'voice.webm';
+      if (audioBlob.type) {
+        if (audioBlob.type.includes('mp4') || audioBlob.type.includes('m4a') || audioBlob.type.includes('aac')) {
+          ext = 'voice.mp4';
+        } else if (audioBlob.type.includes('ogg')) {
+          ext = 'voice.ogg';
+        } else if (audioBlob.type.includes('wav')) {
+          ext = 'voice.wav';
+        }
+      }
       gFormData.append('file', audioBlob, ext);
       gFormData.append('model', whisperModel);
       gFormData.append('language', 'ru');
+      gFormData.append('temperature', '0.0');
+      gFormData.append('prompt', 'Задачи, список дел, покупки, рутины, напоминания на день. Запиши точно без лишних слов.');
       gFormData.append('response_format', 'json');
 
       const whisperRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
@@ -1405,8 +1484,13 @@ export const transcribeWithDirectGroqWhisper = async (audioBlob) => {
       if (whisperRes.ok) {
         const whisperData = await whisperRes.json();
         const text = whisperData.text && whisperData.text.trim();
-        const clean = text ? text.replace(/[^\p{L}\d]/gu, '').trim() : '';
-        if (clean.length >= 2) return text;
+        if (text) {
+          const stripped = stripWhisperHallucinations(text);
+          if (!isHallucinationOrNoise(stripped)) {
+            const clean = stripped.replace(/[^\p{L}\d]/gu, '').trim();
+            if (clean.length >= 2) return stripped;
+          }
+        }
       }
     } catch (we) {
       console.warn(`Direct Groq Whisper ${whisperModel} failed:`, we);

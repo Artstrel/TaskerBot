@@ -33,6 +33,8 @@ import {
   capitalizeFirst,
   isGroceryText,
   cleanGroceryTitle,
+  stripWhisperHallucinations,
+  isHallucinationOrNoise,
 } from '../api';
 import Mascot from './Mascot';
 
@@ -93,6 +95,7 @@ export default function QuickAddModal({
   const speechTranscriptRef = useRef('');
   const inputRef = useRef(null);
   const stopRecordingRef = useRef(null);
+  const hasAutoStartedRef = useRef(false);
 
   const loadProviders = useCallback(async () => {
     try {
@@ -108,20 +111,20 @@ export default function QuickAddModal({
 
   useEffect(() => {
     loadProviders();
-    if (inputRef.current) {
+    if (inputRef.current && !autoStartVoice) {
       inputRef.current.focus();
     }
-  }, [loadProviders]);
+  }, [loadProviders, autoStartVoice]);
 
-  // Dedicated timer effect that starts/stops with isRecording and enforces 60s mobile limit
+  // Dedicated timer effect that starts/stops with isRecording and enforces 120s limit for long dictation
   useEffect(() => {
     let interval = null;
     if (isRecording) {
       interval = setInterval(() => {
         setRecordSeconds((prev) => {
-          if (prev >= 59) {
+          if (prev >= 119) {
             if (stopRecordingRef.current) stopRecordingRef.current();
-            return 60;
+            return 120;
           }
           return prev + 1;
         });
@@ -134,7 +137,26 @@ export default function QuickAddModal({
     };
   }, [isRecording]);
 
-  // Keydown & cleanup effect
+  // Dedicated cleanup ONLY on unmount of QuickAddModal
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current) {
+        try {
+          mediaRecorderRef.current.onstop = null;
+          if (mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        } catch (_) {}
+      }
+      if (streamRef.current) {
+        try {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+        } catch (_) {}
+      }
+    };
+  }, []);
+
+  // Escape keydown listener
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -148,14 +170,6 @@ export default function QuickAddModal({
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        try {
-          mediaRecorderRef.current.stop();
-        } catch (_) { }
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
     };
   }, [editingTaskId, onClose]);
 
@@ -175,7 +189,7 @@ export default function QuickAddModal({
   // Map and attach goal associations to extracted AI tasks
   const mapExtractedTask = useCallback(
     (t, i) => {
-      let rawTitle = t.title || '';
+      let rawTitle = stripWhisperHallucinations(t.title || '');
       let cat = t.category || 'one_time';
       let gId = t.goal_id || null;
       let gTitle = t.goal_title || null;
@@ -249,7 +263,7 @@ export default function QuickAddModal({
     const clean = title.replace(/[^\p{L}\d]/gu, '').trim();
     if (clean.length < 2) return false;
     if (/^[\s\.\,\!\?\-—\:\;]+$/.test(title)) return false;
-    if (/не удалось расшифровать|голосовая заметка \(не удалось|продолжение следует|субтитр|спасибо за просмотр|подписывайтесь|до новых встреч|всем пока/i.test(title)) return false;
+    if (isHallucinationOrNoise(title)) return false;
     return true;
   };
 
@@ -310,16 +324,21 @@ export default function QuickAddModal({
     for (const t of candidateTypes) {
       try {
         if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
-          return { recorder: new MediaRecorder(stream, { mimeType: t }), mimeType: t };
+          const rec = new MediaRecorder(stream, { mimeType: t });
+          return { recorder: rec, mimeType: rec.mimeType || t };
         }
       } catch (_) {}
     }
     // Browser default fallback if no explicit codec matches
-    return { recorder: new MediaRecorder(stream), mimeType: 'audio/webm' };
+    const rec = new MediaRecorder(stream);
+    return { recorder: rec, mimeType: rec.mimeType || 'audio/webm' };
   };
 
   // Start voice recording
   const startRecording = async () => {
+    if (isRecording || (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording')) {
+      return;
+    }
     try {
       setErrorMsg('');
       hapticFeedback('medium');
@@ -328,6 +347,14 @@ export default function QuickAddModal({
         hapticFeedback('warning');
         setErrorMsg('🎙 Запись микрофона недоступна: требуется защищённое HTTPS-соединение.');
         return;
+      }
+
+      // Clean up previous stream if any
+      if (streamRef.current) {
+        try {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+        } catch (_) {}
+        streamRef.current = null;
       }
 
       // Step 1: Request microphone with constraints fallback to prevent OverconstrainedError on iOS
@@ -361,8 +388,10 @@ export default function QuickAddModal({
       recorder.onstop = async () => {
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
         }
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        const actualMime = recorder.mimeType || mimeType;
+        const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
         if (!audioBlob || audioBlob.size < 300) {
           setErrorMsg('🎙 Запись слишком короткая. Нажмите «Голос», надиктуйте задачу и нажмите «Готово».');
           return;
@@ -370,8 +399,13 @@ export default function QuickAddModal({
         await handleAudioProcess(audioBlob);
       };
 
-      // Collect audio chunks every 500ms so data is always buffered
-      recorder.start(500);
+      // Collect audio chunks every 500ms so data is always buffered (with fallback if timeslice not supported)
+      try {
+        recorder.start(500);
+      } catch (startErr) {
+        console.warn('recorder.start(500) fallback to recorder.start():', startErr);
+        recorder.start();
+      }
       setIsRecording(true);
     } catch (err) {
       console.error('Audio recording failed:', err);
@@ -391,8 +425,16 @@ export default function QuickAddModal({
   // Stop voice recording and submit
   const stopRecording = () => {
     hapticFeedback('medium');
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        // Request final audio chunk to ensure trailing speech before "Готово" is captured
+        if (typeof mediaRecorderRef.current.requestData === 'function') {
+          mediaRecorderRef.current.requestData();
+        }
+      } catch (_) {}
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (_) {}
       setIsRecording(false);
     }
   };
@@ -401,10 +443,11 @@ export default function QuickAddModal({
   // Cancel voice recording without submitting
   const cancelRecording = () => {
     hapticFeedback('warning');
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.onstop = () => {
         if (streamRef.current) {
           streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
         }
       };
       try {
@@ -416,7 +459,8 @@ export default function QuickAddModal({
 
   // Auto start voice if requested (e.g. from Goals tab voice action)
   useEffect(() => {
-    if (autoStartVoice) {
+    if (autoStartVoice && !hasAutoStartedRef.current) {
+      hasAutoStartedRef.current = true;
       // Immediate call without arbitrary setTimeout delay so it keeps user activation context
       startRecording().catch(() => {});
     }

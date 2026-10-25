@@ -78,9 +78,16 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [warmupTimerElapsed, setWarmupTimerElapsed] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const isQuickAddOpenRef = useRef(isQuickAddOpen);
+  isQuickAddOpenRef.current = isQuickAddOpen;
   const [quickAddOptions, setQuickAddOptions] = useState(null);
   const [mascotMood, setMascotMood] = useState('idle');
   const [avatarError, setAvatarError] = useState(false);
+
+  const handleCloseQuickAdd = useCallback(() => {
+    setIsQuickAddOpen(false);
+    setQuickAddOptions(null);
+  }, []);
 
   useEffect(() => {
     // Initialize Telegram WebApp
@@ -228,6 +235,8 @@ export default function App() {
   // Smart auto-refresh: visibility change, window focus, Telegram WebApp viewport change, and periodic polling
   useEffect(() => {
     const handleSyncOnResume = () => {
+      // Do not interrupt active recording or modal interactions
+      if (isQuickAddOpenRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const timeSince = Date.now() - lastFetchedRef.current;
         if (timeSince > 4000) {
@@ -237,6 +246,7 @@ export default function App() {
     };
 
     const handleWindowFocus = () => {
+      if (isQuickAddOpenRef.current) return;
       const timeSince = Date.now() - lastFetchedRef.current;
       if (timeSince > 4000) {
         loadData(false, true);
@@ -254,6 +264,7 @@ export default function App() {
 
     // Background polling every 18 seconds while document is visible
     const pollInterval = setInterval(() => {
+      if (isQuickAddOpenRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         loadData(false, true);
       }
@@ -568,10 +579,7 @@ export default function App() {
       {/* Quick Add Bottom Sheet Modal */}
       {isQuickAddOpen && (
         <QuickAddModal
-          onClose={() => {
-            setIsQuickAddOpen(false);
-            setQuickAddOptions(null);
-          }}
+          onClose={handleCloseQuickAdd}
           onTaskCreated={loadData}
           setDashboardData={setDashboardData}
           setGoalsData={setGoalsData}

@@ -9,7 +9,11 @@ from typing import Optional, List, Dict, Any
 import httpx
 from backend.config import settings
 from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AIProvidersResponse, capitalize_first
-from backend.whisper_service import whisper_service, detect_hallucination_or_noise
+from backend.whisper_service import (
+    whisper_service,
+    detect_hallucination_or_noise,
+    strip_whisper_hallucinations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -807,14 +811,20 @@ class AIService:
             if await whisper_service.is_available():
                 whisper_cpp_text = await whisper_service.transcribe(audio_bytes, filename=fn)
                 if whisper_cpp_text and whisper_cpp_text.strip():
-                    raw_text = whisper_cpp_text.strip()
-                    logger.info(f"Audio transcribed successfully via local whisper.cpp: {raw_text[:100]}")
-                    res = await self.parse_text_tasks(
-                        raw_text, current_date, provider=chosen, existing_goals=existing_goals
-                    )
-                    if res and res.tasks:
-                        return res
-                    return _fallback_parse(raw_text, current_date, existing_goals)
+                    raw_text = strip_whisper_hallucinations(whisper_cpp_text.strip())
+                    if not detect_hallucination_or_noise(raw_text):
+                        logger.info(f"Audio transcribed successfully via local whisper.cpp: {raw_text[:100]}")
+                        res = await self.parse_text_tasks(
+                            raw_text, current_date, provider=chosen, existing_goals=existing_goals
+                        )
+                        if res and res.tasks:
+                            valid_tasks = [t for t in res.tasks if not detect_hallucination_or_noise(t.title)]
+                            if valid_tasks:
+                                return ExtractedTaskList(tasks=valid_tasks)
+                        fallback_res = _fallback_parse(raw_text, current_date, existing_goals)
+                        valid_fallback = [t for t in fallback_res.tasks if not detect_hallucination_or_noise(t.title)]
+                        if valid_fallback:
+                            return ExtractedTaskList(tasks=valid_fallback)
         except Exception as wce:
             logger.warning(f"Local whisper.cpp transcription error: {wce}")
 
@@ -823,7 +833,7 @@ class AIService:
         if groq_client:
             transcription = None
             clean_audio_bytes, clean_fn = await whisper_service.preprocess_audio_ffmpeg(audio_bytes, filename=fn)
-            prompt_anchor = "Задачи, список дел, покупки, рутины, напоминания на день."
+            prompt_anchor = "Задачи, список дел, покупки, рутины, напоминания на день. Запиши точно без лишних слов."
             for whisper_model in ["whisper-large-v3-turbo", "whisper-large-v3"]:
                 try:
                     transcription = await groq_client.audio.transcriptions.create(
@@ -840,7 +850,7 @@ class AIService:
                     logger.warning(f"Groq Whisper {whisper_model} error: {we}")
 
             if transcription and str(transcription).strip():
-                raw_text = str(transcription).strip()
+                raw_text = strip_whisper_hallucinations(str(transcription).strip())
                 if detect_hallucination_or_noise(raw_text):
                     logger.info(f"Groq Whisper transcription discarded as hallucination or noise: {raw_text!r}")
                 else:

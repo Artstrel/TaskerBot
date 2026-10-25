@@ -16,13 +16,16 @@ logger = logging.getLogger(__name__)
 # List of common Whisper hallucination markers that occur in noise / silence
 HALLUCINATION_PATTERNS = [
     r"продолжение\s+следует.*",
-    r"субтитр[ыа-я]*",
-    r"редактор\s+субтитр[ыа-я]*",
-    r"корректор\s+субтитр[ыа-я]*",
+    r"(?:(?:русские\s+)?субтитр[ыа-я]*(?:\s*(?:сделал\w*|создал\w*|создавал\w*|подготовил\w*|перевел\w*|от|:)).*|субтитр[ыа-я]*$)",
+    r"редактор\s+субтитр[ыа-я]*.*",
+    r"корректор\s+субтитр[ыа-я]*.*",
+    r"автор\s+субтитр[ыа-я]*.*",
     r"спасибо\s+за\s+просмотр.*",
     r"ставьте\s+лайк[иа-я]*",
     r"подписывайтесь.*",
-    r"переведено\s+сообществом",
+    r"лайк\s+и\s+подписк[а-я]*",
+    r"колокольчик[а-я]*",
+    r"переведено\s+сообществом.*",
     r"всем\s+пока.*",
     r"до\s+новых\s+встреч.*",
     r"amara\.org",
@@ -31,13 +34,43 @@ HALLUCINATION_PATTERNS = [
     r"благодарю\s+за\s+внимание.*",
     r"конец\s+связи",
     r"трансляция\s+завершена",
-    r"не\s+забудьте\s+подписаться",
-    r"смотреть\s+далее",
-    r"оставайтесь\s+с\s+нами",
-    r"приятного\s+просмотра",
+    r"не\s+забудьте\s+подписаться.*",
+    r"смотреть\s+далее.*",
+    r"оставайтесь\s+с\s+нами.*",
+    r"приятного\s+просмотра.*",
+    r"thank\s+you\s+for\s+watching.*",
+    r"please\s+subscribe.*",
+    r"like\s+and\s+subscribe.*",
 ]
 
 HALLUCINATION_RE = re.compile(r"|".join(HALLUCINATION_PATTERNS), re.IGNORECASE)
+
+
+def strip_whisper_hallucinations(text: str) -> str:
+    """
+    Strips known trailing or leading Whisper hallucination phrases from transcribed text,
+    preserving the genuine task content.
+    Example: 'Купить молоко и хлеб. Спасибо за просмотр!' -> 'Купить молоко и хлеб.'
+    """
+    if not text or not text.strip():
+        return ""
+    cleaned = text.strip()
+    for pat in HALLUCINATION_PATTERNS:
+        # Match as trailing phrase or standalone sentence
+        cleaned = re.sub(
+            rf"(?:[.,!?;\s]|^){pat}[.,!?;\s]*$",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip()
+        # Match as leading phrase
+        cleaned = re.sub(
+            rf"^[.,!?;\s]*{pat}(?:[.,!?;\s]|$)",
+            "",
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip()
+    return cleaned.strip()
 
 
 def detect_hallucination_or_noise(text: str) -> bool:
@@ -55,12 +88,19 @@ def detect_hallucination_or_noise(text: str) -> bool:
     if len(meaningful) < 2:
         return True
 
-    # 2. Match known hallucination phrases
-    if HALLUCINATION_RE.search(trimmed):
-        # Unless the user explicitly asked to create/write subtitles as a task
-        is_legit_task = bool(re.search(r"\b(написать|сделать|подготовить|добавить|исправить|отредактировать|вставить)\s+субтитр", trimmed, re.IGNORECASE))
+    # 2. Check if text is purely a hallucination phrase
+    stripped = strip_whisper_hallucinations(trimmed)
+    meaningful_after = re.sub(r"[^\wа-яА-ЯёЁ\d]+", "", stripped)
+    if len(meaningful_after) < 2:
+        is_legit_task = bool(
+            re.search(
+                r"\b(написать|сделать|подготовить|добавить|исправить|отредактировать|вставить)\s+субтитр",
+                trimmed,
+                re.IGNORECASE,
+            )
+        )
         if not is_legit_task:
-            logger.info(f"Discarded Whisper hallucination marker: {trimmed!r}")
+            logger.info(f"Discarded Whisper pure hallucination marker: {trimmed!r}")
             return True
 
     # 3. Detect repetitive phrase/word loops (e.g. 'задача задача задача' or '1. 1. 1.')
@@ -237,7 +277,7 @@ class WhisperCPPService:
                     except Exception:
                         raw_text = res.text
 
-                    raw_text = (raw_text or "").strip()
+                    raw_text = strip_whisper_hallucinations((raw_text or "").strip())
 
                     # 3. Filter noise & hallucinations
                     if detect_hallucination_or_noise(raw_text):
