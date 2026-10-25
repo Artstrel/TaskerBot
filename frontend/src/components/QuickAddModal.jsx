@@ -298,85 +298,106 @@ export default function QuickAddModal({
     setIsProcessing(false);
   };
 
+  // Safe MediaRecorder builder across iOS Safari, Android Chrome and Desktop
+  const createSafeMediaRecorder = (stream) => {
+    const candidateTypes = [
+      'audio/mp4', // Best for iOS Safari / WKWebView
+      'audio/webm;codecs=opus', // Best for Android Chrome & Desktop
+      'audio/webm',
+      'audio/aac',
+      'audio/ogg;codecs=opus',
+    ];
+    for (const t of candidateTypes) {
+      try {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
+          return { recorder: new MediaRecorder(stream, { mimeType: t }), mimeType: t };
+        }
+      } catch (_) {}
+    }
+    // Browser default fallback if no explicit codec matches
+    return { recorder: new MediaRecorder(stream), mimeType: 'audio/webm' };
+  };
+
   // Start voice recording
   const startRecording = async () => {
     try {
       setErrorMsg('');
       hapticFeedback('medium');
-      // Hardware mobile audio constraints for iOS & Android
-      const constraints = {
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+      if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+        hapticFeedback('warning');
+        setErrorMsg('🎙 Запись микрофона недоступна: требуется защищённое HTTPS-соединение.');
+        return;
+      }
+
+      // Step 1: Request microphone with constraints fallback to prevent OverconstrainedError on iOS
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+      } catch (constraintErr) {
+        console.warn('Advanced audio constraints rejected, retrying with raw audio:', constraintErr);
+        // Fallback without constraints (essential for older iOS WebKit versions)
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
       streamRef.current = stream;
       audioChunksRef.current = [];
 
-      speechTranscriptRef.current = '';
-      const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-      if (SpeechRecognition) {
-        try {
-          const rec = new SpeechRecognition();
-          rec.lang = 'ru-RU';
-          rec.continuous = true;
-          rec.interimResults = true;
-          rec.onresult = (event) => {
-            let transcript = '';
-            for (let i = 0; i < event.results.length; ++i) {
-              transcript += event.results[i][0].transcript + ' ';
-            }
-            speechTranscriptRef.current = transcript.trim();
-          };
-          rec.start();
-          speechRecognitionRef.current = rec;
-        } catch (e) {
-          console.warn('SpeechRecognition failed to start:', e);
-        }
-      }
+      // Monitor stream tracks for OS interruptions (e.g. phone call or Telegram backgrounded)
+      stream.getAudioTracks().forEach((track) => {
+        track.onended = () => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            try {
+              mediaRecorderRef.current.stop();
+            } catch (_) {}
+            setIsRecording(false);
+          }
+        };
+      });
 
-      let mimeType = 'audio/webm';
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-        mimeType = 'audio/webm;codecs=opus';
-      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-        mimeType = 'audio/mp4';
-      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-        mimeType = 'audio/ogg;codecs=opus';
-      }
+      // Step 2: Initialize MediaRecorder with safe format detection
+      const { recorder, mimeType } = createSafeMediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
 
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
           audioChunksRef.current.push(event.data);
         }
       };
 
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
+      recorder.onstop = async () => {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+        }
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
         await handleAudioProcess(audioBlob);
       };
 
-      mediaRecorder.start();
+      recorder.start();
       setIsRecording(true);
     } catch (err) {
       console.error('Audio recording failed:', err);
-      setErrorMsg('Нет доступа к микрофону. Разрешите микрофон в настройках браузера или приложения.');
+      hapticFeedback('warning');
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setErrorMsg('🎙 Микрофон заблокирован. Разрешите доступ: Настройки iPhone -> Telegram -> включите «Микрофон».');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setErrorMsg('🎙 Микрофон не обнаружен на вашем устройстве.');
+      } else if (err.name === 'NotSupportedError') {
+        setErrorMsg('🎙 Запись звука не поддерживается в этой версии браузера.');
+      } else {
+        setErrorMsg(`🎙 Ошибка микрофона: ${err.message || 'нажмите на кнопку ещё раз'}`);
+      }
     }
   };
 
   // Stop voice recording and submit
   const stopRecording = () => {
     hapticFeedback('medium');
-    if (speechRecognitionRef.current) {
-      try {
-        speechRecognitionRef.current.stop();
-      } catch (_) { }
-    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -387,11 +408,6 @@ export default function QuickAddModal({
   // Cancel voice recording without submitting
   const cancelRecording = () => {
     hapticFeedback('warning');
-    if (speechRecognitionRef.current) {
-      try {
-        speechRecognitionRef.current.stop();
-      } catch (_) { }
-    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.onstop = () => {
         if (streamRef.current) {
@@ -408,10 +424,8 @@ export default function QuickAddModal({
   // Auto start voice if requested (e.g. from Goals tab voice action)
   useEffect(() => {
     if (autoStartVoice) {
-      const t = setTimeout(() => {
-        startRecording();
-      }, 250);
-      return () => clearTimeout(t);
+      // Immediate call without arbitrary setTimeout delay so it keeps user activation context
+      startRecording().catch(() => {});
     }
   }, [autoStartVoice]);
 
@@ -1273,20 +1287,41 @@ export default function QuickAddModal({
           {errorMsg && (
             <div
               style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                border: '1px solid rgba(255, 255, 255, 0.25)',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
                 color: '#ffffff',
-                padding: '9px 12px',
+                padding: '10px 14px',
                 borderRadius: 'var(--radius-sm)',
                 fontSize: '13px',
-                marginBottom: '12px',
+                marginBottom: '14px',
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: 'column',
                 gap: '8px',
               }}
             >
-              <AlertCircle size={15} style={{ flexShrink: 0 }} />
-              <span>{errorMsg}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, color: 'var(--accent-primary)' }} />
+                <span>{errorMsg}</span>
+              </div>
+              {errorMsg.toLowerCase().includes('микрофон') && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{
+                    alignSelf: 'flex-start',
+                    marginTop: '2px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                  onClick={startRecording}
+                >
+                  <Mic size={14} />
+                  <span>Попробовать снова</span>
+                </button>
+              )}
             </div>
           )}
 
