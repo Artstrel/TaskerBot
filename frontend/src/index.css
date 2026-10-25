@@ -1470,16 +1470,16 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .voice-recording-card.voice-recording-dialog-stage {
-  background: var(--bg-card);
+  background: transparent;
   border: none;
   border-radius: var(--radius-lg);
-  padding: 18px 20px 16px 20px;
+  padding: 12px 4px 8px 4px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 18px;
-  min-height: 290px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  min-height: 270px;
+  box-shadow: none;
   animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   box-sizing: border-box;
 }
@@ -1582,7 +1582,7 @@ body.is-tg-fullscreen .header-actions {
   justify-content: space-between;
   gap: 12px;
   padding-top: 10px;
-  border-top: none;
+  border-top: none !important;
   width: 100%;
 }
 
@@ -1755,7 +1755,7 @@ body.is-tg-fullscreen .header-actions {
   align-items: center;
   justify-content: space-between;
   padding-top: 8px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: none;
   width: 100%;
 }
 
