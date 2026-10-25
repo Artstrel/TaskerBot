@@ -37,6 +37,7 @@ import {
   isHallucinationOrNoise,
 } from '../api';
 import Mascot from './Mascot';
+import BarVisualizer from './BarVisualizer';
 
 export default function QuickAddModal({
   onClose,
@@ -68,6 +69,8 @@ export default function QuickAddModal({
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [activeStream, setActiveStream] = useState(null);
+  const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Extracted tasks preview & editing
@@ -272,46 +275,49 @@ export default function QuickAddModal({
   // Process audio: Priority #1 Server/Whisper.cpp audio upload (with FFT noise filtering & VAD), Priority #2 Fallback to Web Speech API
   const handleAudioProcess = async (audioBlob) => {
     setIsProcessing(true);
+    setIsTranscribingAudio(true);
     setErrorMsg('');
 
-    // 1. Приоритет №1: Серверный whisper.cpp с аппаратным VAD и шумоподавлением FFmpeg (afftdn)
-    if (audioBlob && audioBlob.size > 0) {
-      try {
-        const res = await parseSmartAudio(audioBlob, selectedProvider);
-        const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
-        if (validTasks.length > 0) {
-          hapticFeedback('success');
-          setExtractedTasks(validTasks.map(mapExtractedTask));
-          setIsProcessing(false);
-          return;
+    try {
+      // 1. Приоритет №1: Серверный whisper.cpp с аппаратным VAD и шумоподавлением FFmpeg (afftdn)
+      if (audioBlob && audioBlob.size > 0) {
+        try {
+          const res = await parseSmartAudio(audioBlob, selectedProvider);
+          const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
+          if (validTasks.length > 0) {
+            hapticFeedback('success');
+            setExtractedTasks(validTasks.map(mapExtractedTask));
+            return;
+          }
+        } catch (err) {
+          console.warn('Backend whisper.cpp / Whisper audio parse failed:', err);
         }
-      } catch (err) {
-        console.warn('Backend whisper.cpp / Whisper audio parse failed:', err);
       }
-    }
 
-    // 2. Резервный Fallback: Системный диктант устройства (Web Speech API - iOS Siri / Android Google Speech)
-    const clientText = speechTranscriptRef.current && speechTranscriptRef.current.trim();
-    const cleanSpeech = clientText ? clientText.replace(/[^\p{L}\d]/gu, '').trim() : '';
+      // 2. Резервный Fallback: Системный диктант устройства (Web Speech API - iOS Siri / Android Google Speech)
+      const clientText = speechTranscriptRef.current && speechTranscriptRef.current.trim();
+      const cleanSpeech = clientText ? clientText.replace(/[^\p{L}\d]/gu, '').trim() : '';
 
-    if (cleanSpeech.length >= 2) {
-      try {
-        const res = await parseSmartText(clientText, selectedProvider);
-        const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
-        if (validTasks.length > 0) {
-          hapticFeedback('success');
-          setExtractedTasks(validTasks.map(mapExtractedTask));
-          setIsProcessing(false);
-          return;
+      if (cleanSpeech.length >= 2) {
+        try {
+          const res = await parseSmartText(clientText, selectedProvider);
+          const validTasks = (res?.tasks || []).filter((t) => t && isValidTaskTitle(t.title));
+          if (validTasks.length > 0) {
+            hapticFeedback('success');
+            setExtractedTasks(validTasks.map(mapExtractedTask));
+            return;
+          }
+        } catch (speechErr) {
+          console.warn('Fallback parse of device speech failed:', speechErr);
         }
-      } catch (speechErr) {
-        console.warn('Fallback parse of device speech failed:', speechErr);
       }
-    }
 
-    hapticFeedback('warning');
-    setErrorMsg('🎙 Слишком много фонового шума. Попробуйте надиктовать ближе к микрофону или введите текстом.');
-    setIsProcessing(false);
+      hapticFeedback('warning');
+      setErrorMsg('🎙 Слишком много фонового шума. Попробуйте надиктовать ближе к микрофону или введите текстом.');
+    } finally {
+      setIsProcessing(false);
+      setIsTranscribingAudio(false);
+    }
   };
 
   // Safe MediaRecorder builder across iOS Safari, Android Chrome and Desktop
@@ -375,6 +381,7 @@ export default function QuickAddModal({
       }
 
       streamRef.current = stream;
+      setActiveStream(stream);
       audioChunksRef.current = [];
 
       // Step 2: Initialize MediaRecorder with safe format detection
@@ -392,9 +399,12 @@ export default function QuickAddModal({
           streamRef.current.getTracks().forEach((track) => track.stop());
           streamRef.current = null;
         }
+        setActiveStream(null);
         const actualMime = recorder.mimeType || mimeType;
         const audioBlob = new Blob(audioChunksRef.current, { type: actualMime });
         if (!audioBlob || audioBlob.size < 300) {
+          setIsTranscribingAudio(false);
+          setIsProcessing(false);
           setErrorMsg('🎙 Запись слишком короткая. Нажмите «Голос», надиктуйте задачу и нажмите «Готово».');
           return;
         }
@@ -428,6 +438,8 @@ export default function QuickAddModal({
   const stopRecording = () => {
     hapticFeedback('medium');
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      setIsTranscribingAudio(true);
+      setActiveStream(null);
       try {
         // Request final audio chunk to ensure trailing speech before "Готово" is captured
         if (typeof mediaRecorderRef.current.requestData === 'function') {
@@ -445,6 +457,8 @@ export default function QuickAddModal({
   // Cancel voice recording without submitting
   const cancelRecording = () => {
     hapticFeedback('warning');
+    setIsTranscribingAudio(false);
+    setActiveStream(null);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.onstop = () => {
         if (streamRef.current) {
@@ -454,7 +468,7 @@ export default function QuickAddModal({
       };
       try {
         mediaRecorderRef.current.stop();
-      } catch (_) { }
+      } catch (_) {}
       setIsRecording(false);
     }
   };
@@ -1282,7 +1296,7 @@ export default function QuickAddModal({
     <div
       className="sheet-backdrop"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !isProcessing && !isRecording) {
+        if (e.target === e.currentTarget && !isProcessing && !isRecording && !isTranscribingAudio) {
           onClose();
         }
       }}
@@ -1294,7 +1308,7 @@ export default function QuickAddModal({
           <div className="sheet-title">
             {isRecording ? (
               <Mascot state="happy" size={26} interactive={false} />
-            ) : isProcessing ? (
+            ) : isProcessing || isTranscribingAudio ? (
               <Mascot state="thinking" size={26} interactive={false} />
             ) : (
               <Sparkles size={18} color="var(--accent-primary)" />
@@ -1302,13 +1316,15 @@ export default function QuickAddModal({
             <span>
               {isRecording
                 ? 'Запись голоса...'
-                : extractedTasks
-                  ? 'Подтверждение задач'
-                  : initialGoalTitle
-                    ? `Шаг к цели: ${initialGoalTitle}`
-                    : category === 'goal'
-                      ? 'Новая цель'
-                      : 'Создать задачу'}
+                : isTranscribingAudio
+                  ? 'Расшифровка аудио...'
+                  : extractedTasks
+                    ? 'Подтверждение задач'
+                    : initialGoalTitle
+                      ? `Шаг к цели: ${initialGoalTitle}`
+                      : category === 'goal'
+                        ? 'Новая цель'
+                        : 'Создать задачу'}
             </span>
           </div>
 
@@ -1316,7 +1332,7 @@ export default function QuickAddModal({
             className="sheet-close-btn"
             onClick={isRecording ? cancelRecording : onClose}
             title="Закрыть"
-            disabled={isProcessing}
+            disabled={isProcessing || isTranscribingAudio}
           >
             <X size={18} />
           </button>
@@ -1631,40 +1647,76 @@ export default function QuickAddModal({
                 </button>
               </div>
             </div>
-          ) : isRecording ? (
-            /* VIEW B1: Dedicated compact live voice recording state */
-            <div className="voice-recording-card">
-              <div className="voice-recording-main">
-                <div className="voice-status-group">
-                  <span className="voice-record-dot" />
+          ) : (isRecording || isTranscribingAudio) ? (
+            /* VIEW B1: Dedicated spacious live voice recording & transcription state */
+            <div className="voice-recording-card voice-recording-dialog-stage">
+              <div className="voice-stage-top">
+                <div className="voice-stage-status-badge">
+                  {isRecording ? (
+                    <>
+                      <span className="voice-record-dot live" />
+                      <span className="voice-status-label">Идёт запись</span>
+                    </>
+                  ) : (
+                    <>
+                      <RotateCw size={12} className="spin-icon" style={{ color: '#ffffff' }} />
+                      <span className="voice-status-label">Расшифровка AI</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="voice-timer-pill">
+                  <Clock size={12} style={{ opacity: 0.7 }} />
                   <span className="voice-timer-display">{formatTimer(recordSeconds)}</span>
+                  <span className="voice-timer-limit">/ 02:00</span>
                 </div>
-
-                <div className="voice-wave-container" title="Идёт запись звука">
-                  <span className="wave-bar wb-1" />
-                  <span className="wave-bar wb-2" />
-                  <span className="wave-bar wb-3" />
-                  <span className="wave-bar wb-4" />
-                </div>
-
-                <span className="voice-hint-text">Слушаю...</span>
               </div>
 
-              <div className="voice-card-actions">
+              {/* Central Audio Waveform Visualizer */}
+              <div className="voice-visualizer-center-stage">
+                <BarVisualizer
+                  stream={activeStream}
+                  state={isRecording ? 'recording' : 'processing'}
+                  barCount={7}
+                  height={80}
+                  barWidth={10}
+                  gap={7}
+                />
+
+                <p className="voice-stage-hint">
+                  {isRecording
+                    ? 'Говорите чётко — надиктуйте задачи, привычки или цели'
+                    : 'AI Whisper распознаёт аудио и формирует структуру задач...'}
+                </p>
+              </div>
+
+              {/* Bottom Actions Bar */}
+              <div className="voice-card-actions voice-stage-actions">
                 <button
                   type="button"
-                  className="filter-chip"
+                  className="voice-stage-cancel-btn"
                   onClick={cancelRecording}
+                  disabled={isTranscribingAudio}
                 >
                   Отмена
                 </button>
                 <button
                   type="button"
-                  className="submit-task-btn"
+                  className="voice-stage-submit-btn"
                   onClick={stopRecording}
+                  disabled={isTranscribingAudio}
                 >
-                  <Square size={12} fill="#000000" />
-                  <span>Готово ({formatTimer(recordSeconds)})</span>
+                  {isTranscribingAudio ? (
+                    <>
+                      <RotateCw size={14} className="spin-icon" />
+                      <span>Обработка...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Square size={12} fill="currentColor" />
+                      <span>Готово ({formatTimer(recordSeconds)})</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

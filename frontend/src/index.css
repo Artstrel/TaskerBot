@@ -1454,7 +1454,7 @@ body.is-tg-fullscreen .header-actions {
 }
 
 /* ==========================================================================
-   Voice Compact Recording Box (Minimalist 4-Bar Waveform)
+   Voice Compact & Enlarged Dialog Stage (LiveKit-Style Bar Visualizer)
    ========================================================================== */
 .voice-recording-card {
   background: var(--bg-input);
@@ -1467,6 +1467,175 @@ body.is-tg-fullscreen .header-actions {
   min-height: 104px;
   justify-content: space-between;
   animation: fadeIn 0.15s ease-out;
+}
+
+.voice-recording-card.voice-recording-dialog-stage {
+  background: linear-gradient(180deg, rgba(28, 28, 31, 0.95) 0%, rgba(18, 18, 20, 0.98) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 290px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.voice-stage-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.voice-stage-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.voice-status-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.2px;
+}
+
+.voice-timer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.voice-timer-pill .voice-timer-display {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+}
+
+.voice-timer-pill .voice-timer-limit {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.voice-visualizer-center-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px 12px;
+  width: 100%;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.04) 0%, transparent 72%);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+
+.voice-stage-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin: 0;
+  max-width: 340px;
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+/* LiveKit-Style Bar Visualizer */
+.livekit-bar-visualizer {
+  display: flex;
+  align-items: flex-end; /* Bottom boundary alignment: bars grow upwards */
+  justify-content: center;
+  user-select: none;
+}
+
+.livekit-bar-visualizer .visualizer-bar {
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.65) 100%);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  display: block;
+}
+
+.livekit-bar-visualizer.processing .visualizer-bar {
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.45) 100%);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.45);
+}
+
+.voice-stage-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+  width: 100%;
+}
+
+.voice-stage-cancel-btn {
+  flex: 1;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.voice-stage-cancel-btn:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.voice-stage-cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-stage-submit-btn {
+  flex: 2;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  color: #000000;
+  background: #ffffff;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+}
+
+.voice-stage-submit-btn:hover:not(:disabled) {
+  background: #e4e4e7;
+  transform: translateY(-1px);
+}
+
+.voice-stage-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .voice-recording-main {
@@ -1489,6 +1658,14 @@ body.is-tg-fullscreen .header-actions {
   background: #ffffff;
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
   animation: gentlePulse 1.6s infinite ease-in-out;
+}
+
+.voice-record-dot.live {
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+  animation: gentlePulse 1.2s infinite ease-in-out;
 }
 
 @keyframes gentlePulse {
