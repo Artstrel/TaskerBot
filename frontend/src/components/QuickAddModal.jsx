@@ -348,18 +348,6 @@ export default function QuickAddModal({
       streamRef.current = stream;
       audioChunksRef.current = [];
 
-      // Monitor stream tracks for OS interruptions (e.g. phone call or Telegram backgrounded)
-      stream.getAudioTracks().forEach((track) => {
-        track.onended = () => {
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-            try {
-              mediaRecorderRef.current.stop();
-            } catch (_) {}
-            setIsRecording(false);
-          }
-        };
-      });
-
       // Step 2: Initialize MediaRecorder with safe format detection
       const { recorder, mimeType } = createSafeMediaRecorder(stream);
       mediaRecorderRef.current = recorder;
@@ -375,10 +363,15 @@ export default function QuickAddModal({
           streamRef.current.getTracks().forEach((track) => track.stop());
         }
         const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        if (!audioBlob || audioBlob.size < 300) {
+          setErrorMsg('🎙 Запись слишком короткая. Нажмите «Голос», надиктуйте задачу и нажмите «Готово».');
+          return;
+        }
         await handleAudioProcess(audioBlob);
       };
 
-      recorder.start();
+      // Collect audio chunks every 500ms so data is always buffered
+      recorder.start(500);
       setIsRecording(true);
     } catch (err) {
       console.error('Audio recording failed:', err);

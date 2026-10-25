@@ -1631,6 +1631,7 @@ export const parseSmartText = async (text, provider = null) => {
 export const parseSmartAudio = async (audioBlob, provider = null) => {
   // 1. Try Backend API first if reachable
   try {
+    const formData = new FormData();
     let ext = 'voice.webm';
     if (audioBlob.type) {
       if (audioBlob.type.includes('mp4') || audioBlob.type.includes('m4a')) ext = 'voice.mp4';
@@ -1649,8 +1650,12 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
       const data = await res.json();
       const normalized = normalizeTasks(data);
       if (normalized && normalized.tasks.length > 0) return normalized;
+    } else {
+      console.warn('Backend audio parse returned status:', res.status);
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Backend audio parse error:', e);
+  }
 
   const chosen = provider || 'auto';
 

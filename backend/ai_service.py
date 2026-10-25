@@ -714,7 +714,9 @@ class AIService:
                         msg = choices[0]["message"]
                         content = msg.get("content") or msg.get("reasoning") or ""
                         parsed = _parse_json_tasks(content)
-                        if parsed and parsed.tasks:
+                        if parsed is not None:
+                            if parsed.tasks:
+                                return parsed
                             return parsed
                         logger.warning(
                             f"OpenRouter model {model_name} returned non-JSON task format: {content[:100]}"
