@@ -891,15 +891,13 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
                         </div>
 
                         <div
-                          style={{
-                            width: '16px',
-                            height: '16px',
-                            borderRadius: '50%',
-                            border: isSelected ? '5px solid var(--accent-primary)' : '1.5px solid var(--text-muted)',
-                            background: isSelected ? '#ffffff' : 'transparent',
-                            flexShrink: 0,
-                          }}
-                        />
+                          className={`linear-checkbox ${isSelected ? 'checked' : ''}`}
+                          style={{ margin: 0, flexShrink: 0 }}
+                          aria-checked={isSelected}
+                          role="checkbox"
+                        >
+                          {isSelected && <Check size={12} strokeWidth={3} />}
+                        </div>
                       </div>
                     );
                   })}

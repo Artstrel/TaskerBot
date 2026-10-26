@@ -55,6 +55,7 @@ export default function TodayTab({
   const [isOverdueOpen, setIsOverdueOpen] = useState(true);
   const [isRoutinesOpen, setIsRoutinesOpen] = useState(true);
   const [isTodayOpen, setIsTodayOpen] = useState(true);
+  const [isCompletedOpen, setIsCompletedOpen] = useState(false);
 
   // Inline task title editing state
   const [editingTaskId, setEditingTaskId] = useState(null);
@@ -160,24 +161,73 @@ export default function TodayTab({
       });
   };
 
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(now);
+  const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
+  const todayDateSubtitle = `${weekday}, ${dayMonth}`;
+
   if (!dashboardData) {
     return (
-      <div className="tab-loading-state">
-        <Mascot state="thinking" size={54} />
-        <div className="loading-spinner-ring" />
-        <h3 style={{ fontSize: '15px', fontWeight: 600, marginTop: '16px', color: 'var(--text-primary)' }}>
-          Загрузка задач...
-        </h3>
-        {warmupTimerElapsed ? (
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '300px', margin: '8px auto 0', lineHeight: 1.45, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-            <Zap size={14} style={{ color: 'var(--accent-warning, #f59e0b)', flexShrink: 0 }} />
-            <span>Сервер просыпается после перерыва. Ваши задачи в полной безопасности в базе данных и загрузятся через несколько секунд!</span>
-          </p>
-        ) : (
-          <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '6px' }}>
-            Подключение к базе данных...
-          </p>
-        )}
+      <div className="today-tab-container">
+        <ViewHeader
+          title="Сегодня"
+          subtitle={todayDateSubtitle}
+          actions={
+            <span className="sync-indicator-pill">
+              <RotateCw size={12} className="spin-sync-icon" />
+              <span>Синхронизация...</span>
+            </span>
+          }
+        />
+        <div className="today-desktop-grid">
+          <div className="today-col-left">
+            <section className="linear-section">
+              <div className="linear-section-header">
+                <div className="linear-section-title">
+                  <Flame size={15} color="var(--text-tertiary)" />
+                  <div className="skeleton-shimmer" style={{ width: '130px', height: '16px' }} />
+                </div>
+              </div>
+              <div className="linear-list">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="skeleton-list-item">
+                    <div className="skeleton-shimmer skeleton-checkbox" />
+                    <div className="skeleton-content">
+                      <div className="skeleton-shimmer skeleton-title" style={{ width: n === 1 ? '70%' : '55%' }} />
+                      <div className="skeleton-shimmer skeleton-subtitle" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+          <div className="today-col-right">
+            {warmupTimerElapsed && (
+              <div style={{ padding: '12px 16px', background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <Zap size={14} style={{ color: 'var(--accent-warning, #f59e0b)', flexShrink: 0 }} />
+                <span>Сервер просыпается после перерыва. Ваши задачи загрузятся через несколько секунд!</span>
+              </div>
+            )}
+            <section className="linear-section">
+              <div className="linear-section-header">
+                <div className="linear-section-title">
+                  <div className="skeleton-shimmer" style={{ width: '110px', height: '16px' }} />
+                </div>
+              </div>
+              <div className="linear-list">
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} className="skeleton-list-item">
+                    <div className="skeleton-shimmer skeleton-checkbox" />
+                    <div className="skeleton-content">
+                      <div className="skeleton-shimmer skeleton-title" style={{ width: n === 1 ? '75%' : n === 2 ? '60%' : '85%' }} />
+                      <div className="skeleton-shimmer skeleton-subtitle" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
     );
   }
@@ -191,6 +241,9 @@ export default function TodayTab({
     completed_count = 0,
     total_count = 0,
   } = dashboardData;
+
+  const activeTodayTasks = today_tasks.filter((t) => !t.is_completed);
+  const completedTodayTasks = today_tasks.filter((t) => t.is_completed);
 
   const progressPct = total_count > 0 ? Math.round((completed_count / total_count) * 100) : 0;
   const isDayAllDone = total_count > 0 && completed_count === total_count;
@@ -1059,16 +1112,19 @@ export default function TodayTab({
     );
   };
 
-  const now = new Date();
-  const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(now);
-  const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
-  const todayDateSubtitle = `${weekday}, ${dayMonth}`;
-
   return (
     <div className="today-tab-container">
       <ViewHeader
         title="Сегодня"
         subtitle={todayDateSubtitle}
+        actions={
+          isSyncing ? (
+            <span className="sync-indicator-pill">
+              <RotateCw size={12} className="spin-sync-icon" />
+              <span>Синхронизация...</span>
+            </span>
+          ) : null
+        }
       />
 
       <div className="today-desktop-grid">
@@ -1256,8 +1312,8 @@ export default function TodayTab({
             </div>
           )}
 
-          {/* Completely Empty State */}
-          {isDayCompletelyEmpty && (
+          {/* Completely Empty State (only when not syncing) */}
+          {isDayCompletelyEmpty && !isSyncing && (
             <div className="empty-state-mascot-card">
               <Mascot state="sleep" size={96} interactive={true} />
               <div className="empty-mascot-title">На сегодня пусто</div>
@@ -1265,6 +1321,28 @@ export default function TodayTab({
                 Запланируйте задачи через строку выше или нажмите «+» для умного голосового ввода.
               </div>
             </div>
+          )}
+
+          {/* Syncing Skeleton placeholder when empty */}
+          {isDayCompletelyEmpty && isSyncing && (
+            <section className="linear-section">
+              <div className="linear-section-header">
+                <div className="linear-section-title">
+                  <div className="skeleton-shimmer" style={{ width: '120px', height: '16px' }} />
+                </div>
+              </div>
+              <div className="linear-list">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="skeleton-list-item">
+                    <div className="skeleton-shimmer skeleton-checkbox" />
+                    <div className="skeleton-content">
+                      <div className="skeleton-shimmer skeleton-title" style={{ width: n === 1 ? '65%' : n === 2 ? '80%' : '50%' }} />
+                      <div className="skeleton-shimmer skeleton-subtitle" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {/* SECTION 1: Overdue Tasks */}
@@ -1381,8 +1459,8 @@ export default function TodayTab({
             </section>
           )}
 
-          {/* SECTION 3: Today's Tasks */}
-          {today_tasks.length > 0 && (
+          {/* SECTION 3: Active Today's Tasks */}
+          {activeTodayTasks.length > 0 && (
             <section className="linear-section today-tasks-section">
               <div
                 className="linear-section-header"
@@ -1391,7 +1469,7 @@ export default function TodayTab({
                 <div className="linear-section-title">
                   <span>Задачи</span>
                   <span className="linear-count-badge">
-                    {today_tasks.filter((t) => t.is_completed).length}/{today_tasks.length}
+                    {activeTodayTasks.length}
                   </span>
                 </div>
                 {isTodayOpen ? <ChevronUp size={16} color="var(--text-tertiary)" /> : <ChevronDown size={16} color="var(--text-tertiary)" />}
@@ -1399,7 +1477,7 @@ export default function TodayTab({
 
               {isTodayOpen && (
                 <div className="linear-list">
-                  {today_tasks.map((task) => (
+                  {activeTodayTasks.map((task) => (
                     <div
                       key={task.id}
                       className={`linear-list-item ${task.is_completed ? 'completed' : ''}`}
@@ -1450,6 +1528,132 @@ export default function TodayTab({
                         <>
                           <div className="item-content-col">
                             <div className="item-title">
+                              {task.title}
+                            </div>
+                            <div className="item-meta-row">
+                              {task.scheduled_time && (
+                                <span className="item-tag tag-due">
+                                  <Clock size={10} />
+                                  {task.scheduled_time}
+                                </span>
+                              )}
+                              {task.goal_title && (
+                                <span className="item-tag">
+                                  <Target size={10} />
+                                  {task.goal_title}
+                                </span>
+                              )}
+                            </div>
+                            {renderNumericStepper(task, 'task')}
+                          </div>
+
+                          <div className="item-action-btns">
+                            <button
+                              className="item-mini-btn"
+                              title="Редактировать"
+                              onClick={() => handleStartEdit(task)}
+                            >
+                              <Pencil size={13} />
+                            </button>
+                            <button
+                              className="item-mini-btn"
+                              title="Перенести на завтра"
+                              onClick={() => handlePostponeTomorrow(task.id)}
+                            >
+                              <ArrowRight size={14} />
+                            </button>
+                            <button
+                              className="item-mini-btn btn-danger"
+                              title="Удалить"
+                              onClick={() => handleDeleteTask(task.id)}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* SECTION 4: Completed Tasks Accordion (Выполненные) */}
+          {completedTodayTasks.length > 0 && (
+            <section className="linear-section today-completed-section">
+              <div
+                className="linear-section-header"
+                onClick={() => setIsCompletedOpen((prev) => !prev)}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="linear-section-title">
+                  <Check size={15} color="var(--text-secondary)" />
+                  <span style={{ color: 'var(--text-secondary)' }}>Выполненные</span>
+                  <span className="linear-count-badge badge-success">
+                    {completedTodayTasks.length}
+                  </span>
+                </div>
+                {isCompletedOpen ? (
+                  <ChevronUp size={16} color="var(--text-tertiary)" />
+                ) : (
+                  <ChevronDown size={16} color="var(--text-tertiary)" />
+                )}
+              </div>
+
+              {isCompletedOpen && (
+                <div className="linear-list">
+                  {completedTodayTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className="linear-list-item completed"
+                      style={{ alignItems: 'flex-start' }}
+                    >
+                      <button
+                        className="linear-checkbox checked"
+                        onClick={() => handleToggleTask(task.id, task.is_completed)}
+                        aria-label="Вернуть в активные задачи"
+                        style={{ marginTop: '3px' }}
+                      >
+                        <Check size={12} strokeWidth={3} />
+                      </button>
+
+                      {editingTaskId === task.id ? (
+                        <div className="task-inline-edit-box">
+                          <input
+                            type="text"
+                            className="task-inline-input"
+                            value={editTaskTitle}
+                            onChange={(e) => setEditTaskTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(task.id);
+                              if (e.key === 'Escape') setEditingTaskId(null);
+                            }}
+                            autoFocus
+                          />
+                          <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                            <button
+                              type="button"
+                              className="item-mini-btn"
+                              title="Отмена"
+                              onClick={() => setEditingTaskId(null)}
+                            >
+                              <X size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              className="item-mini-btn btn-success"
+                              title="Сохранить"
+                              onClick={() => handleSaveEdit(task.id)}
+                            >
+                              <Check size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="item-content-col">
+                            <div className="item-title" style={{ textDecoration: 'line-through', opacity: 0.65 }}>
                               {task.title}
                             </div>
                             <div className="item-meta-row">
