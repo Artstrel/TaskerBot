@@ -30,7 +30,6 @@ import {
   setOpenRouterKey,
   sendTestNotification,
 } from '../api';
-import Mascot from './Mascot';
 import { applyTheme, getStoredThemeConfig } from '../theme';
 
 export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
@@ -43,6 +42,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   const [openRouterKeyInput, setOpenRouterKeyInput] = useState(getOpenRouterKey());
   const [isSendingTest, setIsSendingTest] = useState(false);
   const [testFeedback, setTestFeedback] = useState(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(() => {
     const saved = localStorage.getItem('settings_notifications_open');
@@ -289,119 +289,120 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
       {/* Mobile iOS HIG Large Title */}
       <h1 className="mobile-large-title mobile-only-item">Параметры</h1>
 
-      {/* Desktop Material 3 View Header */}
-      <div className="desktop-view-header desktop-only-item">
-        <div className="desktop-view-title-group">
-          <h1 className="desktop-view-title">Параметры</h1>
-          <div className="desktop-view-subtitle">
-            Уведомления, время завершения дня и AI-интеграция
+      <div className="settings-content-wrap">
+        {/* Desktop Material 3 View Header */}
+        <div className="desktop-view-header desktop-only-item">
+          <div className="desktop-view-title-group">
+            <h1 className="desktop-view-title">Параметры</h1>
+            <div className="desktop-view-subtitle">
+              Уведомления, время завершения дня и AI-интеграция
+            </div>
+          </div>
+          <div className="desktop-view-actions">
+            {onForceRefresh && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  hapticFeedback('light');
+                  onForceRefresh();
+                }}
+                title="Обновить настройки"
+              >
+                <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+                <span>Обновить</span>
+              </button>
+            )}
+            {savedSuccess && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--accent-success)',
+                  background: 'var(--accent-success-dim)',
+                  padding: '4px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Check size={12} /> Сохранено
+              </span>
+            )}
           </div>
         </div>
-        <div className="desktop-view-actions">
-          {onForceRefresh && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                hapticFeedback('light');
-                onForceRefresh();
-              }}
-              title="Обновить настройки"
-            >
-              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-              <span>Обновить</span>
-            </button>
-          )}
-          {savedSuccess && (
-            <span
-              style={{
-                fontSize: '11px',
-                color: 'var(--accent-success)',
-                background: 'var(--accent-success-dim)',
-                padding: '4px 10px',
-                borderRadius: 'var(--radius-full)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <Check size={12} /> Сохранено
-            </span>
-          )}
-        </div>
-      </div>
 
-      <div className="settings-content-wrap">
         {/* Mobile Sub-Header Bar */}
         <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', width: '100%' }}>
           <div className="mobile-subheader-text">
             Уведомления, время и AI-интеграция
           </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {onForceRefresh && (
-            <button
-              type="button"
-              className="canvas-sync-btn mobile-only-item"
-              onClick={() => {
-                hapticFeedback('light');
-                onForceRefresh();
-              }}
-              title="Обновить настройки"
-            >
-              <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
-            </button>
-          )}
-          {savedSuccess && (
-            <span
-              style={{
-                fontSize: '11px',
-                color: 'var(--accent-success)',
-                background: 'var(--accent-success-dim)',
-                padding: '3px 8px',
-                borderRadius: 'var(--radius-full)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <Check size={12} /> Сохранено
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* User profile row */}
-      <div
-        style={{
-          background: 'var(--bg-surface)',
-          border: 'none',
-          borderRadius: 'var(--radius-lg)',
-          padding: '12px 14px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          marginBottom: '16px',
-        }}
-      >
-        <div style={{ flexShrink: 0 }}>
-          <Mascot state="idle" size={42} interactive={true} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            {currentUser.first_name || 'Пользователь'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {onForceRefresh && (
+              <button
+                type="button"
+                className="canvas-sync-btn mobile-only-item"
+                onClick={() => {
+                  hapticFeedback('light');
+                  onForceRefresh();
+                }}
+                title="Обновить настройки"
+              >
+                <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+              </button>
+            )}
+            {savedSuccess && (
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--accent-success)',
+                  background: 'var(--accent-success-dim)',
+                  padding: '3px 8px',
+                  borderRadius: 'var(--radius-full)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <Check size={12} /> Сохранено
+              </span>
+            )}
           </div>
-          {currentUser.username && (
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-              @{currentUser.username}
+        </div>
+
+        {/* User profile card */}
+        <div className="settings-profile-card">
+          <div className="header-avatar-circle" style={{ width: 44, height: 44 }}>
+            {currentUser.photo_url && !avatarError ? (
+              <img
+                src={currentUser.photo_url}
+                alt={currentUser.first_name || 'User'}
+                className="header-avatar-img"
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarError(true)}
+              />
+            ) : (
+              <span className="header-avatar-initial" style={{ fontSize: 18 }}>
+                {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              {currentUser.first_name || 'Пользователь'}
             </div>
-          )}
-          <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '1px' }}>
-            Telegram ID: {currentUser.id}
+            {currentUser.username && (
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                @{currentUser.username}
+              </div>
+            )}
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+              Telegram ID: {currentUser.id}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="settings-desktop-grid">
+        <div className="settings-desktop-grid">
         {/* ========================================================
             ACCORDION 0: Оформление и тема (Open by default)
             ======================================================== */}
