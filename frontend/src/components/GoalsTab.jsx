@@ -783,7 +783,7 @@ export default function GoalsTab({
 
                         {/* Clean linear progress line */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '12px' }}>
-                          <div style={{ flex: 1, height: '4px', background: 'var(--bg-card)', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ flex: 1, height: '4px', background: 'var(--border-subtle)', borderRadius: '2px', overflow: 'hidden' }}>
                             <div
                               style={{
                                 width: `${goal.progress_percentage}%`,

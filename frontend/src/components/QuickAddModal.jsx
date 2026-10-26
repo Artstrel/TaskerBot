@@ -2077,41 +2077,17 @@ export default function QuickAddModal({
                   </button>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {/* Delete button in edit mode */}
-                    {isEditMode && (
-                      <button
-                        type="button"
-                        className="item-mini-btn btn-danger"
-                        style={{
-                          height: '34px',
-                          padding: '0 12px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          borderRadius: 'var(--radius-full)',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                        }}
-                        onClick={handleDeleteCurrent}
-                        disabled={isProcessing}
-                        title="Удалить"
-                      >
-                        <Trash2 size={14} />
-                        <span>Удалить</span>
-                      </button>
-                    )}
-
-                    {/* Optional Smart AI parse button - ONLY in create mode */}
+                    {/* Compact Smart AI parse icon button - ONLY in create mode */}
                     {!isEditMode && inputText.trim().length > 12 && (
                       <button
                         type="button"
-                        className="filter-chip"
+                        className="ai-parse-icon-btn"
                         onClick={handleSmartAiParse}
                         disabled={isProcessing}
-                        title="Распознать несколько задач и дат через AI"
+                        title="Распознать несколько задач через AI"
+                        aria-label="AI парсинг"
                       >
-                        <Sparkles size={14} color="var(--accent-primary)" />
-                        <span>AI парсинг</span>
+                        <Sparkles size={16} color="var(--accent-primary)" />
                       </button>
                     )}
 
@@ -2471,6 +2447,25 @@ export default function QuickAddModal({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Bottom Delete Button for Edit Mode */}
+              {isEditMode && (
+                <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+                  <button
+                    type="button"
+                    className="modal-danger-btn"
+                    onClick={handleDeleteCurrent}
+                    disabled={isProcessing}
+                  >
+                    <Trash2 size={15} />
+                    <span>
+                      {category === 'routine' || editingType === 'routine'
+                        ? 'Удалить привычку'
+                        : 'Удалить задачу'}
+                    </span>
+                  </button>
                 </div>
               )}
             </div>
