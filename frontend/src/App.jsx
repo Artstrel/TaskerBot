@@ -4,7 +4,6 @@ import {
   Target,
   Settings,
   Plus,
-  RotateCw,
   ShoppingCart,
 } from 'lucide-react';
 import {
@@ -105,6 +104,13 @@ export default function App() {
         tg.enableClosingConfirmation();
       } catch (_) {
         // Not all clients support
+      }
+      try {
+        if (typeof tg.disableVerticalSwipes === 'function') {
+          tg.disableVerticalSwipes();
+        }
+      } catch (_) {
+        // Telegram Bot API < 7.7
       }
 
       const updateTelegramMetrics = () => {
@@ -344,97 +350,54 @@ export default function App() {
     month: 'short',
   }).format(new Date());
 
-  // Swipe / Pull to Refresh state and handlers
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
-  const touchStartY = useRef(null);
-
-  const handleTouchStart = (e) => {
-    if (window.scrollY <= 0 && !isSyncing) {
-      touchStartY.current = e.touches[0].clientY;
-      setIsPulling(true);
-    } else {
-      touchStartY.current = null;
+  const handlePillRefresh = useCallback(async () => {
+    if (isSyncing || isFetchingRef.current) return;
+    hapticFeedback('light');
+    try {
+      await loadData(true);
+      hapticFeedback('success');
+    } catch (_) {
+      hapticFeedback('error');
     }
-  };
-
-  const handleTouchMove = (e) => {
-    if (touchStartY.current === null || isSyncing) return;
-    if (window.scrollY > 0) {
-      touchStartY.current = null;
-      setPullDistance(0);
-      setIsPulling(false);
-      return;
-    }
-    const currentY = e.touches[0].clientY;
-    const diff = currentY - touchStartY.current;
-    if (diff > 0) {
-      const distance = Math.min(80, Math.pow(diff, 0.85));
-      setPullDistance(distance);
-    } else {
-      setPullDistance(0);
-    }
-  };
-
-  const handleTouchEnd = async () => {
-    if (touchStartY.current === null) return;
-    touchStartY.current = null;
-    setIsPulling(false);
-
-    if (pullDistance >= 55 && !isSyncing) {
-      setPullDistance(50);
-      hapticFeedback('medium');
-      try {
-        await loadData(true);
-      } finally {
-        setPullDistance(0);
-      }
-    } else {
-      setPullDistance(0);
-    }
-  };
+  }, [isSyncing, loadData]);
 
   return (
     <ErrorBoundary>
       <div className="app-shell">
         {/* Desktop Sidebar (hidden on mobile, visible >= 768px) */}
         <aside className="desktop-sidebar">
-          {/* Desktop Sidebar Top: Profile Bubble & Refresh */}
+          {/* Desktop Sidebar Top: Profile Bubble (Tap to refresh) */}
           <div className="sidebar-top-bar">
-            <div
-              className="header-profile-bubble"
-              title={`${currentUser.first_name || 'TaskerBot'} • ${todayFormatted}`}
+            <button
+              type="button"
+              className={`header-profile-bubble ${isSyncing ? 'is-syncing' : ''}`}
+              onClick={handlePillRefresh}
+              disabled={isSyncing}
+              title={isSyncing ? 'Синхронизация с сервером...' : 'Нажмите для обновления'}
+              aria-label={isSyncing ? 'Синхронизация данных' : 'Обновить данные'}
+              aria-busy={isSyncing}
             >
-              <div className="header-avatar-circle">
-                {currentUser.photo_url && !avatarError ? (
-                  <img
-                    src={currentUser.photo_url}
-                    alt={currentUser.first_name || 'User'}
-                    className="header-avatar-img"
-                    referrerPolicy="no-referrer"
-                    onError={() => setAvatarError(true)}
-                  />
-                ) : (
-                  <span className="header-avatar-initial">
-                    {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
-                  </span>
-                )}
+              <div className="header-avatar-wrapper">
+                <div className="header-avatar-circle">
+                  {currentUser.photo_url && !avatarError ? (
+                    <img
+                      src={currentUser.photo_url}
+                      alt={currentUser.first_name || 'User'}
+                      className="header-avatar-img"
+                      referrerPolicy="no-referrer"
+                      onError={() => setAvatarError(true)}
+                    />
+                  ) : (
+                    <span className="header-avatar-initial">
+                      {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="header-bubble-text">
                 <span className="header-bubble-name">{currentUser.first_name || 'TaskerBot'}</span>
                 <span className="header-bubble-date">{todayFormatted}</span>
               </div>
-            </div>
-
-            <button
-              className="header-icon-btn"
-              onClick={() => {
-                hapticFeedback('light');
-                loadData(true);
-              }}
-              title="Обновить данные"
-            >
-              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
             </button>
           </div>
 
@@ -505,78 +468,41 @@ export default function App() {
         <div className="app-main-wrapper">
           {/* Top Sticky Header */}
           <header className="app-header">
-            <div className="header-profile-bubble">
-              <div className="header-avatar-circle">
-                {currentUser.photo_url && !avatarError ? (
-                  <img
-                    src={currentUser.photo_url}
-                    alt={currentUser.first_name || 'User'}
-                    className="header-avatar-img"
-                    referrerPolicy="no-referrer"
-                    onError={() => setAvatarError(true)}
-                  />
-                ) : (
-                  <span className="header-avatar-initial">
-                    {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
-                  </span>
-                )}
+            <button
+              type="button"
+              className={`header-profile-bubble ${isSyncing ? 'is-syncing' : ''}`}
+              onClick={handlePillRefresh}
+              disabled={isSyncing}
+              title={isSyncing ? 'Синхронизация с сервером...' : 'Нажмите для обновления'}
+              aria-label={isSyncing ? 'Синхронизация данных' : 'Обновить данные'}
+              aria-busy={isSyncing}
+            >
+              <div className="header-avatar-wrapper">
+                <div className="header-avatar-circle">
+                  {currentUser.photo_url && !avatarError ? (
+                    <img
+                      src={currentUser.photo_url}
+                      alt={currentUser.first_name || 'User'}
+                      className="header-avatar-img"
+                      referrerPolicy="no-referrer"
+                      onError={() => setAvatarError(true)}
+                    />
+                  ) : (
+                    <span className="header-avatar-initial">
+                      {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="header-bubble-text">
                 <span className="header-bubble-name">{currentUser.first_name || 'TaskerBot'}</span>
                 <span className="header-bubble-date">{todayFormatted}</span>
               </div>
-            </div>
-
-            <div className="header-actions">
-              {isSyncing && (
-                <span className="sync-badge" title="Синхронизация с сервером...">
-                  <span className="sync-dot" />
-                  <span className="sync-badge-text">Синхронизация</span>
-                </span>
-              )}
-              <button
-                className="header-icon-btn"
-                onClick={() => {
-                  hapticFeedback('light');
-                  loadData(true);
-                }}
-                title="Обновить данные"
-              >
-                <RotateCw size={15} className={isSyncing ? 'spin-icon' : ''} />
-              </button>
-            </div>
+            </button>
           </header>
 
-          {/* Main Content Area with Pull-to-Refresh */}
-          <main
-            className="main-content-viewport"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-          >
-            {/* Pull to refresh visual indicator */}
-            <div
-              className={`ptr-indicator-wrap ${isPulling ? 'is-pulling' : ''} ${isSyncing && pullDistance > 0 ? 'is-syncing' : ''}`}
-              style={{
-                height: `${pullDistance}px`,
-                opacity: pullDistance > 10 ? Math.min(1, pullDistance / 40) : 0,
-              }}
-              aria-hidden="true"
-            >
-              <div className="ptr-indicator-pill">
-                <RotateCw
-                  size={15}
-                  className={isSyncing ? 'spin-icon' : ''}
-                  style={{
-                    transform: isSyncing ? undefined : `rotate(${pullDistance * 4}deg)`,
-                    transition: isPulling ? 'none' : 'transform 0.2s ease',
-                  }}
-                />
-                <span className="ptr-indicator-label">
-                  {pullDistance >= 55 ? 'Отпустите для обновления' : 'Потяните для обновления'}
-                </span>
-              </div>
-            </div>
+          {/* Main Content Area */}
+          <main className="main-content-viewport">
 
             <div className="main-content-container">
               {activeTab === 'today' && (
