@@ -714,6 +714,7 @@ export default function GoalsTab({
                   return (
                     <div
                       key={goal.id}
+                      className="goal-card-item"
                       style={{
                         background: 'var(--bg-surface)',
                         border: '1px solid var(--border-subtle)',

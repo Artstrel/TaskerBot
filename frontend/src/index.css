@@ -69,7 +69,10 @@
   --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.35);
   --shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.8);
 
-  /* Component specific adaptations */
+  --header-scrim-stop1: rgba(13, 13, 13, 0.88);
+  --header-scrim-stop2: rgba(13, 13, 13, 0.55);
+  --header-scrim-stop3: rgba(13, 13, 13, 0.18);
+
   --dock-scrim-stop1: rgba(13, 13, 13, 0.96);
   --dock-scrim-stop2: rgba(13, 13, 13, 0.72);
   --dock-scrim-stop3: rgba(13, 13, 13, 0.25);
@@ -136,6 +139,10 @@
   --shadow-sheet: 0 -10px 40px rgba(0, 0, 0, 0.15);
 
   /* Component specific adaptations */
+  --header-scrim-stop1: rgba(244, 244, 246, 0.88);
+  --header-scrim-stop2: rgba(244, 244, 246, 0.55);
+  --header-scrim-stop3: rgba(244, 244, 246, 0.18);
+
   --dock-scrim-stop1: rgba(244, 244, 246, 0.96);
   --dock-scrim-stop2: rgba(244, 244, 246, 0.72);
   --dock-scrim-stop3: rgba(244, 244, 246, 0.25);
@@ -262,7 +269,7 @@ h4,
   position: sticky;
   top: 0;
   z-index: 40;
-  background: var(--bg-app);
+  background: transparent;
   border-bottom: none;
   padding: 12px calc(18px + var(--safe-right)) 8px calc(18px + var(--safe-left));
   display: flex;
@@ -271,16 +278,27 @@ h4,
   transition: padding 0.2s ease;
 }
 
-/* Compact gradient tail (fade-out to 0% opacity) under the sticky header */
-.app-header::after {
+/* Progressive scrim gradient:
+   Starts at y=0, completely covers status bar & pill with 100% solid var(--bg-app),
+   then seamlessly fades to 0% opacity past the pill over ~28px towards content */
+.app-header::before {
   content: '';
   position: absolute;
-  top: 100%;
+  top: 0;
   left: 0;
   right: 0;
-  height: 18px;
-  background: linear-gradient(to bottom, var(--bg-app) 0%, rgba(13, 13, 13, 0) 100%);
+  bottom: -28px;
+  background: linear-gradient(
+    to bottom,
+    var(--bg-app) 0%,
+    var(--bg-app) calc(100% - 28px),
+    var(--header-scrim-stop1) calc(100% - 20px),
+    var(--header-scrim-stop2) calc(100% - 12px),
+    var(--header-scrim-stop3) calc(100% - 5px),
+    transparent 100%
+  );
   pointer-events: none;
+  z-index: -1;
 }
 
 /* iOS: align the profile bubble center vertically with the axis of Telegram's Close and Menu buttons */
@@ -343,6 +361,25 @@ body.is-tg-fullscreen .header-actions {
 .header-profile-bubble:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-hover);
+}
+
+/* Desktop sidebar: flat, no drop shadow, clean subtle border and card background */
+.desktop-sidebar .header-profile-bubble,
+.sidebar-top-bar .header-profile-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  box-shadow: none !important;
+}
+
+.desktop-sidebar .header-profile-bubble:hover,
+.sidebar-top-bar .header-profile-bubble:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
+}
+
+.desktop-sidebar .header-avatar-circle,
+.sidebar-top-bar .header-avatar-circle {
+  box-shadow: none !important;
 }
 
 .header-avatar-circle {
@@ -2661,14 +2698,20 @@ body,
 .settings-desktop-grid {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  width: 100%;
 }
 
 /* ==========================================================================
-   Desktop Responsive Breakpoints (>= 768px and >= 1100px)
+   Responsive Breakpoints:
+   - Mobile: < 768px
+   - Tablet: 768px - 1023px (Slim 68px Icon Rail + 1-Column Content)
+   - Desktop: >= 1024px (260px Sidebar + 2-Column Grid / CSS Masonry)
+   - Large Desktop: >= 1240px
    ========================================================================== */
 
+/* Base Tablet & Desktop Shared Styles (>= 768px) */
 @media (min-width: 768px) {
-
   .mobile-only-item,
   .mobile-only-fab,
   .mobile-only-dock {
@@ -2700,7 +2743,12 @@ body,
     display: none !important;
   }
 
-  /* Material 3 Section Headers on Desktop */
+  /* Remove shadow from profile bubble anywhere on >= 768px */
+  .header-profile-bubble {
+    box-shadow: none !important;
+  }
+
+  /* Material 3 Section Headers on Tablet & Desktop */
   .linear-section {
     margin: 24px 0 14px 0;
   }
@@ -2729,66 +2777,22 @@ body,
     padding: 0 0 40px 0;
   }
 
-  .main-content-container {
-    max-width: 1200px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 32px 40px 64px 40px;
-  }
-
-  /* Borderless Cards & Groups on Desktop (Preserve borders only in task lists) */
+  /* Borderless Cards & Groups on Tablet & Desktop */
   .settings-group,
   .day-status-card,
   .today-quick-add-wrap {
     border: none !important;
   }
 
-  /* TodayTab 2-Column Grid on Desktop */
-  .today-desktop-grid {
-    display: grid;
-    grid-template-columns: 360px 1fr;
-    gap: 28px;
-    align-items: start;
-  }
-
-  .today-col-left {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-width: 0;
-    position: sticky;
-    top: 76px;
-  }
-
-  .today-col-right {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-width: 0;
-  }
-
   .today-quick-add-wrap {
     margin: 0;
   }
 
-  .today-desktop-grid .linear-section {
+  .linear-section {
     margin: 0;
   }
 
-  .today-desktop-grid .day-status-card {
-    margin: 0;
-  }
-
-  /* GroceriesTab 2-Column Grid on Desktop */
-  .groceries-tab-container .day-status-card {
-    margin: 0 0 16px 0;
-  }
-
-  .groceries-tab-container .groceries-quick-add-wrap {
-    margin: 0 0 20px 0;
-  }
-
-  /* Aligned Empty State Card on Desktop */
+  /* Aligned Empty State Card on Tablet & Desktop */
   .empty-state-mascot-card,
   .groceries-tab-container .empty-state-mascot-card,
   .today-tab-container .empty-state-mascot-card,
@@ -2802,31 +2806,22 @@ body,
     margin: 0 0 20px 0;
   }
 
-  .groceries-desktop-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-    align-items: start;
+  .groceries-tab-container .day-status-card {
+    margin: 0 0 16px 0;
   }
 
-  .groceries-desktop-grid .linear-section {
-    margin: 0;
+  .groceries-tab-container .groceries-quick-add-wrap {
+    margin: 0 0 20px 0;
   }
 
-  /* GoalsTab Multi-Column Grid on Desktop */
-  .goals-grid-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 18px;
-    align-items: start;
-  }
-
-  /* SettingsTab Multi-Column Grid on Desktop */
+  /* SettingsTab: Linear / GitHub style clean centered column (Zero gaps on expand) */
   .settings-desktop-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-    gap: 20px;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    max-width: 760px;
+    margin: 0 auto;
+    width: 100%;
   }
 
   .settings-desktop-grid .settings-group {
@@ -2854,14 +2849,223 @@ body,
   }
 }
 
-@media (min-width: 1100px) {
+/* Tablet Intermediate Breakpoint (768px - 1023px): Slim 68px Icon Rail + 1-Column Content */
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Slim Icon-Rail Sidebar on Tablet */
+  .desktop-sidebar {
+    width: 68px;
+    padding: 18px 8px;
+    align-items: center;
+  }
+
+  .sidebar-top-bar {
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 0 12px 0;
+    margin-bottom: 12px;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sidebar-top-bar .header-profile-bubble {
+    padding: 0;
+    border: none;
+    background: transparent;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+  }
+
+  .sidebar-top-bar .header-bubble-text {
+    display: none !important;
+  }
+
+  .sidebar-quick-add-btn {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .sidebar-quick-add-btn span,
+  .sidebar-quick-add-btn kbd {
+    display: none !important;
+  }
+
+  .sidebar-nav {
+    width: 100%;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sidebar-nav-item {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    justify-content: center;
+    border-radius: var(--radius-md);
+  }
+
+  .sidebar-nav-item span:not(.dock-badge-dot):not(.dock-badge-num) {
+    display: none !important;
+  }
+
+  .sidebar-nav-item .dock-badge-dot {
+    top: 8px;
+    right: 8px;
+  }
+
+  .sidebar-nav-item .dock-badge-num {
+    top: 4px;
+    right: 2px;
+    font-size: 10px;
+    padding: 1px 4px;
+  }
+
+  /* Main Container on Tablet: ample room with no wasted padding */
+  .main-content-container {
+    padding: 24px 20px 48px 20px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* TodayTab 1-Column on Tablet: prevents any task squash into 1 letter */
   .today-desktop-grid {
-    grid-template-columns: 390px 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+  }
+
+  .today-col-left {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    position: static;
+    width: 100%;
+  }
+
+  .today-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .today-desktop-grid .linear-section {
+    margin: 0;
+  }
+
+  .today-desktop-grid .day-status-card {
+    margin: 0;
+  }
+
+  /* Groceries & Goals 1-Column on Tablet */
+  .groceries-desktop-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+  }
+
+  .goals-grid-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+  }
+}
+
+/* Full Desktop Breakpoint (>= 1024px) */
+@media (min-width: 1024px) {
+  .desktop-sidebar {
+    width: 260px;
+    padding: 20px 16px;
+    align-items: stretch;
+  }
+
+  .main-content-container {
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 28px 36px 64px 36px;
+  }
+
+  /* TodayTab 2-Column Grid on Desktop */
+  .today-desktop-grid {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 28px;
+    align-items: start;
+    width: 100%;
+  }
+
+  .today-col-left {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+    position: sticky;
+    top: 24px;
+  }
+
+  .today-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+  }
+
+  .today-desktop-grid .linear-section {
+    margin: 0;
+  }
+
+  .today-desktop-grid .day-status-card {
+    margin: 0;
+  }
+
+  /* GroceriesTab 2-Column Grid on Desktop */
+  .groceries-desktop-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .groceries-desktop-grid .linear-section {
+    margin: 0;
+  }
+
+  /* GoalsTab CSS Masonry on Desktop: tightly stacks cards, zero empty gaps when expanding */
+  .goals-grid-container {
+    display: block;
+    column-count: 2;
+    column-gap: 20px;
+  }
+
+  .goal-card-item {
+    break-inside: avoid-column;
+    page-break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    margin-bottom: 20px;
+    display: inline-block;
+    width: 100%;
+  }
+}
+
+/* Large Desktop Breakpoint (>= 1240px) */
+@media (min-width: 1240px) {
+  .today-desktop-grid {
+    grid-template-columns: 380px 1fr;
     gap: 32px;
   }
 
   .main-content-container {
-    padding: 28px 44px 64px 44px;
+    padding: 32px 44px 64px 44px;
   }
 }
 

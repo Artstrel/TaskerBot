@@ -351,7 +351,10 @@ export default function App() {
         <aside className="desktop-sidebar">
           {/* Desktop Sidebar Top: Profile Bubble & Refresh */}
           <div className="sidebar-top-bar">
-            <div className="header-profile-bubble">
+            <div
+              className="header-profile-bubble"
+              title={`${currentUser.first_name || 'TaskerBot'} • ${todayFormatted}`}
+            >
               <div className="header-avatar-circle">
                 {currentUser.photo_url && !avatarError ? (
                   <img
@@ -407,6 +410,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'today' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('today')}
+              title="Сегодня"
             >
               <Calendar size={18} />
               <span>Сегодня</span>
@@ -416,6 +420,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'groceries' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('groceries')}
+              title="Продукты"
             >
               <ShoppingCart size={18} />
               <span>Продукты</span>
@@ -429,6 +434,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'goals' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('goals')}
+              title="Цели & Проекты"
             >
               <Target size={18} />
               <span>Цели & Проекты</span>
@@ -437,6 +443,7 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('settings')}
+              title="Настройки"
             >
               <Settings size={18} />
               <span>Настройки</span>
