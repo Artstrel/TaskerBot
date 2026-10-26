@@ -31,6 +31,7 @@ import {
   sendTestNotification,
 } from '../api';
 import { applyTheme, getStoredThemeConfig } from '../theme';
+import ViewHeader from './ViewHeader';
 
 export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
   const [settings, setSettings] = useState(null);
@@ -286,67 +287,22 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
 
   return (
     <div className="tab-scroll-container settings-tab-container">
-      {/* Mobile iOS HIG Large Title */}
-      <h1 className="mobile-large-title mobile-only-item">Параметры</h1>
-
-      <div className="settings-content-wrap">
-        {/* Desktop Material 3 View Header */}
-        <div className="desktop-view-header desktop-only-item">
-          <div className="desktop-view-title-group">
-            <h1 className="desktop-view-title">Параметры</h1>
-            <div className="desktop-view-subtitle">
-              Уведомления, время завершения дня и AI-интеграция
-            </div>
-          </div>
-          <div className="desktop-view-actions">
+      <ViewHeader
+        title="Параметры"
+        subtitle="Уведомления, время завершения дня и AI-интеграция"
+        subtitlePrefix={
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
             {onForceRefresh && (
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="canvas-sync-btn"
                 onClick={() => {
                   hapticFeedback('light');
                   onForceRefresh();
                 }}
                 title="Обновить настройки"
-              >
-                <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-                <span>Обновить</span>
-              </button>
-            )}
-            {savedSuccess && (
-              <span
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--accent-success)',
-                  background: 'var(--accent-success-dim)',
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius-full)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <Check size={12} /> Сохранено
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile Sub-Header Bar */}
-        <div className="mobile-only-item" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', width: '100%' }}>
-          <div className="mobile-subheader-text">
-            Уведомления, время и AI-интеграция
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {onForceRefresh && (
-              <button
-                type="button"
-                className="canvas-sync-btn mobile-only-item"
-                onClick={() => {
-                  hapticFeedback('light');
-                  onForceRefresh();
-                }}
-                title="Обновить настройки"
+                aria-label="Обновить настройки"
+                style={{ width: '26px', height: '26px', flexShrink: 0 }}
               >
                 <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
               </button>
@@ -354,21 +310,26 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
             {savedSuccess && (
               <span
                 style={{
-                  fontSize: '11px',
+                  fontSize: 'var(--font-caption)',
                   color: 'var(--accent-success)',
                   background: 'var(--accent-success-dim)',
-                  padding: '3px 8px',
+                  padding: '2px 8px',
                   borderRadius: 'var(--radius-full)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '4px',
+                  fontWeight: 500,
+                  flexShrink: 0,
                 }}
               >
-                <Check size={12} /> Сохранено
+                <Check size={11} /> Сохранено
               </span>
             )}
           </div>
-        </div>
+        }
+      />
+
+      <div className="settings-content-wrap">
 
         {/* User profile card */}
         <div className="settings-profile-card">

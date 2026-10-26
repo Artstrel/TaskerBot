@@ -27,6 +27,7 @@ import {
   capitalizeFirst,
 } from '../api';
 import Mascot from './Mascot';
+import ViewHeader from './ViewHeader';
 
 export default function GoalsTab({
   goalsData = [],
@@ -476,82 +477,57 @@ export default function GoalsTab({
 
   return (
     <div className="tab-scroll-container goals-tab-container">
-      {/* Mobile iOS HIG Large Title */}
-      <h1 className="mobile-large-title mobile-only-item">Проекты & Цели</h1>
-
-      {/* Desktop Material 3 View Header */}
-      <div className="desktop-view-header desktop-only-item">
-        <div className="desktop-view-title-group">
-          <h1 className="desktop-view-title">Проекты & Цели</h1>
-          <div className="desktop-view-subtitle">
-            {activeGoals.length} {activeGoals.length === 1 ? 'цель' : 'целей'} в работе
-            {completedGoals.length > 0 ? ` • ${completedGoals.length} завершено` : ''}
-          </div>
-        </div>
-        <div className="desktop-view-actions">
-          {onForceRefresh && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                hapticFeedback('light');
-                onForceRefresh();
-              }}
-              title="Обновить цели"
-            >
-              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-              <span>Обновить</span>
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => {
-              hapticFeedback('light');
-              setIsCreatingGoal((prev) => !prev);
-            }}
-          >
-            <Plus size={15} />
-            <span>Новая цель</span>
-          </button>
-        </div>
-      </div>
-
-      <div className="goals-content-wrap">
-        {/* Mobile Sub-Header Bar */}
-        <div className="mobile-only-item goals-mobile-subheader">
-          <div className="mobile-subheader-text">
-            {activeGoals.length} {activeGoals.length === 1 ? 'цель' : 'целей'} в работе
-            {completedGoals.length > 0 ? ` • ${completedGoals.length} завершено` : ''}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <ViewHeader
+        title="Проекты & Цели"
+        subtitle={`${activeGoals.length} ${activeGoals.length === 1 ? 'цель' : 'целей'} в работе${completedGoals.length > 0 ? ` • ${completedGoals.length} завершено` : ''}`}
+        actions={
+          <>
             {onForceRefresh && (
               <button
                 type="button"
-                className="canvas-sync-btn mobile-only-item"
+                className="btn btn-secondary btn-sm"
                 onClick={() => {
                   hapticFeedback('light');
                   onForceRefresh();
                 }}
                 title="Обновить цели"
               >
-                <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
+                <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+                <span>Обновить</span>
               </button>
             )}
             <button
+              type="button"
+              className="btn btn-primary btn-sm"
               onClick={() => {
                 hapticFeedback('light');
                 setIsCreatingGoal((prev) => !prev);
               }}
-              className="filter-chip"
-              style={{ padding: '6px 10px', fontSize: '12px' }}
             >
-              <Plus size={14} />
-              <span>Вручную</span>
+              <Plus size={15} />
+              <span>Новая цель</span>
             </button>
-          </div>
-        </div>
+          </>
+        }
+        mobileActions={
+          onForceRefresh && (
+            <button
+              type="button"
+              className="canvas-sync-btn"
+              onClick={() => {
+                hapticFeedback('light');
+                onForceRefresh();
+              }}
+              title="Обновить цели"
+              aria-label="Обновить цели"
+            >
+              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+            </button>
+          )
+        }
+      />
 
+      <div className="goals-content-wrap">
         {/* AI Smart Goal Input Bar */}
         <div className="goals-quick-add-wrap" style={{ marginBottom: '16px' }}>
           <form onSubmit={handleAiGoalSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -571,6 +547,19 @@ export default function GoalsTab({
             >
               <Mic size={16} />
               <span>Голос</span>
+            </button>
+            <button
+              type="button"
+              className="quick-bar-btn"
+              onClick={() => {
+                hapticFeedback('light');
+                setIsCreatingGoal((prev) => !prev);
+              }}
+              title="Создать цель вручную"
+              aria-label="Создать цель вручную"
+            >
+              <Plus size={15} />
+              <span className="quick-bar-btn-label">Вручную</span>
             </button>
             {aiGoalInput.trim() && (
               <button
