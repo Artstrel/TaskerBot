@@ -1059,37 +1059,37 @@ export default function TodayTab({
     );
   };
 
-    const now = new Date();
-    const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(now);
-    const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
-    const todayDateSubtitle = `Сегодня, ${weekday}, ${dayMonth}`;
+  const now = new Date();
+  const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(now);
+  const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
+  const todayDateSubtitle = `${weekday}, ${dayMonth}`;
 
-    return (
-      <div className="today-tab-container">
-        <ViewHeader
-          title="Сегодня"
-          subtitle={todayDateSubtitle}
-        />
+  return (
+    <div className="today-tab-container">
+      <ViewHeader
+        title="Сегодня"
+        subtitle={todayDateSubtitle}
+      />
 
-        <div className="today-desktop-grid">
-          {/* LEFT COLUMN: Status & Habits */}
-          <div className="today-col-left">
-            {/* Day Progress & Time remaining card: hidden when all completed or 0 tasks */}
-            {total_count > 0 && completed_count < total_count && (
-              <div className="day-status-card">
-                <div className="day-progress-horizontal-group">
-                  <div className="progress-track">
-                    <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-                  </div>
-                  <span className="day-progress-metric">
-                    {completed_count} из {total_count} ({progressPct}%)
-                  </span>
+      <div className="today-desktop-grid">
+        {/* LEFT COLUMN: Status & Habits */}
+        <div className="today-col-left">
+          {/* Day Progress & Time remaining card: hidden when all completed or 0 tasks */}
+          {total_count > 0 && completed_count < total_count && (
+            <div className="day-status-card">
+              <div className="day-progress-horizontal-group">
+                <div className="progress-track">
+                  <div className="progress-fill" style={{ width: `${progressPct}%` }} />
                 </div>
-                <div className="day-status-actions">
-                  {renderTimeChip()}
-                </div>
+                <span className="day-progress-metric">
+                  {completed_count} из {total_count} ({progressPct}%)
+                </span>
               </div>
-            )}
+              <div className="day-status-actions">
+                {renderTimeChip()}
+              </div>
+            </div>
+          )}
 
           {/* SECTION 2: Daily Routines / Habits */}
           {routine_tasks.length > 0 && (
