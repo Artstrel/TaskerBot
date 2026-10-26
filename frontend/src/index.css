@@ -969,6 +969,11 @@ body.is-tg-fullscreen .header-actions {
   transition: background 0.15s ease;
 }
 
+.linear-section-header svg,
+.settings-accordion-header svg {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), color 0.15s ease;
+}
+
 .linear-section-header:hover,
 .settings-accordion-header:hover {
   background: var(--bg-card-hover);
@@ -1024,6 +1029,7 @@ body.is-tg-fullscreen .header-actions {
   border-radius: 0;
   padding: 2px 14px 12px 14px;
   margin: 0;
+  animation: accordionSlideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .linear-count-badge {
@@ -1167,10 +1173,10 @@ body.is-tg-fullscreen .header-actions {
 .linear-list-item {
   display: flex;
   align-items: flex-start;
-  padding: 13px 14px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border-subtle);
   background: transparent;
-  transition: background-color 0.15s ease;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   gap: 12px;
 }
@@ -1185,6 +1191,10 @@ body.is-tg-fullscreen .header-actions {
 
 .linear-list-item.completed {
   opacity: 0.55;
+}
+
+.linear-list-item .item-title {
+  transition: color 0.22s ease, opacity 0.22s ease, text-decoration-color 0.22s ease;
 }
 
 .linear-list-item.completed .item-title {
@@ -1205,8 +1215,12 @@ body.is-tg-fullscreen .header-actions {
   justify-content: center;
   cursor: pointer;
   margin-top: 2px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
   padding: 0;
+}
+
+.linear-checkbox:active {
+  transform: scale(0.9);
 }
 
 .linear-checkbox:hover {
@@ -1218,6 +1232,7 @@ body.is-tg-fullscreen .header-actions {
   background: var(--text-primary);
   border-color: var(--text-primary);
   color: var(--bg-app);
+  animation: checkPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .linear-checkbox.habit-streak {
@@ -1228,6 +1243,7 @@ body.is-tg-fullscreen .header-actions {
   background: var(--text-primary);
   border-color: var(--text-primary);
   color: var(--bg-app);
+  animation: checkPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Item content */
@@ -2023,6 +2039,38 @@ body,
 
 .spin-icon {
   animation: spin 0.75s linear infinite;
+}
+
+@keyframes accordionSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes checkPop {
+  0% {
+    transform: scale(0.82);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Screen tab transitions */
+.today-tab-container,
+.groceries-tab-container,
+.goals-content-wrap,
+.settings-content-wrap,
+.today-skeleton-screen {
+  animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ==========================================================================

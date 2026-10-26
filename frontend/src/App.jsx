@@ -81,6 +81,7 @@ export default function App() {
   const [groceriesData, setGroceriesData] = useState(() => getCachedGroceries());
   const [isLoading, setIsLoading] = useState(!getCachedDashboard());
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [warmupTimerElapsed, setWarmupTimerElapsed] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const isQuickAddOpenRef = useRef(isQuickAddOpen);
@@ -258,6 +259,7 @@ export default function App() {
       setWarmupTimerElapsed(false);
       setIsLoading(false);
       setIsSyncing(false);
+      setIsInitialLoading(false);
       isFetchingRef.current = false;
     }
   }, [dashboardData]);
@@ -514,6 +516,7 @@ export default function App() {
                   onRefresh={() => loadData(false)}
                   onForceRefresh={() => loadData(true)}
                   isSyncing={isSyncing}
+                  isInitialLoading={isInitialLoading}
                   onTaskCompleted={handleTaskCelebration}
                   warmupTimerElapsed={warmupTimerElapsed}
                   onOpenQuickAdd={(opts) => {

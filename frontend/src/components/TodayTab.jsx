@@ -46,6 +46,7 @@ export default function TodayTab({
   onRefresh,
   onForceRefresh,
   isSyncing,
+  isInitialLoading = false,
   onTaskCompleted,
   warmupTimerElapsed,
   onOpenQuickAdd,
@@ -53,6 +54,7 @@ export default function TodayTab({
   const [quickTitle, setQuickTitle] = useState('');
   const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
   const [isOverdueOpen, setIsOverdueOpen] = useState(true);
+  const [isRoutinesOpenUserOverridden, setIsRoutinesOpenUserOverridden] = useState(false);
   const [isRoutinesOpen, setIsRoutinesOpen] = useState(true);
   const [isTodayOpen, setIsTodayOpen] = useState(true);
   const [isCompletedOpen, setIsCompletedOpen] = useState(false);
@@ -166,9 +168,9 @@ export default function TodayTab({
   const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
   const todayDateSubtitle = `${weekday}, ${dayMonth}`;
 
-  if (!dashboardData) {
+  if (isInitialLoading || !dashboardData) {
     return (
-      <div className="today-tab-container">
+      <div className="today-tab-container today-skeleton-screen">
         <ViewHeader
           title="Сегодня"
           subtitle={todayDateSubtitle}
@@ -245,9 +247,17 @@ export default function TodayTab({
   const activeTodayTasks = today_tasks.filter((t) => !t.is_completed);
   const completedTodayTasks = today_tasks.filter((t) => t.is_completed);
 
+  const allRoutinesDone = routine_tasks.length > 0 && routine_tasks.every((r) => r.is_completed_today);
+  const hasUnfinishedRoutines = routine_tasks.some((r) => !r.is_completed_today);
+  const hasUnfinishedTasks = activeTodayTasks.length > 0 || overdue_tasks.some((t) => !t.is_completed);
+
+  const totalEntityCount = routine_tasks.length + today_tasks.length + overdue_tasks.length;
+  const isRoutinesSectionOpen = isRoutinesOpenUserOverridden ? isRoutinesOpen : !allRoutinesDone;
+
   const progressPct = total_count > 0 ? Math.round((completed_count / total_count) * 100) : 0;
-  const isDayAllDone = total_count > 0 && completed_count === total_count;
-  const isDayCompletelyEmpty = total_count === 0 && overdue_tasks.length === 0;
+  // Day is all done strictly when there are items and NONE are unfinished
+  const isDayAllDone = totalEntityCount > 0 && !hasUnfinishedRoutines && !hasUnfinishedTasks;
+  const isDayCompletelyEmpty = totalEntityCount === 0;
 
   const handleToggleTask = (taskId, currentStatus) => {
     const nextStatus = !currentStatus;
@@ -1152,19 +1162,22 @@ export default function TodayTab({
             <section className="linear-section today-routines-section">
               <div
                 className="linear-section-header"
-                onClick={() => setIsRoutinesOpen((prev) => !prev)}
+                onClick={() => {
+                  setIsRoutinesOpenUserOverridden(true);
+                  setIsRoutinesOpen(!isRoutinesSectionOpen);
+                }}
               >
                 <div className="linear-section-title">
-                  <Flame size={15} color="var(--text-primary)" />
+                  <Flame size={15} color={allRoutinesDone ? "var(--color-success, #22c55e)" : "var(--text-primary)"} />
                   <span>Привычки & Рутины</span>
-                  <span className="linear-count-badge badge-streak">
+                  <span className={`linear-count-badge badge-streak ${allRoutinesDone ? 'badge-success' : ''}`}>
                     {routine_tasks.filter((r) => r.is_completed_today).length}/{routine_tasks.length}
                   </span>
                 </div>
-                {isRoutinesOpen ? <ChevronUp size={16} color="var(--text-tertiary)" /> : <ChevronDown size={16} color="var(--text-tertiary)" />}
+                {isRoutinesSectionOpen ? <ChevronUp size={16} color="var(--text-tertiary)" /> : <ChevronDown size={16} color="var(--text-tertiary)" />}
               </div>
 
-              {isRoutinesOpen && (
+              {isRoutinesSectionOpen && (
                 <div className="linear-list">
                   {routine_tasks.map((routine) => (
                     <div
