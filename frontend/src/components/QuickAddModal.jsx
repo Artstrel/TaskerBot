@@ -1824,11 +1824,7 @@ export default function QuickAddModal({
                       /* Normal task item view with clickable title */
                       <>
                         <div className="item-content-col">
-                          <div
-                            className="item-title editable-title"
-                            onClick={() => handleStartEdit(task)}
-                            title="Нажмите, чтобы отредактировать"
-                          >
+                          <div className="item-title">
                             {task.title}
                           </div>
                           <div className="item-meta-row" style={{ flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>

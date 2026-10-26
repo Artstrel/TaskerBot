@@ -924,7 +924,7 @@ export default function TodayTab({
       });
   };
 
-  // Time remaining chip configuration with live ticking clock
+  // Time remaining chip configuration with live ticking clock (minimalist text badge)
   const renderTimeChip = () => {
     const totalSeconds = Math.max(0, Math.floor(liveHoursLeft * 3600));
     const hours = Math.floor(totalSeconds / 3600);
@@ -933,30 +933,29 @@ export default function TodayTab({
 
     let label = '';
     if (hours > 0) {
-      label = `${hours}ч ${mins}м до сброса`;
+      label = `${hours}ч ${mins}м`;
     } else {
-      label = `${mins}м ${secs}с до сброса`;
+      label = `${mins}м ${secs}с`;
     }
+
+    const fullTooltip = `До сброса дня: ${label}`;
 
     if (liveUrgency === 'critical_1h') {
       return (
-        <span className="time-left-chip chip-danger" title="Критическое время до сброса дня">
-          <AlertTriangle size={12} />
+        <span className="time-left-chip chip-danger" title={fullTooltip}>
           {label}
         </span>
       );
     }
     if (liveUrgency.startsWith('warning')) {
       return (
-        <span className="time-left-chip chip-warning">
-          <Clock size={12} />
+        <span className="time-left-chip chip-warning" title={fullTooltip}>
           {label}
         </span>
       );
     }
     return (
-      <span className="time-left-chip">
-        <Clock size={12} />
+      <span className="time-left-chip" title={fullTooltip}>
         {label}
       </span>
     );
@@ -1060,63 +1059,37 @@ export default function TodayTab({
     );
   };
 
-  return (
-    <div className="today-tab-container">
-      <ViewHeader
-        title="Сегодня"
-        subtitle={`${completed_count} из ${total_count} выполнено (${progressPct}%)`}
-        actions={
-          onForceRefresh && (
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                hapticFeedback('light');
-                onForceRefresh();
-              }}
-              title="Обновить данные"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-              <span>Обновить</span>
-            </button>
-          )
-        }
-      />
+    const now = new Date();
+    const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(now);
+    const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
+    const todayDateSubtitle = `Сегодня, ${weekday}, ${dayMonth}`;
 
-      <div className="today-desktop-grid">
-        {/* LEFT COLUMN: Status & Habits */}
-        <div className="today-col-left">
-          {/* Day Progress & Time remaining card */}
-          <div className="day-status-card">
-            <div className="day-progress-bar-wrap">
-              <div className="day-progress-label">
-                <span>
-                  {completed_count} из {total_count} выполнено ({progressPct}%)
-                </span>
+    return (
+      <div className="today-tab-container">
+        <ViewHeader
+          title="Сегодня"
+          subtitle={todayDateSubtitle}
+        />
+
+        <div className="today-desktop-grid">
+          {/* LEFT COLUMN: Status & Habits */}
+          <div className="today-col-left">
+            {/* Day Progress & Time remaining card: hidden when all completed or 0 tasks */}
+            {total_count > 0 && completed_count < total_count && (
+              <div className="day-status-card">
+                <div className="day-progress-horizontal-group">
+                  <div className="progress-track">
+                    <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+                  </div>
+                  <span className="day-progress-metric">
+                    {completed_count} из {total_count} ({progressPct}%)
+                  </span>
+                </div>
+                <div className="day-status-actions">
+                  {renderTimeChip()}
+                </div>
               </div>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-              </div>
-            </div>
-            <div className="day-status-actions">
-              {renderTimeChip()}
-              {onForceRefresh && (
-                <button
-                  type="button"
-                  className="day-status-action-btn mobile-only-item"
-                  onClick={() => {
-                    hapticFeedback('light');
-                    onForceRefresh();
-                  }}
-                  title="Обновить и синхронизировать данные"
-                  aria-label="Обновить и синхронизировать данные"
-                >
-                  <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-                </button>
-              )}
-            </div>
-          </div>
+            )}
 
           {/* SECTION 2: Daily Routines / Habits */}
           {routine_tasks.length > 0 && (
@@ -1187,11 +1160,7 @@ export default function TodayTab({
                       ) : (
                         <>
                           <div className="item-content-col">
-                            <div
-                              className="item-title editable-title"
-                              onClick={() => handleStartRoutineEdit(routine)}
-                              title="Нажмите для редактирования"
-                            >
+                            <div className="item-title">
                               {routine.title}
                             </div>
                             <div className="item-meta-row">
@@ -1363,11 +1332,7 @@ export default function TodayTab({
                       ) : (
                         <>
                           <div className="item-content-col">
-                            <div
-                              className="item-title editable-title"
-                              onClick={() => handleStartEdit(task)}
-                              title="Нажмите для редактирования"
-                            >
+                            <div className="item-title">
                               {task.title}
                             </div>
                             <div className="item-meta-row">
@@ -1484,11 +1449,7 @@ export default function TodayTab({
                       ) : (
                         <>
                           <div className="item-content-col">
-                            <div
-                              className="item-title editable-title"
-                              onClick={() => handleStartEdit(task)}
-                              title="Нажмите для редактирования"
-                            >
+                            <div className="item-title">
                               {task.title}
                             </div>
                             <div className="item-meta-row">

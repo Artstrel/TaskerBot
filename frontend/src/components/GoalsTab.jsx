@@ -481,49 +481,17 @@ export default function GoalsTab({
         title="Проекты & Цели"
         subtitle={`${activeGoals.length} ${activeGoals.length === 1 ? 'цель' : 'целей'} в работе${completedGoals.length > 0 ? ` • ${completedGoals.length} завершено` : ''}`}
         actions={
-          <>
-            {onForceRefresh && (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  hapticFeedback('light');
-                  onForceRefresh();
-                }}
-                title="Обновить цели"
-              >
-                <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-                <span>Обновить</span>
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              onClick={() => {
-                hapticFeedback('light');
-                setIsCreatingGoal((prev) => !prev);
-              }}
-            >
-              <Plus size={15} />
-              <span>Новая цель</span>
-            </button>
-          </>
-        }
-        mobileActions={
-          onForceRefresh && (
-            <button
-              type="button"
-              className="canvas-sync-btn"
-              onClick={() => {
-                hapticFeedback('light');
-                onForceRefresh();
-              }}
-              title="Обновить цели"
-              aria-label="Обновить цели"
-            >
-              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-            </button>
-          )
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => {
+              hapticFeedback('light');
+              setIsCreatingGoal((prev) => !prev);
+            }}
+          >
+            <Plus size={15} />
+            <span>Новая цель</span>
+          </button>
         }
       />
 

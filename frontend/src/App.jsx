@@ -344,6 +344,56 @@ export default function App() {
     month: 'short',
   }).format(new Date());
 
+  // Swipe / Pull to Refresh state and handlers
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const touchStartY = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (window.scrollY <= 0 && !isSyncing) {
+      touchStartY.current = e.touches[0].clientY;
+      setIsPulling(true);
+    } else {
+      touchStartY.current = null;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (touchStartY.current === null || isSyncing) return;
+    if (window.scrollY > 0) {
+      touchStartY.current = null;
+      setPullDistance(0);
+      setIsPulling(false);
+      return;
+    }
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - touchStartY.current;
+    if (diff > 0) {
+      const distance = Math.min(80, Math.pow(diff, 0.85));
+      setPullDistance(distance);
+    } else {
+      setPullDistance(0);
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (touchStartY.current === null) return;
+    touchStartY.current = null;
+    setIsPulling(false);
+
+    if (pullDistance >= 55 && !isSyncing) {
+      setPullDistance(50);
+      hapticFeedback('medium');
+      try {
+        await loadData(true);
+      } finally {
+        setPullDistance(0);
+      }
+    } else {
+      setPullDistance(0);
+    }
+  };
+
   return (
     <ErrorBoundary>
       <div className="app-shell">
@@ -497,8 +547,37 @@ export default function App() {
             </div>
           </header>
 
-          {/* Main Content Area */}
-          <main className="main-content-viewport">
+          {/* Main Content Area with Pull-to-Refresh */}
+          <main
+            className="main-content-viewport"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            {/* Pull to refresh visual indicator */}
+            <div
+              className={`ptr-indicator-wrap ${isPulling ? 'is-pulling' : ''} ${isSyncing && pullDistance > 0 ? 'is-syncing' : ''}`}
+              style={{
+                height: `${pullDistance}px`,
+                opacity: pullDistance > 10 ? Math.min(1, pullDistance / 40) : 0,
+              }}
+              aria-hidden="true"
+            >
+              <div className="ptr-indicator-pill">
+                <RotateCw
+                  size={15}
+                  className={isSyncing ? 'spin-icon' : ''}
+                  style={{
+                    transform: isSyncing ? undefined : `rotate(${pullDistance * 4}deg)`,
+                    transition: isPulling ? 'none' : 'transform 0.2s ease',
+                  }}
+                />
+                <span className="ptr-indicator-label">
+                  {pullDistance >= 55 ? 'Отпустите для обновления' : 'Потяните для обновления'}
+                </span>
+              </div>
+            </div>
+
             <div className="main-content-container">
               {activeTab === 'today' && (
                 <TodayTab

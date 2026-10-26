@@ -429,82 +429,64 @@ export default function GroceriesTab({
     <div className="tab-scroll-container groceries-tab-container">
       <ViewHeader
         title="Список продуктов"
-        subtitle={`${completedCount} из ${totalCount} куплено (${progressPct}%)`}
+        subtitle="Быстрые покупки"
         actions={
-          <>
-            {onForceRefresh && (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => {
-                  hapticFeedback('light');
-                  onForceRefresh();
-                }}
-                title="Обновить список продуктов"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
-                <span>Обновить</span>
-              </button>
-            )}
-            {completedCount > 0 && (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={handleClearCompleted}
-                title="Очистить купленные товары"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Trash2 size={14} />
-                <span>Очистить купленное</span>
-              </button>
-            )}
-          </>
-        }
-      />
-
-      {/* Progress & Actions Header Card */}
-      <div className="day-status-card">
-        <div className="day-progress-bar-wrap">
-          <div className="day-progress-label">
-            <span>
-              {completedCount} из {totalCount} куплено ({progressPct}%)
-            </span>
-          </div>
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-          </div>
-        </div>
-
-        <div className="day-status-actions">
-          {onForceRefresh && (
+          completedCount > 0 && (
             <button
               type="button"
-              className="day-status-action-btn mobile-only-item"
-              onClick={() => {
-                hapticFeedback('light');
-                onForceRefresh();
-              }}
-              title="Обновить список продуктов"
-              aria-label="Обновить список продуктов"
+              className="btn btn-secondary btn-sm"
+              onClick={handleClearCompleted}
+              title="Очистить купленные товары"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              <RotateCw size={14} className={isSyncing ? 'spin-icon' : ''} />
+              <Trash2 size={14} />
+              <span>Очистить купленное</span>
             </button>
-          )}
-
-          {completedCount > 0 && (
+          )
+        }
+        mobileActions={
+          completedCount > 0 && (
             <button
               type="button"
-              className="day-status-action-btn btn-danger-subtle"
+              className="canvas-sync-btn btn-danger-subtle"
               onClick={handleClearCompleted}
               title="Очистить купленные товары"
               aria-label="Очистить купленные товары"
+              style={{ width: '32px', height: '32px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <Trash2 size={15} />
+              <Trash2 size={14} />
             </button>
-          )}
+          )
+        }
+      />
+
+      {/* Progress & Actions Header Card: hidden when all items bought or 0 items */}
+      {totalCount > 0 && completedCount < totalCount && (
+        <div className="day-status-card">
+          <div className="day-progress-horizontal-group">
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className="day-progress-metric">
+              {completedCount} из {totalCount} ({progressPct}%)
+            </span>
+          </div>
+
+          <div className="day-status-actions">
+            {completedCount > 0 && (
+              <button
+                type="button"
+                className="day-status-action-btn btn-danger-subtle"
+                onClick={handleClearCompleted}
+                title="Очистить купленные товары"
+                aria-label="Очистить купленные товары"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Top Quick Add Bar with Direct Voice Button */}
       <div className="groceries-quick-add-wrap">
@@ -635,12 +617,7 @@ export default function GroceriesTab({
                     </div>
                   ) : (
                     <div className="task-content-main" style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        className="linear-title"
-                        onClick={() => handleStartEdit(item)}
-                        title="Нажмите для редактирования названия"
-                        style={{ cursor: 'pointer' }}
-                      >
+                      <div className="linear-title">
                         {item.title}
                       </div>
 

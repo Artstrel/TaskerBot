@@ -574,6 +574,7 @@ body.is-tg-fullscreen .header-actions {
   gap: 3px;
   min-width: 0;
   flex: 1;
+  padding-left: 6px;
 }
 
 .view-title {
@@ -1100,6 +1101,7 @@ body.is-tg-fullscreen .header-actions {
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-top: 6px;
+  padding: 0;
 }
 
 .linear-section .linear-list {
@@ -1293,6 +1295,31 @@ body.is-tg-fullscreen .header-actions {
   min-width: 0;
 }
 
+.day-progress-horizontal-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.day-progress-horizontal-group .progress-track {
+  width: 90px;
+  max-width: 120px;
+  height: 6px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.day-progress-metric {
+  font-size: var(--font-subtext);
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 .day-status-actions {
   display: flex;
   align-items: center;
@@ -1381,6 +1408,38 @@ body.is-tg-fullscreen .header-actions {
   background: var(--accent-danger-dim);
   color: var(--accent-danger);
   font-weight: 600;
+}
+
+/* Pull to Refresh Indicator */
+.ptr-indicator-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: height 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.2s ease;
+  pointer-events: none;
+  width: 100%;
+}
+
+.ptr-indicator-wrap.is-pulling {
+  transition: none;
+}
+
+.ptr-indicator-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  color: var(--text-secondary);
+  font-size: var(--font-caption);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.ptr-indicator-label {
+  font-weight: 500;
 }
 
 /* Empty State with Mascot */
@@ -2256,16 +2315,9 @@ body,
    Inline Task Editing Styles
    ========================================================================== */
 .editable-title {
-  cursor: pointer;
   border-radius: 4px;
   padding: 1px 4px;
   margin: -1px -4px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.editable-title:hover {
-  background: var(--accent-primary-dim);
-  color: var(--text-primary);
 }
 
 .task-inline-edit-box {

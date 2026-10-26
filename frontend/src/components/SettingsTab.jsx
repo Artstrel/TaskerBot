@@ -291,41 +291,24 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
         title="Параметры"
         subtitle="Уведомления, время завершения дня и AI-интеграция"
         subtitlePrefix={
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            {onForceRefresh && (
-              <button
-                type="button"
-                className="canvas-sync-btn"
-                onClick={() => {
-                  hapticFeedback('light');
-                  onForceRefresh();
-                }}
-                title="Обновить настройки"
-                aria-label="Обновить настройки"
-                style={{ width: '26px', height: '26px', flexShrink: 0 }}
-              >
-                <RotateCw size={13} className={isSyncing ? 'spin-icon' : ''} />
-              </button>
-            )}
-            {savedSuccess && (
-              <span
-                style={{
-                  fontSize: 'var(--font-caption)',
-                  color: 'var(--accent-success)',
-                  background: 'var(--accent-success-dim)',
-                  padding: '2px 8px',
-                  borderRadius: 'var(--radius-full)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontWeight: 500,
-                  flexShrink: 0,
-                }}
-              >
-                <Check size={11} /> Сохранено
-              </span>
-            )}
-          </div>
+          savedSuccess && (
+            <span
+              style={{
+                fontSize: 'var(--font-caption)',
+                color: 'var(--accent-success)',
+                background: 'var(--accent-success-dim)',
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontWeight: 500,
+                flexShrink: 0,
+              }}
+            >
+              <Check size={11} /> Сохранено
+            </span>
+          )
         }
       />
 
