@@ -47,6 +47,7 @@ export default function TodayTab({
   isSyncing,
   onTaskCompleted,
   warmupTimerElapsed,
+  onOpenQuickAdd,
 }) {
   const [quickTitle, setQuickTitle] = useState('');
   const [isSubmittingQuick, setIsSubmittingQuick] = useState(false);
@@ -88,8 +89,15 @@ export default function TodayTab({
 
   const handleStartEdit = (task) => {
     hapticFeedback('selection');
-    setEditingTaskId(task.id);
-    setEditTaskTitle(task.title);
+    if (onOpenQuickAdd) {
+      onOpenQuickAdd({
+        editingItem: task,
+        editingType: 'task',
+      });
+    } else {
+      setEditingTaskId(task.id);
+      setEditTaskTitle(task.title);
+    }
   };
 
   const handleSaveEdit = (taskId) => {
@@ -400,8 +408,15 @@ export default function TodayTab({
 
   const handleStartRoutineEdit = (routine) => {
     hapticFeedback('selection');
-    setEditingRoutineId(routine.id);
-    setEditRoutineTitle(routine.title);
+    if (onOpenQuickAdd) {
+      onOpenQuickAdd({
+        editingItem: routine,
+        editingType: 'routine',
+      });
+    } else {
+      setEditingRoutineId(routine.id);
+      setEditRoutineTitle(routine.title);
+    }
   };
 
   const handleSaveRoutineEdit = (routineId) => {

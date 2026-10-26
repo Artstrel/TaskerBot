@@ -324,6 +324,7 @@ async def update_task_endpoint(
         current_value=task_in.current_value,
         step=task_in.step,
         unit=task_in.unit,
+        fields_set=task_in.model_fields_set,
     )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

@@ -726,6 +726,7 @@ async def update_one_time_task(
     current_value: Optional[float] = None,
     step: Optional[float] = None,
     unit: Optional[str] = None,
+    fields_set: Optional[set] = None,
 ) -> Optional[OneTimeTaskRead]:
     stmt = (
         select(OneTimeTask)
@@ -737,27 +738,50 @@ async def update_one_time_task(
     if not task:
         return None
 
-    if title is not None:
-        task.title = title.strip()
-    if scheduled_date is not None:
-        task.scheduled_date = scheduled_date
-        task.is_overdue = False
-        task.overdue_days = 0
-    if is_completed is not None:
-        task.is_completed = is_completed
-        task.completed_at = datetime.utcnow() if is_completed else None
-    if goal_id is not None:
-        task.goal_id = goal_id if goal_id > 0 else None
-    if priority is not None:
-        task.priority = priority
-    if target_value is not None:
-        task.target_value = target_value
-    if current_value is not None:
-        task.current_value = max(0.0, round(float(current_value), 2))
-    if step is not None:
-        task.step = step
-    if unit is not None:
-        task.unit = unit.strip() if unit else None
+    if fields_set is not None:
+        if "title" in fields_set and title is not None:
+            task.title = title.strip()
+        if "scheduled_date" in fields_set:
+            task.scheduled_date = scheduled_date
+            task.is_overdue = False
+            task.overdue_days = 0
+        if "is_completed" in fields_set and is_completed is not None:
+            task.is_completed = is_completed
+            task.completed_at = datetime.utcnow() if is_completed else None
+        if "goal_id" in fields_set:
+            task.goal_id = goal_id if (goal_id and goal_id > 0) else None
+        if "priority" in fields_set and priority is not None:
+            task.priority = priority
+        if "target_value" in fields_set:
+            task.target_value = target_value
+        if "current_value" in fields_set and current_value is not None:
+            task.current_value = max(0.0, round(float(current_value), 2))
+        if "step" in fields_set and step is not None:
+            task.step = step
+        if "unit" in fields_set:
+            task.unit = unit.strip() if unit else None
+    else:
+        if title is not None:
+            task.title = title.strip()
+        if scheduled_date is not None:
+            task.scheduled_date = scheduled_date
+            task.is_overdue = False
+            task.overdue_days = 0
+        if is_completed is not None:
+            task.is_completed = is_completed
+            task.completed_at = datetime.utcnow() if is_completed else None
+        if goal_id is not None:
+            task.goal_id = goal_id if goal_id > 0 else None
+        if priority is not None:
+            task.priority = priority
+        if target_value is not None:
+            task.target_value = target_value
+        if current_value is not None:
+            task.current_value = max(0.0, round(float(current_value), 2))
+        if step is not None:
+            task.step = step
+        if unit is not None:
+            task.unit = unit.strip() if unit else None
 
     # Check auto-complete if current_value / target_value changed
     if task.target_value is not None and task.target_value > 0 and (current_value is not None or target_value is not None):

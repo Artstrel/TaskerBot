@@ -23,7 +23,11 @@ import {
   parseSmartAudio,
   parseSmartText,
   createRoutine,
+  updateRoutine,
+  deleteRoutine,
   createTask,
+  updateTask,
+  deleteTask,
   createGoal,
   createGroceryItem,
   hapticFeedback,
@@ -54,18 +58,61 @@ export default function QuickAddModal({
   initialGoalTitle,
   initialText,
   autoStartVoice = false,
+  editingItem = null,
+  editingType = null,
 }) {
-  const [inputText, setInputText] = useState(initialText || '');
-  const [category, setCategory] = useState(
-    initialCategory || (initialGoalId ? 'subtask' : 'one_time')
-  ); // 'one_time' | 'routine' | 'goal' | 'subtask'
-  const [selectedGoalId, setSelectedGoalId] = useState(initialGoalId || null);
-  const [selectedGoalTitle, setSelectedGoalTitle] = useState(initialGoalTitle || '');
-  const [dueDateOption, setDueDateOption] = useState('today'); // 'today' | 'tomorrow' | 'custom' | 'none'
-  const [customDueDate, setCustomDueDate] = useState('');
-  const [frequencyType, setFrequencyType] = useState('daily'); // 'daily' | 'interval' | 'weekly'
-  const [intervalDays, setIntervalDays] = useState(3);
-  const [daysOfWeek, setDaysOfWeek] = useState([0, 2, 4]);
+  const isEditMode = Boolean(editingItem);
+
+  const initialCat = editingItem
+    ? (editingType === 'routine' || editingItem.frequency_type ? 'routine' : (editingItem.goal_id ? 'subtask' : 'one_time'))
+    : (initialCategory || (initialGoalId ? 'subtask' : 'one_time'));
+
+  const [inputText, setInputText] = useState(
+    editingItem ? (editingItem.title || '') : (initialText || '')
+  );
+  const [category, setCategory] = useState(initialCat);
+  const [selectedGoalId, setSelectedGoalId] = useState(
+    editingItem ? (editingItem.goal_id || null) : (initialGoalId || null)
+  );
+  const [selectedGoalTitle, setSelectedGoalTitle] = useState(
+    editingItem ? (editingItem.goal_title || (editingItem.goal ? editingItem.goal.title : '')) : (initialGoalTitle || '')
+  );
+
+  // Compute initial due date option for tasks
+  const computeInitialDueDateOption = () => {
+    if (!editingItem) return 'today';
+    if (!editingItem.scheduled_date) return 'none';
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomDate = new Date();
+    tomDate.setDate(tomDate.getDate() + 1);
+    const tomorrowStr = tomDate.toISOString().split('T')[0];
+    if (editingItem.scheduled_date === todayStr) return 'today';
+    if (editingItem.scheduled_date === tomorrowStr) return 'tomorrow';
+    return 'custom';
+  };
+
+  const [dueDateOption, setDueDateOption] = useState(computeInitialDueDateOption);
+  const [customDueDate, setCustomDueDate] = useState(
+    editingItem && editingItem.scheduled_date ? editingItem.scheduled_date : ''
+  );
+
+  // Frequency and routine state
+  const computeDaysOfWeek = () => {
+    if (!editingItem || !editingItem.days_of_week) return [0, 2, 4];
+    if (Array.isArray(editingItem.days_of_week)) return editingItem.days_of_week;
+    if (typeof editingItem.days_of_week === 'string') {
+      return editingItem.days_of_week.split(',').map((d) => parseInt(d.trim(), 10)).filter((n) => !isNaN(n));
+    }
+    return [0, 2, 4];
+  };
+
+  const [frequencyType, setFrequencyType] = useState(
+    editingItem ? (editingItem.frequency_type || 'daily') : 'daily'
+  );
+  const [intervalDays, setIntervalDays] = useState(
+    editingItem ? (editingItem.interval_days || 3) : 3
+  );
+  const [daysOfWeek, setDaysOfWeek] = useState(computeDaysOfWeek);
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -84,10 +131,18 @@ export default function QuickAddModal({
   const [editingStep, setEditingStep] = useState('');
 
   // Quantitative / numeric state
-  const [isNumeric, setIsNumeric] = useState(false);
-  const [targetValue, setTargetValue] = useState('');
-  const [unit, setUnit] = useState('');
-  const [step, setStep] = useState('');
+  const [isNumeric, setIsNumeric] = useState(
+    Boolean(editingItem && editingItem.target_value && editingItem.target_value > 0)
+  );
+  const [targetValue, setTargetValue] = useState(
+    editingItem && editingItem.target_value != null ? String(editingItem.target_value) : ''
+  );
+  const [unit, setUnit] = useState(
+    editingItem && editingItem.unit ? editingItem.unit : ''
+  );
+  const [step, setStep] = useState(
+    editingItem && editingItem.step != null ? String(editingItem.step) : ''
+  );
 
   // AI Providers state
   const [providers, setProviders] = useState([]);
@@ -281,6 +336,34 @@ export default function QuickAddModal({
     setErrorMsg('');
 
     try {
+      if (isEditMode) {
+        let textResult = '';
+        if (audioBlob && audioBlob.size > 0) {
+          try {
+            const res = await parseSmartAudio(audioBlob, selectedProvider);
+            if (res?.tasks && res.tasks.length > 0 && res.tasks[0]?.title) {
+              textResult = res.tasks.map((t) => t.title).filter(Boolean).join(', ');
+            }
+          } catch (err) {
+            console.warn('Backend audio parse failed in edit mode:', err);
+          }
+        }
+        if (!textResult) {
+          const clientText = speechTranscriptRef.current && speechTranscriptRef.current.trim();
+          if (clientText) textResult = clientText;
+        }
+
+        if (textResult) {
+          hapticFeedback('success');
+          setInputText(capitalizeFirst(textResult.trim()));
+          return;
+        }
+
+        hapticFeedback('warning');
+        setErrorMsg('🎙 Не удалось распознать речь. Попробуйте надиктовать ближе к микрофону или введите текстом.');
+        return;
+      }
+
       // 1. Приоритет №1: Серверный whisper.cpp с аппаратным VAD и шумоподавлением FFmpeg (afftdn)
       if (audioBlob && audioBlob.size > 0) {
         try {
@@ -512,6 +595,238 @@ export default function QuickAddModal({
       setErrorMsg('Ошибка AI-парсинга.');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Save edit for existing task or routine
+  const handleSaveEdit = (e) => {
+    if (e) e.preventDefault();
+    const title = capitalizeFirst(inputText.trim());
+    if (!title || !editingItem) return;
+
+    const parsedTarget = isNumeric && targetValue ? parseFloat(targetValue.replace(',', '.')) : null;
+    const parsedStep = isNumeric && step ? parseFloat(step.replace(',', '.')) : 1.0;
+    const cleanUnit = isNumeric && unit.trim() ? unit.trim() : null;
+
+    hapticFeedback('success');
+    onClose();
+
+    if (category === 'routine' || editingType === 'routine' || editingItem.frequency_type) {
+      const routineFreq = frequencyType || 'daily';
+      const routineInterval = routineFreq === 'interval' ? (parseInt(intervalDays, 10) || 1) : 1;
+      const routineDays = routineFreq === 'weekly' ? daysOfWeek : null;
+
+      if (setDashboardData) {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          const updatedList = (prev.routine_tasks || []).map((r) =>
+            r.id === editingItem.id
+              ? {
+                  ...r,
+                  title,
+                  target_value: parsedTarget,
+                  step: parsedStep,
+                  unit: cleanUnit,
+                  frequency_type: routineFreq,
+                  interval_days: routineInterval,
+                  days_of_week: routineDays,
+                }
+              : r
+          );
+          const updated = { ...prev, routine_tasks: updatedList };
+          setCachedDashboard(updated);
+          return updated;
+        });
+      }
+
+      updateRoutine(editingItem.id, {
+        title,
+        target_value: parsedTarget,
+        step: parsedStep,
+        unit: cleanUnit,
+        frequency_type: routineFreq,
+        interval_days: routineInterval,
+        days_of_week: routineDays,
+      })
+        .then(() => {
+          onTaskCreated?.();
+        })
+        .catch((err) => {
+          console.error('Failed to update routine:', err);
+          onTaskCreated?.();
+        });
+    } else {
+      // One-time task / subtask
+      const selectedDate = getSelectedDate();
+      const gId = category === 'subtask' || selectedGoalId ? selectedGoalId : null;
+      const goalObj = (goalsData || []).find((g) => g.id === gId);
+      const goalTitle = goalObj ? goalObj.title : (selectedGoalTitle || null);
+      const todayStr = new Date().toISOString().split('T')[0];
+      const isDueToday = selectedDate === todayStr;
+
+      if (setDashboardData) {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+
+          const foundInToday = (prev.today_tasks || []).some((t) => t.id === editingItem.id);
+          const foundInOverdue = (prev.overdue_tasks || []).some((t) => t.id === editingItem.id);
+
+          const updatedTask = {
+            ...editingItem,
+            title,
+            scheduled_date: selectedDate,
+            goal_id: gId,
+            goal_title: goalTitle,
+            target_value: parsedTarget,
+            step: parsedStep,
+            unit: cleanUnit,
+          };
+
+          let newToday = prev.today_tasks || [];
+          let newOverdue = prev.overdue_tasks || [];
+
+          if (isDueToday) {
+            if (foundInToday) {
+              newToday = newToday.map((t) => (t.id === editingItem.id ? updatedTask : t));
+            } else if (foundInOverdue) {
+              newOverdue = newOverdue.filter((t) => t.id !== editingItem.id);
+              newToday = [updatedTask, ...newToday];
+            } else {
+              newToday = [updatedTask, ...newToday];
+            }
+          } else {
+            // Task is scheduled for another date or null (без срока) -> Remove from today/overdue
+            newToday = newToday.filter((t) => t.id !== editingItem.id);
+            newOverdue = newOverdue.filter((t) => t.id !== editingItem.id);
+          }
+
+          const countDiff = (foundInToday || foundInOverdue) && !isDueToday ? -1 : (!foundInToday && !foundInOverdue && isDueToday ? 1 : 0);
+
+          const updated = {
+            ...prev,
+            today_tasks: newToday,
+            overdue_tasks: newOverdue,
+            total_count: Math.max(0, (prev.total_count || 0) + countDiff),
+          };
+          setCachedDashboard(updated);
+          return updated;
+        });
+      }
+
+      if (setGoalsData && gId) {
+        setGoalsData((prev) => {
+          if (!prev) return prev;
+          const updated = (prev || []).map((g) => {
+            if (g.id === gId) {
+              const subtasks = (g.subtasks || []).map((s) =>
+                s.id === editingItem.id
+                  ? {
+                      ...s,
+                      title,
+                      scheduled_date: selectedDate,
+                      target_value: parsedTarget,
+                      step: parsedStep,
+                      unit: cleanUnit,
+                    }
+                  : s
+              );
+              return { ...g, subtasks };
+            }
+            return g;
+          });
+          setCachedGoals(updated);
+          return updated;
+        });
+      }
+
+      updateTask(editingItem.id, {
+        title,
+        scheduled_date: selectedDate,
+        goal_id: typeof gId === 'number' ? gId : null,
+        target_value: parsedTarget,
+        step: parsedStep,
+        unit: cleanUnit,
+      })
+        .then(() => {
+          onTaskCreated?.();
+        })
+        .catch((err) => {
+          console.error('Failed to update task:', err);
+          onTaskCreated?.();
+        });
+    }
+  };
+
+  // Direct deletion from inside edit modal
+  const handleDeleteCurrent = async () => {
+    if (!editingItem) return;
+    hapticFeedback('warning');
+    onClose();
+
+    if (category === 'routine' || editingType === 'routine' || editingItem.frequency_type) {
+      if (setDashboardData) {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          const updated = {
+            ...prev,
+            routine_tasks: (prev.routine_tasks || []).filter((r) => r.id !== editingItem.id),
+            total_count: Math.max(0, (prev.total_count || 0) - 1),
+          };
+          setCachedDashboard(updated);
+          return updated;
+        });
+      }
+      try {
+        await deleteRoutine(editingItem.id);
+      } catch (err) {
+        console.error('Failed to delete routine:', err);
+      }
+      onTaskCreated?.();
+    } else {
+      if (setDashboardData) {
+        setDashboardData((prev) => {
+          if (!prev) return prev;
+          const wasCompleted = editingItem.is_completed;
+          const updated = {
+            ...prev,
+            today_tasks: (prev.today_tasks || []).filter((t) => t.id !== editingItem.id),
+            overdue_tasks: (prev.overdue_tasks || []).filter((t) => t.id !== editingItem.id),
+            total_count: Math.max(0, (prev.total_count || 0) - 1),
+            completed_count: wasCompleted ? Math.max(0, (prev.completed_count || 0) - 1) : prev.completed_count,
+          };
+          setCachedDashboard(updated);
+          return updated;
+        });
+      }
+      if (setGoalsData && editingItem.goal_id) {
+        setGoalsData((prev) => {
+          if (!prev) return prev;
+          const updated = (prev || []).map((g) => {
+            if (g.id === editingItem.goal_id) {
+              const subtasks = (g.subtasks || []).filter((s) => s.id !== editingItem.id);
+              const completedCount = subtasks.filter((s) => s.is_completed).length;
+              const progress = subtasks.length > 0 ? Math.round((completedCount / subtasks.length) * 100) : 0;
+              return {
+                ...g,
+                subtasks,
+                progress,
+                total_subtasks: subtasks.length,
+                completed_subtasks: completedCount,
+                progress_percentage: progress,
+              };
+            }
+            return g;
+          });
+          setCachedGoals(updated);
+          return updated;
+        });
+      }
+      try {
+        await deleteTask(editingItem.id);
+      } catch (err) {
+        console.error('Failed to delete task:', err);
+      }
+      onTaskCreated?.();
     }
   };
 
@@ -1312,6 +1627,8 @@ export default function QuickAddModal({
               <Mascot state="happy" size={26} interactive={false} />
             ) : isProcessing || isTranscribingAudio ? (
               <Mascot state="thinking" size={26} interactive={false} />
+            ) : isEditMode ? (
+              <Pencil size={18} color="var(--accent-primary)" />
             ) : (
               <Sparkles size={18} color="var(--accent-primary)" />
             )}
@@ -1322,11 +1639,13 @@ export default function QuickAddModal({
                   ? 'Расшифровка аудио...'
                   : extractedTasks
                     ? 'Подтверждение задач'
-                    : initialGoalTitle
-                      ? `Шаг к цели: ${initialGoalTitle}`
-                      : category === 'goal'
-                        ? 'Новая цель'
-                        : 'Создать задачу'}
+                    : isEditMode
+                      ? (category === 'routine' || editingType === 'routine' ? 'Редактирование привычки' : 'Редактирование задачи')
+                      : initialGoalTitle
+                        ? `Шаг к цели: ${initialGoalTitle}`
+                        : category === 'goal'
+                          ? 'Новая цель'
+                          : 'Создать задачу'}
             </span>
           </div>
 
@@ -1737,7 +2056,11 @@ export default function QuickAddModal({
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      handleDirectCreate();
+                      if (isEditMode) {
+                        handleSaveEdit();
+                      } else {
+                        handleDirectCreate();
+                      }
                     }
                   }}
                 />
@@ -1754,8 +2077,32 @@ export default function QuickAddModal({
                   </button>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {/* Optional Smart AI parse button */}
-                    {inputText.trim().length > 12 && (
+                    {/* Delete button in edit mode */}
+                    {isEditMode && (
+                      <button
+                        type="button"
+                        className="item-mini-btn btn-danger"
+                        style={{
+                          height: '34px',
+                          padding: '0 12px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          borderRadius: 'var(--radius-full)',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                        }}
+                        onClick={handleDeleteCurrent}
+                        disabled={isProcessing}
+                        title="Удалить"
+                      >
+                        <Trash2 size={14} />
+                        <span>Удалить</span>
+                      </button>
+                    )}
+
+                    {/* Optional Smart AI parse button - ONLY in create mode */}
+                    {!isEditMode && inputText.trim().length > 12 && (
                       <button
                         type="button"
                         className="filter-chip"
@@ -1771,80 +2118,82 @@ export default function QuickAddModal({
                     <button
                       type="submit"
                       className="submit-task-btn"
-                      onClick={handleDirectCreate}
+                      onClick={isEditMode ? handleSaveEdit : handleDirectCreate}
                       disabled={!inputText.trim() || isProcessing}
                     >
-                      <Send size={15} />
-                      <span>{isProcessing ? 'Сохраняю...' : 'Создать'}</span>
+                      {isEditMode ? <Check size={15} /> : <Send size={15} />}
+                      <span>{isProcessing ? 'Сохраняю...' : isEditMode ? 'Сохранить' : 'Создать'}</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Chips: Category */}
-              <div style={{ marginTop: '12px' }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
-                  ТИП
-                </div>
-                <div className="chips-row">
-                  <button
-                    type="button"
-                    className={`filter-chip ${category === 'one_time' ? 'active' : ''}`}
-                    onClick={() => {
-                      hapticFeedback('selection');
-                      setCategory('one_time');
-                    }}
-                  >
-                    <Calendar size={14} /> Задача
-                  </button>
-                  <button
-                    type="button"
-                    className={`filter-chip ${category === 'grocery' ? 'active' : ''}`}
-                    onClick={() => {
-                      hapticFeedback('selection');
-                      setCategory('grocery');
-                    }}
-                  >
-                    <ShoppingCart size={14} /> Продукт
-                  </button>
-                  <button
-                    type="button"
-                    className={`filter-chip ${category === 'routine' ? 'active' : ''}`}
-                    onClick={() => {
-                      hapticFeedback('selection');
-                      setCategory('routine');
-                    }}
-                  >
-                    <Flame size={14} /> Привычка
-                  </button>
-                  {goalsData && goalsData.length > 0 && (
+              {/* Chips: Category - only in creation mode */}
+              {!isEditMode && (
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
+                    ТИП
+                  </div>
+                  <div className="chips-row">
                     <button
                       type="button"
-                      className={`filter-chip ${category === 'subtask' ? 'active' : ''}`}
+                      className={`filter-chip ${category === 'one_time' ? 'active' : ''}`}
                       onClick={() => {
                         hapticFeedback('selection');
-                        setCategory('subtask');
-                        if (!selectedGoalId && goalsData.length > 0) {
-                          setSelectedGoalId(goalsData[0].id);
-                          setSelectedGoalTitle(goalsData[0].title);
-                        }
+                        setCategory('one_time');
                       }}
                     >
-                      <Milestone size={14} /> Шаг цели
+                      <Calendar size={14} /> Задача
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className={`filter-chip ${category === 'goal' ? 'active' : ''}`}
-                    onClick={() => {
-                      hapticFeedback('selection');
-                      setCategory('goal');
-                    }}
-                  >
-                    <Target size={14} /> Проект / Цель
-                  </button>
+                    <button
+                      type="button"
+                      className={`filter-chip ${category === 'grocery' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setCategory('grocery');
+                      }}
+                    >
+                      <ShoppingCart size={14} /> Продукт
+                    </button>
+                    <button
+                      type="button"
+                      className={`filter-chip ${category === 'routine' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setCategory('routine');
+                      }}
+                    >
+                      <Flame size={14} /> Привычка
+                    </button>
+                    {goalsData && goalsData.length > 0 && (
+                      <button
+                        type="button"
+                        className={`filter-chip ${category === 'subtask' ? 'active' : ''}`}
+                        onClick={() => {
+                          hapticFeedback('selection');
+                          setCategory('subtask');
+                          if (!selectedGoalId && goalsData.length > 0) {
+                            setSelectedGoalId(goalsData[0].id);
+                            setSelectedGoalTitle(goalsData[0].title);
+                          }
+                        }}
+                      >
+                        <Milestone size={14} /> Шаг цели
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={`filter-chip ${category === 'goal' ? 'active' : ''}`}
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setCategory('goal');
+                      }}
+                    >
+                      <Target size={14} /> Проект / Цель
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Goal selector for subtask */}
               {category === 'subtask' && goalsData && goalsData.length > 0 && (
@@ -1871,6 +2220,7 @@ export default function QuickAddModal({
                       borderRadius: 'var(--radius-full)',
                     }}
                   >
+                    <option value="">Без цели</option>
                     {goalsData.map((g) => (
                       <option key={g.id} value={g.id}>
                         {g.title}
@@ -1880,8 +2230,8 @@ export default function QuickAddModal({
                 </div>
               )}
 
-              {/* Chips: Due Date (for one_time tasks) */}
-              {category === 'one_time' && (
+              {/* Chips: Due Date (for one_time and subtask tasks) */}
+              {(category === 'one_time' || category === 'subtask') && (
                 <div style={{ marginTop: '10px' }}>
                   <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
                     СРОК ИСПОЛНЕНИЯ

@@ -504,6 +504,10 @@ export default function App() {
                   isSyncing={isSyncing}
                   onTaskCompleted={handleTaskCelebration}
                   warmupTimerElapsed={warmupTimerElapsed}
+                  onOpenQuickAdd={(opts) => {
+                    setQuickAddOptions(opts);
+                    setIsQuickAddOpen(true);
+                  }}
                 />
               )}
               {activeTab === 'groceries' && (
@@ -620,6 +624,8 @@ export default function App() {
           initialGoalId={quickAddOptions?.initialGoalId}
           initialGoalTitle={quickAddOptions?.initialGoalTitle}
           autoStartVoice={quickAddOptions?.autoStartVoice}
+          editingItem={quickAddOptions?.editingItem}
+          editingType={quickAddOptions?.editingType}
         />
       )}
       </div>
