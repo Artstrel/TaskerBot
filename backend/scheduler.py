@@ -15,6 +15,7 @@ from backend.crud import (
     get_user_routines_with_status,
     get_day_tasks,
     is_routine_scheduled_for_date,
+    get_user_goals,
 )
 from backend.bot.bot_instance import bot
 from backend.bot.keyboards import get_webapp_inline_keyboard
