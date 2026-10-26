@@ -33,7 +33,7 @@ import {
 import { applyTheme, getStoredThemeConfig } from '../theme';
 import ViewHeader from './ViewHeader';
 
-export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
+export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing, isInitialLoading = false }) {
   const [settings, setSettings] = useState(null);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [customBackend, setCustomBackend] = useState(getCustomBackendUrl());
@@ -277,10 +277,98 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing }) {
     if (onRefresh) onRefresh();
   };
 
-  if (!settings) {
+  if (isInitialLoading || !settings) {
     return (
-      <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-        Загрузка настроек...
+      <div className="tab-scroll-container settings-tab-container today-skeleton-screen">
+        <ViewHeader
+          title="Параметры"
+          subtitle="Уведомления, время завершения дня и AI-интеграция"
+          actions={
+            <span className="sync-indicator-pill">
+              <RotateCw size={12} className="spin-sync-icon" />
+              <span>Синхронизация...</span>
+            </span>
+          }
+        />
+
+        <div className="settings-content-wrap">
+          {/* User profile card shimmer */}
+          <div className="settings-profile-card">
+            <div className="skeleton-shimmer" style={{ width: 44, height: 44, borderRadius: '50%', flexShrink: 0 }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="skeleton-shimmer" style={{ width: '130px', height: '16px' }} />
+              <div className="skeleton-shimmer" style={{ width: '80px', height: '12px' }} />
+            </div>
+          </div>
+
+          <div className="settings-desktop-grid">
+            {/* Accordion 1: Theme shimmer */}
+            <section className="linear-section settings-accordion-section">
+              <div className="settings-accordion-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <Sun size={15} color="var(--text-tertiary)" />
+                  <div className="skeleton-shimmer" style={{ width: '140px', height: '16px' }} />
+                </div>
+              </div>
+              <div className="settings-accordion-body" style={{ padding: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="skeleton-shimmer"
+                      style={{ height: '38px', borderRadius: 'var(--radius-full)' }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* Accordion 2: Notifications shimmer */}
+            <section className="linear-section settings-accordion-section">
+              <div className="settings-accordion-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <Bell size={15} color="var(--text-tertiary)" />
+                  <div className="skeleton-shimmer" style={{ width: '110px', height: '16px' }} />
+                </div>
+              </div>
+              <div className="settings-accordion-body" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {[1, 2].map((i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div className="skeleton-shimmer" style={{ width: i === 1 ? '60%' : '75%', height: '14px' }} />
+                      <div className="skeleton-shimmer" style={{ width: '40%', height: '10px' }} />
+                    </div>
+                    <div
+                      className="skeleton-shimmer"
+                      style={{ width: '44px', height: '24px', borderRadius: '12px', flexShrink: 0 }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Accordion 3: AI Provider shimmer */}
+            <section className="linear-section settings-accordion-section">
+              <div className="settings-accordion-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <Cpu size={15} color="var(--text-tertiary)" />
+                  <div className="skeleton-shimmer" style={{ width: '125px', height: '16px' }} />
+                </div>
+              </div>
+              <div className="settings-accordion-body" style={{ padding: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="skeleton-shimmer"
+                      style={{ height: '42px', borderRadius: 'var(--radius-md)' }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
     );
   }

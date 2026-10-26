@@ -1968,20 +1968,6 @@ export default function QuickAddModal({
             /* VIEW B1: Dedicated spacious live voice recording & transcription state */
             <div className="voice-recording-card voice-recording-dialog-stage">
               <div className="voice-stage-top">
-                <div className="voice-stage-status-badge">
-                  {isRecording ? (
-                    <>
-                      <span className="voice-record-dot live" />
-                      <span className="voice-status-label">Идёт запись</span>
-                    </>
-                  ) : (
-                    <>
-                      <RotateCw size={12} className="spin-icon" style={{ color: '#ffffff' }} />
-                      <span className="voice-status-label">Расшифровка AI</span>
-                    </>
-                  )}
-                </div>
-
                 <div className="voice-timer-pill">
                   <Clock size={12} style={{ opacity: 0.7 }} />
                   <span className="voice-timer-display">{formatTimer(recordSeconds)}</span>
@@ -2024,10 +2010,7 @@ export default function QuickAddModal({
                   disabled={isTranscribingAudio}
                 >
                   {isTranscribingAudio ? (
-                    <>
-                      <RotateCw size={14} className="spin-icon" />
-                      <span>Обработка...</span>
-                    </>
+                    <span>Обработка...</span>
                   ) : (
                     <>
                       <Square size={12} fill="currentColor" />

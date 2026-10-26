@@ -344,6 +344,7 @@ export default function App() {
 
   const overdueCount = dashboardData?.overdue_tasks?.length || 0;
   const unboughtGroceriesCount = groceriesData?.active_items?.length || 0;
+  const tabIndex = Math.max(0, ['today', 'groceries', 'goals', 'settings'].indexOf(activeTab));
 
   // Format header date
   const todayFormatted = new Intl.DateTimeFormat('ru-RU', {
@@ -422,6 +423,14 @@ export default function App() {
 
           {/* Desktop Navigation Menu */}
           <nav className="sidebar-nav">
+            <div
+              className="sidebar-active-pill"
+              style={{
+                '--tab-index': tabIndex,
+                transform: `translateY(calc(${tabIndex} * 48px))`,
+              }}
+              aria-hidden="true"
+            />
             <button
               className={`sidebar-nav-item ${activeTab === 'today' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('today')}
@@ -532,6 +541,7 @@ export default function App() {
                   onRefresh={loadData}
                   onForceRefresh={() => loadData(true)}
                   isSyncing={isSyncing}
+                  isInitialLoading={isInitialLoading}
                   onOpenQuickAdd={(opts) => {
                     setQuickAddOptions(opts);
                     setIsQuickAddOpen(true);
@@ -547,6 +557,7 @@ export default function App() {
                   onRefresh={loadData}
                   onForceRefresh={() => loadData(true)}
                   isSyncing={isSyncing}
+                  isInitialLoading={isInitialLoading}
                   onOpenQuickAdd={(opts) => {
                     setQuickAddOptions(opts);
                     setIsQuickAddOpen(true);
@@ -558,6 +569,7 @@ export default function App() {
                   onRefresh={loadData}
                   onForceRefresh={() => loadData(true)}
                   isSyncing={isSyncing}
+                  isInitialLoading={isInitialLoading}
                 />
               )}
             </div>
@@ -584,6 +596,13 @@ export default function App() {
           {/* Bottom Floating Navigation Dock for Mobile */}
           <nav className="bottom-dock mobile-only-dock">
             <div className="dock-card">
+              <div
+                className="dock-active-pill"
+                style={{
+                  transform: `translateX(calc(${tabIndex} * 100%))`,
+                }}
+                aria-hidden="true"
+              />
               <button
                 className={`dock-nav-item ${activeTab === 'today' ? 'active' : ''}`}
                 onClick={() => handleTabSwitch('today')}

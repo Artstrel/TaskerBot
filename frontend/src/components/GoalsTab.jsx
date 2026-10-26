@@ -11,6 +11,7 @@ import {
   RotateCw,
   RotateCcw,
   AlertTriangle,
+  Target,
 } from 'lucide-react';
 import {
   createGoal,
@@ -37,6 +38,7 @@ export default function GoalsTab({
   onRefresh,
   onForceRefresh,
   isSyncing,
+  isInitialLoading = false,
   onOpenQuickAdd,
 }) {
   const [expandedGoalId, setExpandedGoalId] = useState(null);
@@ -47,6 +49,97 @@ export default function GoalsTab({
   const [newGoalDate, setNewGoalDate] = useState('');
   const [newSubtaskTitles, setNewSubtaskTitles] = useState({});
   const [aiGoalInput, setAiGoalInput] = useState('');
+
+  if (isInitialLoading || !goalsData) {
+    return (
+      <div className="tab-scroll-container goals-content-wrap today-skeleton-screen">
+        <ViewHeader
+          title="Цели & Проекты"
+          subtitle="Долгосрочные планы"
+          actions={
+            <span className="sync-indicator-pill">
+              <RotateCw size={12} className="spin-sync-icon" />
+              <span>Синхронизация...</span>
+            </span>
+          }
+        />
+
+        {/* Quick add bar shimmer */}
+        <div className="goals-quick-add-wrap" style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px' }}>
+          <div className="skeleton-shimmer" style={{ flex: 1, height: '40px', borderRadius: 'var(--radius-full)' }} />
+          <div className="skeleton-shimmer" style={{ width: '80px', height: '40px', borderRadius: 'var(--radius-full)' }} />
+        </div>
+
+        {/* Goals cards skeleton list */}
+        <div className="goals-grid-container" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {[1, 2].map((n) => (
+            <div
+              key={n}
+              className="goal-card-item"
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                  <div className="skeleton-shimmer skeleton-checkbox" />
+                  <div
+                    className="skeleton-shimmer"
+                    style={{ width: n === 1 ? '55%' : '40%', height: '16px', borderRadius: 'var(--radius-sm)' }}
+                  />
+                </div>
+                <div
+                  className="skeleton-shimmer"
+                  style={{ width: '70px', height: '22px', borderRadius: 'var(--radius-full)' }}
+                />
+              </div>
+
+              {/* Progress bar shimmer */}
+              <div
+                className="skeleton-shimmer"
+                style={{ width: '100%', height: '6px', borderRadius: '3px' }}
+              />
+
+              {/* Subtask items shimmer */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                {[1, 2].map((s) => (
+                  <div
+                    key={s}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                      background: 'var(--bg-card)',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                      <div className="skeleton-shimmer" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />
+                      <div
+                        className="skeleton-shimmer"
+                        style={{ width: s === 1 ? '50%' : '35%', height: '12px', borderRadius: 'var(--radius-sm)' }}
+                      />
+                    </div>
+                    <div
+                      className="skeleton-shimmer"
+                      style={{ width: '30px', height: '20px', borderRadius: '4px' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   const toggleExpand = (id) => {
     hapticFeedback('selection');

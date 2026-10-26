@@ -33,6 +33,7 @@ export default function GroceriesTab({
   onRefresh,
   onForceRefresh,
   isSyncing,
+  isInitialLoading = false,
   onOpenQuickAdd,
 }) {
   const [quickTitle, setQuickTitle] = useState('');
@@ -46,6 +47,89 @@ export default function GroceriesTab({
   // Direct numeric value editing state
   const [editingNumericId, setEditingNumericId] = useState(null);
   const [directNumericVal, setDirectNumericVal] = useState('');
+
+  if (isInitialLoading || !groceriesData) {
+    return (
+      <div className="tab-scroll-container groceries-tab-container today-skeleton-screen">
+        <ViewHeader
+          title="Список продуктов"
+          subtitle="Быстрые покупки"
+          actions={
+            <span className="sync-indicator-pill">
+              <RotateCw size={12} className="spin-sync-icon" />
+              <span>Синхронизация...</span>
+            </span>
+          }
+        />
+
+        {/* Progress card shimmer */}
+        <div className="day-status-card" style={{ opacity: 0.85 }}>
+          <div className="day-progress-bar-wrap" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div className="skeleton-shimmer" style={{ width: '140px', height: '14px' }} />
+            <div className="skeleton-shimmer" style={{ width: '100%', height: '6px', borderRadius: '3px' }} />
+          </div>
+        </div>
+
+        {/* Quick add bar shimmer */}
+        <div className="groceries-quick-add-wrap" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <div className="skeleton-shimmer" style={{ flex: 1, height: '40px', borderRadius: 'var(--radius-full)' }} />
+          <div className="skeleton-shimmer" style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-full)' }} />
+        </div>
+
+        {/* Active items skeleton list */}
+        <section className="linear-section">
+          <div className="linear-section-header">
+            <div className="linear-section-title">
+              <ShoppingCart size={15} color="var(--text-tertiary)" />
+              <div className="skeleton-shimmer" style={{ width: '120px', height: '16px' }} />
+            </div>
+          </div>
+          <div className="linear-list">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="skeleton-list-item" style={{ justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                  <div className="skeleton-shimmer skeleton-checkbox" />
+                  <div className="skeleton-content">
+                    <div
+                      className="skeleton-shimmer skeleton-title"
+                      style={{ width: n === 1 ? '60%' : n === 2 ? '45%' : n === 3 ? '70%' : '50%' }}
+                    />
+                  </div>
+                </div>
+                <div
+                  className="skeleton-shimmer"
+                  style={{ width: '74px', height: '28px', borderRadius: 'var(--radius-full)', flexShrink: 0 }}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Completed items skeleton section */}
+        <section className="linear-section">
+          <div className="linear-section-header">
+            <div className="linear-section-title">
+              <CheckCheck size={15} color="var(--text-tertiary)" />
+              <div className="skeleton-shimmer" style={{ width: '90px', height: '16px' }} />
+            </div>
+          </div>
+          <div className="linear-list">
+            {[1, 2].map((n) => (
+              <div key={n} className="skeleton-list-item">
+                <div className="skeleton-shimmer skeleton-checkbox" style={{ opacity: 0.5 }} />
+                <div className="skeleton-content">
+                  <div
+                    className="skeleton-shimmer skeleton-title"
+                    style={{ width: n === 1 ? '50%' : '40%', opacity: 0.5 }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   const activeItems = groceriesData?.active_items || [];
   const completedItems = groceriesData?.completed_items || [];
