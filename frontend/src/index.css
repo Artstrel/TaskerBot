@@ -967,7 +967,7 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .dock-badge-num {
-  --badge-text-x: 0.5px;
+  --badge-text-x: 0.4px;
   --badge-text-y: 0px;
   position: absolute;
   top: 3px;
