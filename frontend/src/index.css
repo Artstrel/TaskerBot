@@ -965,8 +965,8 @@ body.is-tg-fullscreen .header-actions {
 
 .dock-badge-num {
   position: absolute;
-  top: 4px;
-  right: calc(50% - 18px);
+  top: 3px;
+  left: calc(50% + 4px);
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
@@ -975,10 +975,16 @@ body.is-tg-fullscreen .header-actions {
   color: var(--bg-app);
   font-size: 9px;
   font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: none;
+  pointer-events: none;
+  user-select: none;
 }
 
 /* Unified Enclosed Card Accordion (Mobile & Desktop) */
@@ -1588,6 +1594,9 @@ body.is-tg-fullscreen .header-actions {
   background: var(--border-hover);
   border-radius: 2px;
   margin: 10px auto 4px auto;
+  position: relative;
+  z-index: 12;
+  pointer-events: none;
 }
 
 .sheet-header-row {
@@ -1599,15 +1608,20 @@ body.is-tg-fullscreen .header-actions {
   padding: 12px 18px 12px 18px;
   background: transparent;
   border-bottom: none;
+  pointer-events: none;
+}
+
+.sheet-header-row > * {
+  pointer-events: auto;
 }
 
 .sheet-header-row::before {
   content: '';
   position: absolute;
-  top: 0;
+  top: -18px;
   left: 0;
   right: 0;
-  bottom: -12px;
+  bottom: -16px;
   background: linear-gradient(
     to bottom,
     var(--sheet-scrim-stop1) 0%,
@@ -1661,7 +1675,8 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .sheet-body {
-  padding: 14px 18px 24px 18px;
+  margin-top: -56px;
+  padding: calc(56px + 14px) 18px 24px 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -3082,6 +3097,25 @@ body,
   background: transparent !important;
 }
 
+.sidebar-nav-item .dock-badge-num {
+  position: static;
+  margin-left: auto;
+  left: auto;
+  top: auto;
+  min-width: 18px;
+  height: 18px;
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+}
+
+.sidebar-nav-item .dock-badge-dot {
+  position: static;
+  margin-left: auto;
+  left: auto;
+  top: auto;
+}
+
 .sidebar-footer {
   display: none;
 }
@@ -3449,10 +3483,14 @@ body,
   }
 
   .sidebar-nav-item .dock-badge-num {
+    position: absolute;
     top: 4px;
     right: 2px;
+    left: auto;
     font-size: 10px;
     padding: 1px 4px;
+    min-width: 14px;
+    height: 14px;
   }
 
   /* Main Container on Tablet: ample room with no wasted padding */
