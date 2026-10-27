@@ -1862,7 +1862,8 @@ body.is-tg-fullscreen .header-actions {
 
 /* Universal Quick Add Inputs and Action Buttons (Today, Groceries, Goals) */
 .quick-add-bar-wrap {
-  width: 100%;
+  width: auto;
+  box-sizing: border-box;
 }
 
 .quick-add-bar-form {
@@ -1870,6 +1871,7 @@ body.is-tg-fullscreen .header-actions {
   gap: 8px;
   align-items: center;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .quick-bar-input {
@@ -2924,9 +2926,12 @@ body,
   }
 
   .groceries-tab-container .groceries-quick-add-wrap,
-  .today-tab-container .today-quick-add-wrap,
-  .goals-content-wrap .goals-quick-add-wrap {
+  .today-tab-container .today-quick-add-wrap {
     margin: 0 16px 14px 16px;
+  }
+
+  .goals-content-wrap .goals-quick-add-wrap {
+    margin: 0 0 14px 0;
   }
 }
 
@@ -3130,8 +3135,7 @@ body,
 }
 
 .today-quick-add-wrap {
-  order: 2;
-  margin: 0 16px 12px 16px;
+  margin: 0 16px 14px 16px;
 }
 
 .today-tab-container .empty-state-mascot-card {
@@ -3180,7 +3184,7 @@ body,
 }
 
 .goals-quick-add-wrap {
-  width: 100%;
+  margin: 0 0 14px 0;
 }
 
 /* SettingsTab Layout */
@@ -3302,9 +3306,6 @@ body,
     box-sizing: border-box;
   }
 
-  .today-quick-add-wrap {
-    margin: 0;
-  }
 
   /* Aligned Empty State Card on Tablet & Desktop */
   .empty-state-mascot-card,
