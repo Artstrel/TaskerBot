@@ -485,7 +485,9 @@ export default function App() {
               <span>Продукты</span>
               {unboughtGroceriesCount > 0 && (
                 <span className="dock-badge-num">
-                  {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
+                  <span className="dock-badge-val">
+                    {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
+                  </span>
                 </span>
               )}
             </button>
@@ -693,7 +695,9 @@ export default function App() {
                 <span>Продукты</span>
                 {unboughtGroceriesCount > 0 && (
                   <span className="dock-badge-num">
-                    {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
+                    <span className="dock-badge-val">
+                      {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
+                    </span>
                   </span>
                 )}
               </motion.button>

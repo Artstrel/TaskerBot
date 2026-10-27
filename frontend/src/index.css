@@ -967,9 +967,11 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .dock-badge-num {
+  --badge-text-x: 0.5px;
+  --badge-text-y: 0px;
   position: absolute;
   top: 3px;
-  left: calc(50% + 8px);
+  left: calc(50% + 4px);
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
@@ -988,6 +990,12 @@ body.is-tg-fullscreen .header-actions {
   box-shadow: none;
   pointer-events: none;
   user-select: none;
+}
+
+.dock-badge-num .dock-badge-val {
+  display: inline-block;
+  line-height: 1;
+  transform: translate(var(--badge-text-x, 0px), var(--badge-text-y, 0px));
 }
 
 /* Unified Enclosed Card Accordion (Mobile & Desktop) */
@@ -3484,7 +3492,7 @@ body,
     border-radius: var(--radius-md);
   }
 
-  .sidebar-nav-item span:not(.dock-badge-dot):not(.dock-badge-num) {
+  .sidebar-nav-item>span:not(.dock-badge-dot):not(.dock-badge-num) {
     display: none !important;
   }
 
