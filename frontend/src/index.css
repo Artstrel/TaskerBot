@@ -969,7 +969,7 @@ body.is-tg-fullscreen .header-actions {
 .dock-badge-num {
   position: absolute;
   top: 3px;
-  left: calc(50% + 6px);
+  left: calc(50% + 8px);
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
@@ -1625,16 +1625,14 @@ body.is-tg-fullscreen .header-actions {
   left: 0;
   right: 0;
   bottom: -16px;
-  background: linear-gradient(
-    to bottom,
-    var(--sheet-scrim-stop1) 0%,
-    var(--sheet-scrim-stop2) 25%,
-    var(--sheet-scrim-stop3) 45%,
-    var(--sheet-scrim-stop4) 60%,
-    var(--sheet-scrim-stop5) 75%,
-    var(--sheet-scrim-stop6) 90%,
-    var(--sheet-scrim-zero) 100%
-  );
+  background: linear-gradient(to bottom,
+      var(--sheet-scrim-stop1) 0%,
+      var(--sheet-scrim-stop2) 25%,
+      var(--sheet-scrim-stop3) 45%,
+      var(--sheet-scrim-stop4) 60%,
+      var(--sheet-scrim-stop5) 75%,
+      var(--sheet-scrim-stop6) 90%,
+      var(--sheet-scrim-zero) 100%);
   pointer-events: none;
   z-index: -1;
 }
