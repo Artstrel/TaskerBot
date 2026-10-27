@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Calendar,
   Target,
@@ -533,69 +534,83 @@ export default function App() {
           <main className="main-content-viewport">
 
             <div className="main-content-container">
-              {activeTab === 'today' && (
-                <TodayTab
-                  dashboardData={dashboardData}
-                  setDashboardData={setDashboardData}
-                  goalsData={goalsData}
-                  setGoalsData={setGoalsData}
-                  onRefresh={() => loadData(false)}
-                  onForceRefresh={() => loadData(true)}
-                  isSyncing={isSyncing}
-                  isInitialLoading={isInitialLoading}
-                  onTaskCompleted={handleTaskCelebration}
-                  warmupTimerElapsed={warmupTimerElapsed}
-                  onOpenQuickAdd={(opts) => {
-                    setQuickAddOptions(opts);
-                    setIsQuickAddOpen(true);
-                  }}
-                />
-              )}
-              {activeTab === 'groceries' && (
-                <GroceriesTab
-                  groceriesData={groceriesData}
-                  setGroceriesData={setGroceriesData}
-                  onRefresh={loadData}
-                  onForceRefresh={() => loadData(true)}
-                  isSyncing={isSyncing}
-                  isInitialLoading={isInitialLoading}
-                  onOpenQuickAdd={(opts) => {
-                    setQuickAddOptions(opts);
-                    setIsQuickAddOpen(true);
-                  }}
-                />
-              )}
-              {activeTab === 'goals' && (
-                <GoalsTab
-                  goalsData={goalsData}
-                  setGoalsData={setGoalsData}
-                  dashboardData={dashboardData}
-                  setDashboardData={setDashboardData}
-                  onRefresh={loadData}
-                  onForceRefresh={() => loadData(true)}
-                  isSyncing={isSyncing}
-                  isInitialLoading={isInitialLoading}
-                  onOpenQuickAdd={(opts) => {
-                    setQuickAddOptions(opts);
-                    setIsQuickAddOpen(true);
-                  }}
-                />
-              )}
-              {activeTab === 'settings' && (
-                <SettingsTab
-                  onRefresh={loadData}
-                  onForceRefresh={() => loadData(true)}
-                  isSyncing={isSyncing}
-                  isInitialLoading={isInitialLoading}
-                />
-              )}
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  style={{ width: '100%' }}
+                >
+                  {activeTab === 'today' && (
+                    <TodayTab
+                      dashboardData={dashboardData}
+                      setDashboardData={setDashboardData}
+                      goalsData={goalsData}
+                      setGoalsData={setGoalsData}
+                      onRefresh={() => loadData(false)}
+                      onForceRefresh={() => loadData(true)}
+                      isSyncing={isSyncing}
+                      isInitialLoading={isInitialLoading}
+                      onTaskCompleted={handleTaskCelebration}
+                      warmupTimerElapsed={warmupTimerElapsed}
+                      onOpenQuickAdd={(opts) => {
+                        setQuickAddOptions(opts);
+                        setIsQuickAddOpen(true);
+                      }}
+                    />
+                  )}
+                  {activeTab === 'groceries' && (
+                    <GroceriesTab
+                      groceriesData={groceriesData}
+                      setGroceriesData={setGroceriesData}
+                      onRefresh={loadData}
+                      onForceRefresh={() => loadData(true)}
+                      isSyncing={isSyncing}
+                      isInitialLoading={isInitialLoading}
+                      onOpenQuickAdd={(opts) => {
+                        setQuickAddOptions(opts);
+                        setIsQuickAddOpen(true);
+                      }}
+                    />
+                  )}
+                  {activeTab === 'goals' && (
+                    <GoalsTab
+                      goalsData={goalsData}
+                      setGoalsData={setGoalsData}
+                      dashboardData={dashboardData}
+                      setDashboardData={setDashboardData}
+                      onRefresh={loadData}
+                      onForceRefresh={() => loadData(true)}
+                      isSyncing={isSyncing}
+                      isInitialLoading={isInitialLoading}
+                      onOpenQuickAdd={(opts) => {
+                        setQuickAddOptions(opts);
+                        setIsQuickAddOpen(true);
+                      }}
+                    />
+                  )}
+                  {activeTab === 'settings' && (
+                    <SettingsTab
+                      onRefresh={loadData}
+                      onForceRefresh={() => loadData(true)}
+                      isSyncing={isSyncing}
+                      isInitialLoading={isInitialLoading}
+                    />
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </main>
 
           {/* Floating Action Button (FAB) for Mobile Quick Add */}
           {(activeTab === 'today' || activeTab === 'groceries' || activeTab === 'goals') && (
-            <button
+            <motion.button
               className="app-fab mobile-only-fab"
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.05 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 25 }}
               onClick={() => {
                 hapticFeedback('medium');
                 setQuickAddOptions({
@@ -607,7 +622,7 @@ export default function App() {
               aria-label={activeTab === 'groceries' ? "Добавить продукт" : activeTab === 'goals' ? "Создать цель" : "Создать задачу"}
             >
               <Plus size={24} strokeWidth={2.4} />
-            </button>
+            </motion.button>
           )}
 
           {/* Bottom Floating Navigation Dock for Mobile */}
@@ -620,17 +635,19 @@ export default function App() {
                 }}
                 aria-hidden="true"
               />
-              <button
+              <motion.button
                 className={`dock-nav-item ${activeTab === 'today' ? 'active' : ''}`}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('today')}
               >
                 <Calendar size={18} />
                 <span>Сегодня</span>
                 {overdueCount > 0 && <span className="dock-badge-dot" />}
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
                 className={`dock-nav-item ${activeTab === 'groceries' ? 'active' : ''}`}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('groceries')}
               >
                 <ShoppingCart size={18} />
@@ -640,45 +657,49 @@ export default function App() {
                     {unboughtGroceriesCount > 99 ? '99+' : unboughtGroceriesCount}
                   </span>
                 )}
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
                 className={`dock-nav-item ${activeTab === 'goals' ? 'active' : ''}`}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('goals')}
               >
                 <Target size={18} />
                 <span>Цели</span>
-              </button>
+              </motion.button>
 
-              <button
+              <motion.button
                 className={`dock-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('settings')}
               >
                 <Settings size={18} />
                 <span>Настройки</span>
-              </button>
+              </motion.button>
             </div>
           </nav>
         </div>
 
       {/* Quick Add Bottom Sheet Modal */}
-      {isQuickAddOpen && (
-        <QuickAddModal
-          onClose={handleCloseQuickAdd}
-          onTaskCreated={loadData}
-          setDashboardData={setDashboardData}
-          setGoalsData={setGoalsData}
-          setGroceriesData={setGroceriesData}
-          goalsData={goalsData}
-          groceriesData={groceriesData}
-          initialCategory={quickAddOptions?.initialCategory}
-          initialGoalId={quickAddOptions?.initialGoalId}
-          initialGoalTitle={quickAddOptions?.initialGoalTitle}
-          autoStartVoice={quickAddOptions?.autoStartVoice}
-          editingItem={quickAddOptions?.editingItem}
-          editingType={quickAddOptions?.editingType}
-        />
-      )}
+      <AnimatePresence>
+        {isQuickAddOpen && (
+          <QuickAddModal
+            onClose={handleCloseQuickAdd}
+            onTaskCreated={loadData}
+            setDashboardData={setDashboardData}
+            setGoalsData={setGoalsData}
+            setGroceriesData={setGroceriesData}
+            goalsData={goalsData}
+            groceriesData={groceriesData}
+            initialCategory={quickAddOptions?.initialCategory}
+            initialGoalId={quickAddOptions?.initialGoalId}
+            initialGoalTitle={quickAddOptions?.initialGoalTitle}
+            autoStartVoice={quickAddOptions?.autoStartVoice}
+            editingItem={quickAddOptions?.editingItem}
+            editingType={quickAddOptions?.editingType}
+          />
+        )}
+      </AnimatePresence>
       </div>
     </ErrorBoundary>
   );

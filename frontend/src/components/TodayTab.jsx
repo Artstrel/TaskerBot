@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import AnimatedCheckbox from './ui/AnimatedCheckbox';
+import AnimatedChevron from './ui/AnimatedChevron';
+import AnimatedAccordion from './ui/AnimatedAccordion';
 import {
   AlertTriangle,
   Flame,
@@ -188,7 +191,6 @@ export default function TodayTab({
             <section className="linear-section">
               <div className="linear-section-header">
                 <div className="linear-section-title">
-                  <Flame size={15} color="var(--text-tertiary)" />
                   <div className="skeleton-shimmer" style={{ width: '130px', height: '16px' }} />
                 </div>
               </div>
@@ -1264,16 +1266,15 @@ export default function TodayTab({
                 }}
               >
                 <div className="linear-section-title">
-                  <Flame size={15} color={allRoutinesDone ? "var(--color-success, #22c55e)" : "var(--text-primary)"} />
                   <span>Привычки & Рутины</span>
                   <span className={`linear-count-badge badge-streak ${allRoutinesDone ? 'badge-success' : ''}`}>
                     {routine_tasks.filter((r) => r.is_completed_today).length}/{routine_tasks.length}
                   </span>
                 </div>
-                {isRoutinesSectionOpen ? <ChevronUp size={16} color="var(--text-tertiary)" /> : <ChevronDown size={16} color="var(--text-tertiary)" />}
+                <AnimatedChevron isOpen={isRoutinesSectionOpen} size={16} />
               </div>
 
-              {isRoutinesSectionOpen && (
+              <AnimatedAccordion isOpen={isRoutinesSectionOpen}>
                 <div className="linear-list">
                   {routine_tasks.map((routine) => (
                     <div
@@ -1281,14 +1282,13 @@ export default function TodayTab({
                       className={`linear-list-item ${routine.is_completed_today ? 'completed' : ''}`}
                       style={{ alignItems: 'flex-start' }}
                     >
-                      <button
-                        className={`linear-checkbox habit-streak ${routine.is_completed_today ? 'checked' : ''}`}
-                        onClick={() => handleToggleRoutine(routine.id, routine.is_completed_today)}
-                        aria-label="Отметить привычку"
+                      <AnimatedCheckbox
+                        checked={!!routine.is_completed_today}
+                        onChange={() => handleToggleRoutine(routine.id, routine.is_completed_today)}
+                        className="habit-streak"
+                        ariaLabel="Отметить привычку"
                         style={{ marginTop: '3px' }}
-                      >
-                        {routine.is_completed_today && <Check size={12} strokeWidth={3} />}
-                      </button>
+                      />
 
                       {editingRoutineId === routine.id ? (
                         <div className="task-inline-edit-box">
@@ -1381,7 +1381,7 @@ export default function TodayTab({
                     </div>
                   ))}
                 </div>
-              )}
+              </AnimatedAccordion>
             </section>
           )}
         </div>
@@ -1447,21 +1447,19 @@ export default function TodayTab({
                     {overdue_tasks.length}
                   </span>
                 </div>
-                {isOverdueOpen ? <ChevronUp size={16} color="var(--text-tertiary)" /> : <ChevronDown size={16} color="var(--text-tertiary)" />}
+                <AnimatedChevron isOpen={isOverdueOpen} size={16} />
               </div>
 
-              {isOverdueOpen && (
+              <AnimatedAccordion isOpen={isOverdueOpen}>
                 <div className="linear-list">
                   {overdue_tasks.map((task) => (
                     <div key={task.id} className={`linear-list-item ${task.is_completed ? 'completed' : ''}`} style={{ alignItems: 'flex-start' }}>
-                      <button
-                        className={`linear-checkbox ${task.is_completed ? 'checked' : ''}`}
-                        onClick={() => handleToggleTask(task.id, task.is_completed)}
-                        aria-label="Выполнить задачу"
+                      <AnimatedCheckbox
+                        checked={!!task.is_completed}
+                        onChange={() => handleToggleTask(task.id, task.is_completed)}
+                        ariaLabel="Выполнить задачу"
                         style={{ marginTop: '3px' }}
-                      >
-                        {task.is_completed && <Check size={12} strokeWidth={3} />}
-                      </button>
+                      />
 
                       {editingTaskId === task.id ? (
                         <div className="task-inline-edit-box">
@@ -1543,7 +1541,7 @@ export default function TodayTab({
                     </div>
                   ))}
                 </div>
-              )}
+              </AnimatedAccordion>
             </section>
           )}
 
@@ -1560,10 +1558,10 @@ export default function TodayTab({
                     {activeTodayTasks.length}
                   </span>
                 </div>
-                {isTodayOpen ? <ChevronUp size={16} color="var(--text-tertiary)" /> : <ChevronDown size={16} color="var(--text-tertiary)" />}
+                <AnimatedChevron isOpen={isTodayOpen} size={16} />
               </div>
 
-              {isTodayOpen && (
+              <AnimatedAccordion isOpen={isTodayOpen}>
                 <div className="linear-list">
                   {activeTodayTasks.map((task) => (
                     <div
@@ -1571,14 +1569,12 @@ export default function TodayTab({
                       className={`linear-list-item ${task.is_completed ? 'completed' : ''}`}
                       style={{ alignItems: 'flex-start' }}
                     >
-                      <button
-                        className={`linear-checkbox ${task.is_completed ? 'checked' : ''}`}
-                        onClick={() => handleToggleTask(task.id, task.is_completed)}
-                        aria-label="Выполнить задачу"
+                      <AnimatedCheckbox
+                        checked={!!task.is_completed}
+                        onChange={() => handleToggleTask(task.id, task.is_completed)}
+                        ariaLabel="Выполнить задачу"
                         style={{ marginTop: '3px' }}
-                      >
-                        {task.is_completed && <Check size={12} strokeWidth={3} />}
-                      </button>
+                      />
 
                       {editingTaskId === task.id ? (
                         <div className="task-inline-edit-box">
@@ -1663,7 +1659,7 @@ export default function TodayTab({
                     </div>
                   ))}
                 </div>
-              )}
+              </AnimatedAccordion>
             </section>
           )}
 
@@ -1676,20 +1672,15 @@ export default function TodayTab({
                 style={{ cursor: 'pointer' }}
               >
                 <div className="linear-section-title">
-                  <Check size={15} color="var(--text-secondary)" />
                   <span style={{ color: 'var(--text-secondary)' }}>Выполненные</span>
                   <span className="linear-count-badge badge-success">
                     {completedTodayTasks.length}
                   </span>
                 </div>
-                {isCompletedOpen ? (
-                  <ChevronUp size={16} color="var(--text-tertiary)" />
-                ) : (
-                  <ChevronDown size={16} color="var(--text-tertiary)" />
-                )}
+                <AnimatedChevron isOpen={isCompletedOpen} size={16} />
               </div>
 
-              {isCompletedOpen && (
+              <AnimatedAccordion isOpen={isCompletedOpen}>
                 <div className="linear-list">
                   {completedTodayTasks.map((task) => (
                     <div
@@ -1697,14 +1688,12 @@ export default function TodayTab({
                       className="linear-list-item completed"
                       style={{ alignItems: 'flex-start' }}
                     >
-                      <button
-                        className="linear-checkbox checked"
-                        onClick={() => handleToggleTask(task.id, task.is_completed)}
-                        aria-label="Вернуть в активные задачи"
+                      <AnimatedCheckbox
+                        checked={true}
+                        onChange={() => handleToggleTask(task.id, task.is_completed)}
+                        ariaLabel="Вернуть в активные задачи"
                         style={{ marginTop: '3px' }}
-                      >
-                        <Check size={12} strokeWidth={3} />
-                      </button>
+                      />
 
                       {editingTaskId === task.id ? (
                         <div className="task-inline-edit-box">
@@ -1789,7 +1778,7 @@ export default function TodayTab({
                     </div>
                   ))}
                 </div>
-              )}
+              </AnimatedAccordion>
             </section>
           )}
         </div>

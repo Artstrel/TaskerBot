@@ -1559,7 +1559,6 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  animation: fadeIn 0.15s ease-out;
   overscroll-behavior: contain;
 }
 
@@ -1576,7 +1575,6 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: sheetSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   overscroll-behavior: contain;
 }
 
@@ -1595,30 +1593,30 @@ body.is-tg-fullscreen .header-actions {
   align-items: center;
   justify-content: space-between;
   padding: 12px 18px 12px 18px;
-  background: var(--bg-surface);
+  background: transparent;
   border-bottom: none;
 }
 
-.sheet-header-row::after {
+.sheet-header-row::before {
   content: '';
   position: absolute;
-  top: 100%;
+  top: 0;
   left: 0;
   right: 0;
-  height: 24px;
+  bottom: -18px;
   background: linear-gradient(
     to bottom,
-    var(--bg-surface) 0%,
-    color-mix(in srgb, var(--bg-surface) 92%, transparent) 15%,
-    color-mix(in srgb, var(--bg-surface) 82%, transparent) 30%,
-    color-mix(in srgb, var(--bg-surface) 68%, transparent) 45%,
-    color-mix(in srgb, var(--bg-surface) 50%, transparent) 60%,
-    color-mix(in srgb, var(--bg-surface) 32%, transparent) 75%,
-    color-mix(in srgb, var(--bg-surface) 16%, transparent) 88%,
-    color-mix(in srgb, var(--bg-surface) 5%, transparent) 96%,
+    color-mix(in srgb, var(--bg-surface) 88%, transparent) 0%,
+    color-mix(in srgb, var(--bg-surface) 78%, transparent) 15%,
+    color-mix(in srgb, var(--bg-surface) 62%, transparent) 30%,
+    color-mix(in srgb, var(--bg-surface) 42%, transparent) 50%,
+    color-mix(in srgb, var(--bg-surface) 24%, transparent) 70%,
+    color-mix(in srgb, var(--bg-surface) 10%, transparent) 85%,
+    color-mix(in srgb, var(--bg-surface) 3%, transparent) 94%,
     transparent 100%
   );
   pointer-events: none;
+  z-index: -1;
 }
 
 .sheet-title {
@@ -2076,16 +2074,17 @@ body,
 }
 
 @keyframes pulseRecording {
-
-  0%,
-  100% {
-    opacity: 1;
+  0% {
     transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
   }
-
   50% {
-    opacity: 0.8;
-    transform: scale(0.98);
+    transform: scale(1.02);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
   }
 }
 
@@ -3358,7 +3357,6 @@ body,
     max-width: 600px;
     max-height: 85vh;
     box-shadow: var(--shadow-sheet);
-    animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .sheet-handle-bar {

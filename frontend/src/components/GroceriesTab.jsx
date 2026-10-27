@@ -1,4 +1,7 @@
 import React, { useState } from 'react';
+import AnimatedCheckbox from './ui/AnimatedCheckbox';
+import AnimatedChevron from './ui/AnimatedChevron';
+import AnimatedAccordion from './ui/AnimatedAccordion';
 import {
   Check,
   Trash2,
@@ -636,15 +639,13 @@ export default function GroceriesTab({
                   className="linear-list-item"
                   style={{ alignItems: 'flex-start' }}
                 >
-                  {/* Checkbox */}
-                  <button
-                    className="linear-checkbox"
-                    onClick={() => handleToggle(item.id, false)}
-                    aria-label="Отметить как купленное"
+                  {/* Animated Checkbox */}
+                  <AnimatedCheckbox
+                    checked={false}
+                    onChange={() => handleToggle(item.id, false)}
+                    ariaLabel="Отметить как купленное"
                     style={{ marginTop: '3px' }}
-                  >
-                    {/* Empty unchecked circle */}
-                  </button>
+                  />
 
                   {/* Title & Editable Box */}
                   {editingItemId === item.id ? (
@@ -726,14 +727,10 @@ export default function GroceriesTab({
                   {completedItems.length}
                 </span>
               </div>
-              {isCompletedOpen ? (
-                <ChevronUp size={16} color="var(--text-tertiary)" />
-              ) : (
-                <ChevronDown size={16} color="var(--text-tertiary)" />
-              )}
+                <AnimatedChevron isOpen={isCompletedOpen} size={16} />
             </div>
 
-            {isCompletedOpen && (
+            <AnimatedAccordion isOpen={isCompletedOpen}>
               <div className="linear-list">
                 {completedItems.map((item) => (
                   <div
@@ -741,15 +738,13 @@ export default function GroceriesTab({
                     className="linear-list-item completed"
                     style={{ alignItems: 'flex-start' }}
                   >
-                    {/* Checked checkbox */}
-                    <button
-                      className="linear-checkbox checked"
-                      onClick={() => handleToggle(item.id, true)}
-                      aria-label="Вернуть в список покупок"
+                    {/* Checked animated checkbox */}
+                    <AnimatedCheckbox
+                      checked={true}
+                      onChange={() => handleToggle(item.id, true)}
+                      ariaLabel="Вернуть в список покупок"
                       style={{ marginTop: '3px' }}
-                    >
-                      <Check size={12} strokeWidth={3} />
-                    </button>
+                    />
 
                     <div className="task-content-main" style={{ flex: 1, minWidth: 0 }}>
                       <div
@@ -777,7 +772,7 @@ export default function GroceriesTab({
                   </div>
                 ))}
               </div>
-            )}
+            </AnimatedAccordion>
           </section>
         )}
       </div>

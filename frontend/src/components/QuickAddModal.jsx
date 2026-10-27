@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { motion } from 'motion/react';
+import AnimatedCheckbox from './ui/AnimatedCheckbox';
 import {
   X,
   Mic,
@@ -42,7 +44,6 @@ import {
   stripWhisperHallucinations,
   isHallucinationOrNoise,
 } from '../api';
-import Mascot from './Mascot';
 import BarVisualizer from './BarVisualizer';
 
 export default function QuickAddModal({
@@ -1633,28 +1634,29 @@ export default function QuickAddModal({
   };
 
   return (
-    <div
+    <motion.div
       className="sheet-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
       onClick={(e) => {
         if (e.target === e.currentTarget && !isProcessing && !isRecording && !isTranscribingAudio) {
           onClose();
         }
       }}
     >
-      <div className="bottom-sheet-content">
+      <motion.div
+        className="bottom-sheet-content"
+        initial={{ y: '100%', opacity: 0.8 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0.8 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+      >
         <div className="sheet-handle-bar" />
 
         <div className="sheet-header-row">
           <div className="sheet-title">
-            {isRecording ? (
-              <Mascot state="happy" size={26} interactive={false} />
-            ) : isProcessing || isTranscribingAudio ? (
-              <Mascot state="thinking" size={26} interactive={false} />
-            ) : isEditMode ? (
-              <Pencil size={18} color="var(--accent-primary)" />
-            ) : (
-              <Sparkles size={18} color="var(--accent-primary)" />
-            )}
             <span>
               {isRecording
                 ? 'Запись голоса...'
@@ -1672,14 +1674,17 @@ export default function QuickAddModal({
             </span>
           </div>
 
-          <button
+          <motion.button
             className="sheet-close-btn"
             onClick={isRecording ? cancelRecording : onClose}
             title="Закрыть"
             disabled={isProcessing || isTranscribingAudio}
+            whileTap={{ scale: 0.86 }}
+            whileHover={{ rotate: 90 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           >
             <X size={16} strokeWidth={2.2} />
-          </button>
+          </motion.button>
         </div>
 
         <div className="sheet-body">
@@ -1734,17 +1739,16 @@ export default function QuickAddModal({
               <div className="linear-list" style={{ marginBottom: '16px' }}>
                 {extractedTasks.map((task) => (
                   <div key={task.id} className="linear-list-item" style={{ alignItems: 'flex-start' }}>
-                    <button
-                      className={`linear-checkbox ${task.selected ? 'checked' : ''}`}
-                      onClick={() => {
+                    <AnimatedCheckbox
+                      checked={!!task.selected}
+                      onChange={() => {
                         setExtractedTasks((prev) =>
                           prev.map((t) => (t.id === task.id ? { ...t, selected: !t.selected } : t))
                         );
                       }}
                       style={{ marginTop: '3px' }}
-                    >
-                      {task.selected && <Check size={12} strokeWidth={3} />}
-                    </button>
+                      ariaLabel="Выбрать задачу"
+                    />
 
                     {editingTaskId === task.id ? (
                       /* Inline task editing box */
@@ -2068,40 +2072,49 @@ export default function QuickAddModal({
                 />
 
                 <div className="input-actions-bar">
-                  <button
+                  <motion.button
                     type="button"
                     className="voice-recording-btn"
                     onClick={startRecording}
                     disabled={isProcessing}
+                    whileTap={{ scale: 0.92 }}
+                    whileHover={{ scale: 1.03 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   >
                     <Mic size={15} />
                     <span>Голос</span>
-                  </button>
+                  </motion.button>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {/* Compact Smart AI parse icon button - ONLY in create mode */}
                     {!isEditMode && inputText.trim().length > 12 && (
-                      <button
+                      <motion.button
                         type="button"
                         className="ai-parse-icon-btn"
                         onClick={handleSmartAiParse}
                         disabled={isProcessing}
                         title="Распознать несколько задач через AI"
                         aria-label="AI парсинг"
+                        whileTap={{ scale: 0.9 }}
+                        whileHover={{ scale: 1.08 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                       >
                         <Sparkles size={16} color="var(--accent-primary)" />
-                      </button>
+                      </motion.button>
                     )}
 
-                    <button
+                    <motion.button
                       type="submit"
                       className="submit-task-btn"
                       onClick={isEditMode ? handleSaveEdit : handleDirectCreate}
                       disabled={!inputText.trim() || isProcessing}
+                      whileTap={{ scale: 0.93 }}
+                      whileHover={{ scale: 1.03 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                     >
                       {isEditMode ? <Check size={15} /> : <Send size={15} />}
                       <span>{isProcessing ? 'Сохраняю...' : isEditMode ? 'Сохранить' : 'Создать'}</span>
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
               </div>
@@ -2473,7 +2486,7 @@ export default function QuickAddModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

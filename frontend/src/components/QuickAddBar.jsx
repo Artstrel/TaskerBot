@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import { Mic, Plus } from 'lucide-react';
 import { hapticFeedback } from '../api';
 
@@ -48,27 +49,34 @@ export default function QuickAddBar({
         />
 
         {onVoiceClick && (
-          <button
+          <motion.button
             type="button"
             className="quick-bar-btn quick-bar-btn-voice"
             onClick={handleVoice}
             title={voiceTitle}
             aria-label={voiceTitle}
+            whileTap={{ scale: 0.88 }}
+            whileHover={{ scale: 1.08 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
           >
             <Mic size={16} />
-          </button>
+          </motion.button>
         )}
 
-        <button
+        <motion.button
           type="submit"
           className="quick-bar-btn quick-bar-btn-submit"
           disabled={isSubmitDisabled}
           title={submitTitle}
           aria-label={submitTitle}
+          whileTap={{ scale: 0.88 }}
+          whileHover={{ scale: 1.08 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 25 }}
         >
           <Plus size={16} />
-        </button>
+        </motion.button>
       </form>
     </div>
   );
 }
+
