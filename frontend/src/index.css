@@ -135,10 +135,12 @@
   --dock-card-bg: rgba(22, 22, 22, 0.94);
   --dock-item-active-bg: rgba(255, 255, 255, 0.08);
 
-  --sheet-scrim-stop1: rgba(20, 20, 20, 0.90);
-  --sheet-scrim-stop2: rgba(20, 20, 20, 0.65);
-  --sheet-scrim-stop3: rgba(20, 20, 20, 0.25);
-  --sheet-scrim-stop4: rgba(20, 20, 20, 0.06);
+  --sheet-scrim-stop1: rgba(20, 20, 20, 0.96);
+  --sheet-scrim-stop2: rgba(20, 20, 20, 0.92);
+  --sheet-scrim-stop3: rgba(20, 20, 20, 0.85);
+  --sheet-scrim-stop4: rgba(20, 20, 20, 0.48);
+  --sheet-scrim-stop5: rgba(20, 20, 20, 0.20);
+  --sheet-scrim-stop6: rgba(20, 20, 20, 0.06);
   --sheet-scrim-zero: rgba(20, 20, 20, 0);
 
   --chip-active-bg: rgba(255, 255, 255, 0.18);
@@ -207,10 +209,12 @@
   --dock-card-bg: rgba(255, 255, 255, 0.92);
   --dock-item-active-bg: rgba(0, 0, 0, 0.06);
 
-  --sheet-scrim-stop1: rgba(255, 255, 255, 0.90);
-  --sheet-scrim-stop2: rgba(255, 255, 255, 0.65);
-  --sheet-scrim-stop3: rgba(255, 255, 255, 0.25);
-  --sheet-scrim-stop4: rgba(255, 255, 255, 0.06);
+  --sheet-scrim-stop1: rgba(255, 255, 255, 0.96);
+  --sheet-scrim-stop2: rgba(255, 255, 255, 0.92);
+  --sheet-scrim-stop3: rgba(255, 255, 255, 0.85);
+  --sheet-scrim-stop4: rgba(255, 255, 255, 0.48);
+  --sheet-scrim-stop5: rgba(255, 255, 255, 0.20);
+  --sheet-scrim-stop6: rgba(255, 255, 255, 0.06);
   --sheet-scrim-zero: rgba(255, 255, 255, 0);
 
   --chip-active-bg: #09090b;
@@ -348,18 +352,16 @@ h4,
   left: 0;
   right: 0;
   bottom: -8px;
-  background: linear-gradient(
-    to bottom,
-    var(--bg-app) 0%,
-    color-mix(in srgb, var(--bg-app) 92%, transparent) 15%,
-    color-mix(in srgb, var(--bg-app) 82%, transparent) 30%,
-    color-mix(in srgb, var(--bg-app) 68%, transparent) 45%,
-    color-mix(in srgb, var(--bg-app) 50%, transparent) 60%,
-    color-mix(in srgb, var(--bg-app) 32%, transparent) 75%,
-    color-mix(in srgb, var(--bg-app) 16%, transparent) 88%,
-    color-mix(in srgb, var(--bg-app) 5%, transparent) 96%,
-    transparent 100%
-  );
+  background: linear-gradient(to bottom,
+      var(--bg-app) 0%,
+      color-mix(in srgb, var(--bg-app) 92%, transparent) 15%,
+      color-mix(in srgb, var(--bg-app) 82%, transparent) 30%,
+      color-mix(in srgb, var(--bg-app) 68%, transparent) 45%,
+      color-mix(in srgb, var(--bg-app) 50%, transparent) 60%,
+      color-mix(in srgb, var(--bg-app) 32%, transparent) 75%,
+      color-mix(in srgb, var(--bg-app) 16%, transparent) 88%,
+      color-mix(in srgb, var(--bg-app) 5%, transparent) 96%,
+      transparent 100%);
   pointer-events: none;
   z-index: -1;
 }
@@ -505,6 +507,7 @@ body.is-tg-fullscreen .header-actions {
   0% {
     transform: rotate(0deg);
   }
+
   100% {
     transform: rotate(360deg);
   }
@@ -966,7 +969,7 @@ body.is-tg-fullscreen .header-actions {
 .dock-badge-num {
   position: absolute;
   top: 3px;
-  left: calc(50% + 4px);
+  left: calc(50% + 6px);
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
@@ -1611,7 +1614,7 @@ body.is-tg-fullscreen .header-actions {
   pointer-events: none;
 }
 
-.sheet-header-row > * {
+.sheet-header-row>* {
   pointer-events: auto;
 }
 
@@ -1625,9 +1628,11 @@ body.is-tg-fullscreen .header-actions {
   background: linear-gradient(
     to bottom,
     var(--sheet-scrim-stop1) 0%,
-    var(--sheet-scrim-stop2) 30%,
-    var(--sheet-scrim-stop3) 60%,
-    var(--sheet-scrim-stop4) 85%,
+    var(--sheet-scrim-stop2) 25%,
+    var(--sheet-scrim-stop3) 45%,
+    var(--sheet-scrim-stop4) 60%,
+    var(--sheet-scrim-stop5) 75%,
+    var(--sheet-scrim-stop6) 90%,
     var(--sheet-scrim-zero) 100%
   );
   pointer-events: none;
@@ -2094,10 +2099,12 @@ body,
     transform: scale(1);
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
   }
+
   50% {
     transform: scale(1.02);
     box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
   }
+
   100% {
     transform: scale(1);
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
@@ -2123,6 +2130,7 @@ body,
     opacity: 0;
     transform: translateY(-6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2133,9 +2141,11 @@ body,
   0% {
     transform: scale(0.82);
   }
+
   60% {
     transform: scale(1.12);
   }
+
   100% {
     transform: scale(1);
   }
@@ -2255,7 +2265,8 @@ body,
 /* LiveKit-Style Bar Visualizer (Solid White, No Gradients, No Borders) */
 .livekit-bar-visualizer {
   display: flex;
-  align-items: flex-end; /* Bottom boundary alignment: bars grow upwards */
+  align-items: flex-end;
+  /* Bottom boundary alignment: bars grow upwards */
   justify-content: center;
   user-select: none;
 }
@@ -2578,18 +2589,17 @@ body,
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--bg-elevated) 25%,
-    var(--border-subtle) 50%,
-    var(--bg-elevated) 75%
-  );
+  background: linear-gradient(90deg,
+      var(--bg-elevated) 25%,
+      var(--border-subtle) 50%,
+      var(--bg-elevated) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: var(--radius-sm);
@@ -3259,6 +3269,7 @@ body,
 
 /* Base Tablet & Desktop Shared Styles (>= 768px) */
 @media (min-width: 768px) {
+
   .mobile-only-item,
   .mobile-only-fab,
   .mobile-only-dock {
@@ -3299,6 +3310,7 @@ body,
   .linear-section {
     margin: 0 0 14px 0 !important;
   }
+
   .settings-accordion-section {
     margin: 0 !important;
   }
@@ -3401,6 +3413,7 @@ body,
 
 /* Tablet Intermediate Breakpoint (768px - 1023px): Slim 68px Icon Rail + 1-Column Content */
 @media (min-width: 768px) and (max-width: 1023px) {
+
   /* Slim Icon-Rail Sidebar on Tablet */
   .desktop-sidebar {
     width: 68px;
