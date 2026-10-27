@@ -81,7 +81,7 @@ export default function App() {
   const [groceriesData, setGroceriesData] = useState(() => getCachedGroceries());
   const [isLoading, setIsLoading] = useState(!getCachedDashboard());
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [isInitialLoading, setIsInitialLoading] = useState(() => !getCachedDashboard() && !getCachedGoals() && !getCachedGroceries());
   const [warmupTimerElapsed, setWarmupTimerElapsed] = useState(false);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const isQuickAddOpenRef = useRef(isQuickAddOpen);
@@ -169,8 +169,8 @@ export default function App() {
     // Auto-sync timezone
     syncUserTimezone();
 
-    // Initial background data load
-    loadData();
+    // Initial background data load (passes isInitial = true to bypass mutation lock)
+    loadData(false, false, true);
   }, []);
 
   // Global desktop keyboard shortcuts
@@ -195,14 +195,15 @@ export default function App() {
   const lastFetchedRef = useRef(0);
   const isFetchingRef = useRef(false);
   const latestFetchIdRef = useRef(0);
+  const coldStartRetryRef = useRef(0);
 
-  const loadData = useCallback(async (forceFullLoading = false, silent = false) => {
+  const loadData = useCallback(async (forceFullLoading = false, silent = false, isInitial = false) => {
     const now = Date.now();
-    // Prevent background fetches if user recently clicked a toggle or mutations are pending
-    if (!forceFullLoading && (now - getLastUserActionTime() < 4000 || hasActivePendingMutations())) {
+    // Prevent background fetches if user recently clicked a toggle or mutations are pending (except for initial or forced load)
+    if (!forceFullLoading && !isInitial && (now - getLastUserActionTime() < 4000 || hasActivePendingMutations())) {
       return;
     }
-    if (isFetchingRef.current || (!forceFullLoading && now - lastFetchedRef.current < 2500)) {
+    if (isFetchingRef.current || (!forceFullLoading && !isInitial && now - lastFetchedRef.current < 2500)) {
       return;
     }
 
@@ -252,8 +253,24 @@ export default function App() {
       } else {
         setMascotMood('idle');
       }
+
+      // Auto-retry cold start if server has not responded yet (e.g. Render waking up)
+      if (typeof window !== 'undefined' && window.__tasker_server_connected) {
+        coldStartRetryRef.current = 0;
+      } else if (isInitial && coldStartRetryRef.current < 8) {
+        coldStartRetryRef.current++;
+        setTimeout(() => {
+          loadData(false, true, true);
+        }, 3500);
+      }
     } catch (e) {
       console.error('Error loading data:', e);
+      if (isInitial && coldStartRetryRef.current < 8) {
+        coldStartRetryRef.current++;
+        setTimeout(() => {
+          loadData(false, true, true);
+        }, 3500);
+      }
     } finally {
       clearTimeout(timer);
       setWarmupTimerElapsed(false);

@@ -6,8 +6,6 @@ import {
   Check,
   Trash2,
   Clock,
-  Sparkles,
-  Mic,
   RotateCw,
   RotateCcw,
   AlertTriangle,
@@ -29,6 +27,7 @@ import {
 } from '../api';
 import Mascot from './Mascot';
 import ViewHeader from './ViewHeader';
+import QuickAddBar from './QuickAddBar';
 
 export default function GoalsTab({
   goalsData = [],
@@ -50,7 +49,7 @@ export default function GoalsTab({
   const [newSubtaskTitles, setNewSubtaskTitles] = useState({});
   const [aiGoalInput, setAiGoalInput] = useState('');
 
-  if (isInitialLoading || !goalsData) {
+  if (!goalsData) {
     return (
       <div className="tab-scroll-container goals-content-wrap today-skeleton-screen">
         <ViewHeader
@@ -589,52 +588,17 @@ export default function GoalsTab({
       />
 
       <div className="goals-content-wrap">
-        {/* AI Smart Goal Input Bar */}
-        <div className="goals-quick-add-wrap" style={{ marginBottom: '16px' }}>
-          <form onSubmit={handleAiGoalSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <input
-              type="text"
-              className="quick-bar-input"
-              placeholder="Новая цель или шаги..."
-              value={aiGoalInput}
-              onChange={(e) => setAiGoalInput(e.target.value)}
-            />
-            <button
-              type="button"
-              className="quick-bar-btn"
-              onClick={handleVoiceGoalClick}
-              title="Надиктовать цель голосом"
-              aria-label="Надиктовать цель голосом"
-            >
-              <Mic size={16} />
-              <span>Голос</span>
-            </button>
-            <button
-              type="button"
-              className="quick-bar-btn"
-              onClick={() => {
-                hapticFeedback('light');
-                setIsCreatingGoal((prev) => !prev);
-              }}
-              title="Создать цель вручную"
-              aria-label="Создать цель вручную"
-            >
-              <Plus size={15} />
-              <span className="quick-bar-btn-label">Вручную</span>
-            </button>
-            {aiGoalInput.trim() && (
-              <button
-                type="submit"
-                className="submit-task-btn"
-                title="Создать цель с шагами"
-                style={{ minHeight: '40px', padding: '0 16px', borderRadius: 'var(--radius-full)' }}
-              >
-                <Sparkles size={14} />
-                <span>Создать</span>
-              </button>
-            )}
-          </form>
-        </div>
+        {/* Top Quick Add Bar with Direct Voice Button */}
+        <QuickAddBar
+          placeholder="Новая цель или шаги..."
+          value={aiGoalInput}
+          onChange={setAiGoalInput}
+          onSubmit={handleAiGoalSubmit}
+          onVoiceClick={handleVoiceGoalClick}
+          voiceTitle="Надиктовать цель голосом"
+          submitTitle="Создать цель"
+          className="goals-quick-add-wrap"
+        />
 
         {/* Create Goal Form */}
         {isCreatingGoal && (

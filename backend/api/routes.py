@@ -256,7 +256,7 @@ async def add_task(
         step=task_in.step,
         unit=task_in.unit,
     )
-    return OneTimeTaskRead.model_validate(task)
+    return task
 
 
 @router.patch("/tasks/{task_id}/toggle", response_model=OneTimeTaskRead)

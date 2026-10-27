@@ -502,7 +502,7 @@ async def create_one_time_task(
     current_value: Optional[float] = 0.0,
     step: Optional[float] = 1.0,
     unit: Optional[str] = None,
-) -> OneTimeTask:
+) -> OneTimeTaskRead:
     task = OneTimeTask(
         user_id=user_id,
         title=capitalize_first(title),
@@ -516,8 +516,19 @@ async def create_one_time_task(
     )
     session.add(task)
     await session.commit()
-    await session.refresh(task)
-    return task
+
+    if goal_id:
+        stmt = (
+            select(OneTimeTask)
+            .options(selectinload(OneTimeTask.goal))
+            .where(OneTimeTask.id == task.id)
+        )
+        res = await session.execute(stmt)
+        task = res.scalar_one()
+    else:
+        await session.refresh(task)
+
+    return _task_to_read(task)
 
 
 async def get_day_tasks(

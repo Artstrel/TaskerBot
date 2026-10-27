@@ -26,6 +26,7 @@ import {
 } from '../api';
 import Mascot from './Mascot';
 import ViewHeader from './ViewHeader';
+import QuickAddBar from './QuickAddBar';
 
 export default function GroceriesTab({
   groceriesData,
@@ -48,7 +49,7 @@ export default function GroceriesTab({
   const [editingNumericId, setEditingNumericId] = useState(null);
   const [directNumericVal, setDirectNumericVal] = useState('');
 
-  if (isInitialLoading || !groceriesData) {
+  if (!groceriesData) {
     return (
       <div className="tab-scroll-container groceries-tab-container today-skeleton-screen">
         <ViewHeader
@@ -573,47 +574,24 @@ export default function GroceriesTab({
       )}
 
       {/* Top Quick Add Bar with Direct Voice Button */}
-      <div className="groceries-quick-add-wrap">
-        <form onSubmit={handleQuickSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <input
-            type="text"
-            className="quick-bar-input"
-            placeholder="Добавить продукт..."
-            value={quickTitle}
-            onChange={(e) => setQuickTitle(e.target.value)}
-          />
-
-          {/* Direct 1-tap voice dictation button */}
-          <button
-            type="button"
-            className="quick-bar-btn"
-            onClick={() => {
-              hapticFeedback('medium');
-              if (onOpenQuickAdd) {
-                onOpenQuickAdd({
-                  initialCategory: 'grocery',
-                  autoStartVoice: true,
-                });
-              }
-            }}
-            title="Надиктовать список продуктов голосом"
-            aria-label="Надиктовать список продуктов голосом"
-          >
-            <Mic size={16} />
-          </button>
-
-          {/* Quick Submit (+) button */}
-          <button
-            type="submit"
-            className="quick-bar-btn quick-bar-btn-submit"
-            disabled={!quickTitle.trim() || isSubmittingQuick}
-            title="Добавить в список"
-            aria-label="Добавить в список"
-          >
-            <Plus size={16} />
-          </button>
-        </form>
-      </div>
+      <QuickAddBar
+        placeholder="Добавить продукт..."
+        value={quickTitle}
+        onChange={setQuickTitle}
+        onSubmit={handleQuickSubmit}
+        isSubmitting={isSubmittingQuick}
+        onVoiceClick={() => {
+          if (onOpenQuickAdd) {
+            onOpenQuickAdd({
+              initialCategory: 'grocery',
+              autoStartVoice: true,
+            });
+          }
+        }}
+        voiceTitle="Надиктовать список продуктов голосом"
+        submitTitle="Добавить в список"
+        className="groceries-quick-add-wrap"
+      />
 
       {/* All Items Purchased Celebration */}
       {isAllPurchased && (

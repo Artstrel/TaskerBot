@@ -1861,6 +1861,17 @@ body.is-tg-fullscreen .header-actions {
 }
 
 /* Universal Quick Add Inputs and Action Buttons (Today, Groceries, Goals) */
+.quick-add-bar-wrap {
+  width: 100%;
+}
+
+.quick-add-bar-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
 .quick-bar-input {
   flex: 1;
   min-width: 0;
@@ -1889,16 +1900,17 @@ body.is-tg-fullscreen .header-actions {
 
 .quick-bar-btn {
   flex-shrink: 0;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
-  height: 40px;
-  min-height: 40px;
-  padding: 0 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -2911,7 +2923,9 @@ body,
     justify-content: space-between;
   }
 
-  .groceries-tab-container .groceries-quick-add-wrap {
+  .groceries-tab-container .groceries-quick-add-wrap,
+  .today-tab-container .today-quick-add-wrap,
+  .goals-content-wrap .goals-quick-add-wrap {
     margin: 0 16px 14px 16px;
   }
 }
@@ -3165,29 +3179,8 @@ body,
   line-height: var(--lh-subtext);
 }
 
-.goals-quick-add-wrap form {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+.goals-quick-add-wrap {
   width: 100%;
-}
-
-.goals-quick-add-wrap .quick-bar-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.goals-quick-add-wrap .quick-bar-btn {
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-@media (max-width: 420px) {
-  .goals-quick-add-wrap .quick-bar-btn {
-    padding: 0 10px;
-    font-size: var(--font-subtext);
-    gap: 4px;
-  }
 }
 
 /* SettingsTab Layout */
@@ -3327,11 +3320,13 @@ body,
     margin: 0 0 20px 0;
   }
 
-  .groceries-tab-container .day-status-card {
+  .groceries-tab-container .day-status-card,
+  .today-tab-container .day-status-card {
     margin: 0 0 16px 0;
   }
 
-  .groceries-tab-container .groceries-quick-add-wrap {
+  .groceries-tab-container .groceries-quick-add-wrap,
+  .today-tab-container .today-quick-add-wrap {
     margin: 0 0 20px 0;
   }
 

@@ -29,12 +29,13 @@ import {
   getOpenRouterKey,
   setOpenRouterKey,
   sendTestNotification,
+  getCachedUserSettings,
 } from '../api';
 import { applyTheme, getStoredThemeConfig } from '../theme';
 import ViewHeader from './ViewHeader';
 
 export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing, isInitialLoading = false }) {
-  const [settings, setSettings] = useState(null);
+  const [settings, setSettings] = useState(() => getCachedUserSettings());
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [customBackend, setCustomBackend] = useState(getCustomBackendUrl());
   const [backendInput, setBackendInput] = useState(getCustomBackendUrl());
@@ -277,7 +278,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing, isIn
     if (onRefresh) onRefresh();
   };
 
-  if (isInitialLoading || !settings) {
+  if (!settings) {
     return (
       <div className="tab-scroll-container settings-tab-container today-skeleton-screen">
         <ViewHeader

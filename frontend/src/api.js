@@ -99,12 +99,12 @@ export const setCachedDashboard = (data) => {
 };
 
 export const getCachedGoals = () => {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(`tasker_cache_goals_${currentUser.id}`);
     if (raw) return JSON.parse(raw);
   } catch (e) {}
-  return [];
+  return null;
 };
 
 export const setCachedGoals = (data) => {
@@ -115,18 +115,34 @@ export const setCachedGoals = (data) => {
 };
 
 export const getCachedGroceries = () => {
-  if (typeof window === 'undefined') return { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(`tasker_cache_groceries_${currentUser.id}`);
     if (raw) return JSON.parse(raw);
   } catch (e) {}
-  return { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
+  return null;
 };
 
 export const setCachedGroceries = (data) => {
   if (typeof window === 'undefined' || !data) return;
   try {
     localStorage.setItem(`tasker_cache_groceries_${currentUser.id}`, JSON.stringify(data));
+  } catch (e) {}
+};
+
+export const getCachedUserSettings = () => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(`tasker_cache_settings_${currentUser.id}`);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+};
+
+export const setCachedUserSettings = (data) => {
+  if (typeof window === 'undefined' || !data) return;
+  try {
+    localStorage.setItem(`tasker_cache_settings_${currentUser.id}`, JSON.stringify(data));
   } catch (e) {}
 };
 
@@ -162,7 +178,22 @@ export const getPendingSyncQueue = () => {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(PENDING_SYNC_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const now = Date.now();
+        // Prune pending entries older than 30s to avoid indefinite sync locks
+        const valid = parsed.filter((m) => m && m.created_at && (now - m.created_at < 30000));
+        if (valid.length !== parsed.length) {
+          if (valid.length > 0) {
+            localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(valid));
+          } else {
+            localStorage.removeItem(PENDING_SYNC_KEY);
+          }
+        }
+        return valid;
+      }
+    }
   } catch (e) {}
   return [];
 };
@@ -275,6 +306,36 @@ export const reconcileDashboardWithPending = (dash) => {
     } else if (m.type === 'delete_task') {
       todayTasks = todayTasks.filter((t) => t.id !== m.taskId);
       overdueTasks = overdueTasks.filter((t) => t.id !== m.taskId);
+    } else if (m.type === 'progress_task') {
+      const applyProgress = (t) => {
+        if (t.id === m.taskId) {
+          const target = t.target_value;
+          const val = m.current_value;
+          const isDone = target ? val >= target : t.is_completed;
+          return {
+            ...t,
+            current_value: val,
+            is_completed: isDone,
+          };
+        }
+        return t;
+      };
+      todayTasks = todayTasks.map(applyProgress);
+      overdueTasks = overdueTasks.map(applyProgress);
+    } else if (m.type === 'progress_routine') {
+      routineTasks = routineTasks.map((r) => {
+        if (r.id === m.routineId) {
+          const target = r.target_value;
+          const val = m.current_value;
+          const isDone = target ? val >= target : r.is_completed_today;
+          return {
+            ...r,
+            current_value: val,
+            is_completed_today: isDone,
+          };
+        }
+        return r;
+      });
     } else if (m.type === 'postpone_task') {
       todayTasks = todayTasks.filter((t) => t.id !== m.taskId);
       overdueTasks = overdueTasks.filter((t) => t.id !== m.taskId);
@@ -325,6 +386,33 @@ export const reconcileGoalsWithPending = (goals) => {
         const newSubtasks = (g.subtasks || []).map((st) =>
           st.id === subtaskId ? { ...st, is_completed: m.nextStatus } : st
         );
+        const total = newSubtasks.length;
+        const completed = newSubtasks.filter((st) => st.is_completed).length;
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+        const isDone = total > 0 && completed === total;
+        return {
+          ...g,
+          subtasks: newSubtasks,
+          total_subtasks: total,
+          completed_subtasks: completed,
+          progress_percentage: pct,
+          is_completed: isDone,
+        };
+      });
+    } else if (m.type === 'progress_task') {
+      const subtaskId = m.taskId;
+      updatedGoals = updatedGoals.map((g) => {
+        const hasSubtask = (g.subtasks || []).some((st) => st.id === subtaskId);
+        if (!hasSubtask) return g;
+        const newSubtasks = (g.subtasks || []).map((st) => {
+          if (st.id === subtaskId) {
+            const target = st.target_value;
+            const val = m.current_value;
+            const isDone = target ? val >= target : st.is_completed;
+            return { ...st, current_value: val, is_completed: isDone };
+          }
+          return st;
+        });
         const total = newSubtasks.length;
         const completed = newSubtasks.filter((st) => st.is_completed).length;
         const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -558,20 +646,33 @@ export const calculateDayEndAndUrgency = (dayEndTimeStr = '00:00') => {
 
 export const fetchDashboard = async () => {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     const res = await fetch(
       `${API_BASE}/dashboard/today?telegram_id=${currentUser.id}&first_name=${encodeURIComponent(
         currentUser.first_name || ''
-      )}`
+      )}`,
+      { signal: controller.signal }
     );
+    clearTimeout(timeoutId);
     if (res.ok) {
-      if (typeof window !== 'undefined') window.__tasker_is_demo = false;
+      if (typeof window !== 'undefined') {
+        window.__tasker_is_demo = false;
+        window.__tasker_server_connected = true;
+      }
       const data = await res.json();
       const reconciled = reconcileDashboardWithPending(data);
       setCachedDashboard(reconciled);
       return reconciled;
     }
   } catch (e) {
-    // Fall back to local DB
+    // Backend may be waking up or offline
+  }
+
+  // Preserve user cache if available! Never overwrite with mock demo tasks on network error
+  const cached = getCachedDashboard();
+  if (cached) {
+    return cached;
   }
 
   if (typeof window !== 'undefined') window.__tasker_is_demo = true;
@@ -608,14 +709,20 @@ export const fetchDashboard = async () => {
     is_demo: true,
   };
   const reconciledFallback = reconcileDashboardWithPending(fallbackData);
-  setCachedDashboard(reconciledFallback);
+  if (isDemoModeActive()) {
+    setCachedDashboard(reconciledFallback);
+  }
   return reconciledFallback;
 };
 
 export const fetchGoals = async () => {
   try {
-    const res = await fetch(`${API_BASE}/goals?telegram_id=${currentUser.id}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(`${API_BASE}/goals?telegram_id=${currentUser.id}`, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
+      if (typeof window !== 'undefined') window.__tasker_server_connected = true;
       const data = await res.json();
       const reconciled = reconcileGoalsWithPending(data);
       setCachedGoals(reconciled);
@@ -623,17 +730,28 @@ export const fetchGoals = async () => {
     }
   } catch (e) {}
 
+  const cached = getCachedGoals();
+  if (cached) {
+    return cached;
+  }
+
   const db = getLocalDb();
   const goals = db.goals || [];
   const reconciled = reconcileGoalsWithPending(goals);
-  setCachedGoals(reconciled);
+  if (isDemoModeActive()) {
+    setCachedGoals(reconciled);
+  }
   return reconciled;
 };
 
 export const fetchGroceries = async () => {
   try {
-    const res = await fetch(`${API_BASE}/groceries?telegram_id=${currentUser.id}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(`${API_BASE}/groceries?telegram_id=${currentUser.id}`, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
+      if (typeof window !== 'undefined') window.__tasker_server_connected = true;
       const data = await res.json();
       const reconciled = reconcileGroceriesWithPending(data);
       setCachedGroceries(reconciled);
@@ -641,10 +759,17 @@ export const fetchGroceries = async () => {
     }
   } catch (e) {}
 
+  const cached = getCachedGroceries();
+  if (cached) {
+    return cached;
+  }
+
   const db = getLocalDb();
   const groceries = db.groceries || { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
   const reconciled = reconcileGroceriesWithPending(groceries);
-  setCachedGroceries(reconciled);
+  if (isDemoModeActive()) {
+    setCachedGroceries(reconciled);
+  }
   return reconciled;
 };
 
@@ -769,9 +894,22 @@ export const clearCompletedGroceries = async () => {
 
 export const fetchUserSettings = async () => {
   try {
-    const res = await fetch(`${API_BASE}/user/me?telegram_id=${currentUser.id}`);
-    if (res.ok) return await res.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const res = await fetch(`${API_BASE}/user/me?telegram_id=${currentUser.id}`, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      if (typeof window !== 'undefined') window.__tasker_server_connected = true;
+      const data = await res.json();
+      setCachedUserSettings(data);
+      return data;
+    }
   } catch (e) {}
+
+  const cached = getCachedUserSettings();
+  if (cached) {
+    return cached;
+  }
 
   const db = getLocalDb();
   return db.settings || {};
@@ -784,12 +922,17 @@ export const updateUserSettings = async (settingsData) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settingsData),
     });
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      const data = await res.json();
+      setCachedUserSettings(data);
+      return data;
+    }
   } catch (e) {}
 
   const db = getLocalDb();
   db.settings = { ...db.settings, ...settingsData };
   saveLocalDb(db);
+  setCachedUserSettings(db.settings);
   return db.settings;
 };
 
@@ -926,15 +1069,24 @@ export const updateTask = async (taskId, updateData) => {
 
 export const updateTaskProgress = async (taskId, { current_value, delta }) => {
   hapticFeedback('light');
+  recordUserAction();
+  const mutationId = `progress_task_${taskId}_${Date.now()}`;
+  if (current_value !== undefined) {
+    addPendingMutation({ id: mutationId, type: 'progress_task', taskId, current_value, timestamp: Date.now() });
+  }
   try {
     const res = await fetch(`${API_BASE}/tasks/${taskId}/progress?telegram_id=${currentUser.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ current_value, delta }),
     });
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      if (current_value !== undefined) removePendingMutation(mutationId);
+      return await res.json();
+    }
   } catch (e) {}
 
+  if (current_value !== undefined) removePendingMutation(mutationId);
   const db = getLocalDb();
   const task = db.tasks.find((t) => t.id === taskId);
   if (task) {
@@ -956,6 +1108,7 @@ export const updateTaskProgress = async (taskId, { current_value, delta }) => {
 
 export const updateRoutine = async (routineId, updateData) => {
   hapticFeedback('selection');
+  recordUserAction();
   try {
     const res = await fetch(`${API_BASE}/routines/${routineId}?telegram_id=${currentUser.id}`, {
       method: 'PATCH',
@@ -977,15 +1130,24 @@ export const updateRoutine = async (routineId, updateData) => {
 
 export const updateRoutineProgress = async (routineId, { current_value, delta }) => {
   hapticFeedback('light');
+  recordUserAction();
+  const mutationId = `progress_routine_${routineId}_${Date.now()}`;
+  if (current_value !== undefined) {
+    addPendingMutation({ id: mutationId, type: 'progress_routine', routineId, current_value, timestamp: Date.now() });
+  }
   try {
     const res = await fetch(`${API_BASE}/routines/${routineId}/progress?telegram_id=${currentUser.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ current_value, delta }),
     });
-    if (res.ok) return await res.json();
+    if (res.ok) {
+      if (current_value !== undefined) removePendingMutation(mutationId);
+      return await res.json();
+    }
   } catch (e) {}
 
+  if (current_value !== undefined) removePendingMutation(mutationId);
   const db = getLocalDb();
   const r = db.routines.find((item) => item.id === routineId);
   if (r) {

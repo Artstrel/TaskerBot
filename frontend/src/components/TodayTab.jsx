@@ -34,9 +34,11 @@ import {
   setCachedGoals,
   addPendingMutation,
   removePendingMutation,
+  recordUserAction,
 } from '../api';
 import Mascot from './Mascot';
 import ViewHeader from './ViewHeader';
+import QuickAddBar from './QuickAddBar';
 
 export default function TodayTab({
   dashboardData,
@@ -168,7 +170,7 @@ export default function TodayTab({
   const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
   const todayDateSubtitle = `${weekday}, ${dayMonth}`;
 
-  if (isInitialLoading || !dashboardData) {
+  if (!dashboardData) {
     return (
       <div className="today-tab-container today-skeleton-screen">
         <ViewHeader
@@ -594,7 +596,10 @@ export default function TodayTab({
 
   const handleTaskProgress = (taskId, delta) => {
     hapticFeedback('light');
+    recordUserAction();
     let willComplete = false;
+    let computedNextVal = 0;
+    let targetGoalId = null;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
@@ -606,6 +611,8 @@ export default function TodayTab({
               const target = t.target_value || 1;
               const cur = t.current_value || 0;
               const nextVal = Math.max(0, Math.round((cur + delta) * 100) / 100);
+              computedNextVal = nextVal;
+              targetGoalId = t.goal_id;
               const nextCompleted = nextVal >= target;
               if (!t.is_completed && nextCompleted) {
                 willComplete = true;
@@ -631,12 +638,43 @@ export default function TodayTab({
       });
     }
 
+    if (targetGoalId && setGoalsData) {
+      setGoalsData((prevGoals) => {
+        if (!prevGoals || !Array.isArray(prevGoals)) return prevGoals;
+        const updated = prevGoals.map((g) => {
+          if (g.id !== targetGoalId) return g;
+          const updatedSubtasks = (g.subtasks || []).map((st) => {
+            if (st.id === taskId) {
+              const target = st.target_value || 1;
+              const isDone = computedNextVal >= target;
+              return { ...st, current_value: computedNextVal, is_completed: isDone };
+            }
+            return st;
+          });
+          const total = updatedSubtasks.length;
+          const completed = updatedSubtasks.filter((st) => st.is_completed).length;
+          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+          const isDone = total > 0 && completed === total;
+          return {
+            ...g,
+            subtasks: updatedSubtasks,
+            total_subtasks: total,
+            completed_subtasks: completed,
+            progress_percentage: pct,
+            is_completed: isDone,
+          };
+        });
+        setCachedGoals(updated);
+        return updated;
+      });
+    }
+
     if (willComplete && onTaskCompleted) {
       onTaskCompleted();
       hapticFeedback('medium');
     }
 
-    updateTaskProgress(taskId, { delta }).catch((err) => {
+    updateTaskProgress(taskId, { current_value: computedNextVal, delta }).catch((err) => {
       console.error('Failed to update task progress:', err);
       onRefresh?.();
     });
@@ -647,7 +685,9 @@ export default function TodayTab({
     setEditingNumericId(null);
     if (isNaN(val) || val < 0) return;
     hapticFeedback('light');
+    recordUserAction();
     let willComplete = false;
+    let targetGoalId = null;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
@@ -657,6 +697,7 @@ export default function TodayTab({
           (list || []).map((t) => {
             if (t.id === taskId) {
               const target = t.target_value || 1;
+              targetGoalId = t.goal_id;
               const nextCompleted = val >= target;
               if (!t.is_completed && nextCompleted) {
                 willComplete = true;
@@ -682,6 +723,37 @@ export default function TodayTab({
       });
     }
 
+    if (targetGoalId && setGoalsData) {
+      setGoalsData((prevGoals) => {
+        if (!prevGoals || !Array.isArray(prevGoals)) return prevGoals;
+        const updated = prevGoals.map((g) => {
+          if (g.id !== targetGoalId) return g;
+          const updatedSubtasks = (g.subtasks || []).map((st) => {
+            if (st.id === taskId) {
+              const target = st.target_value || 1;
+              const isDone = val >= target;
+              return { ...st, current_value: val, is_completed: isDone };
+            }
+            return st;
+          });
+          const total = updatedSubtasks.length;
+          const completed = updatedSubtasks.filter((st) => st.is_completed).length;
+          const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+          const isDone = total > 0 && completed === total;
+          return {
+            ...g,
+            subtasks: updatedSubtasks,
+            total_subtasks: total,
+            completed_subtasks: completed,
+            progress_percentage: pct,
+            is_completed: isDone,
+          };
+        });
+        setCachedGoals(updated);
+        return updated;
+      });
+    }
+
     if (willComplete && onTaskCompleted) {
       onTaskCompleted();
       hapticFeedback('medium');
@@ -695,7 +767,9 @@ export default function TodayTab({
 
   const handleRoutineProgress = (routineId, delta) => {
     hapticFeedback('light');
+    recordUserAction();
     let willComplete = false;
+    let computedNextVal = 0;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
@@ -706,6 +780,7 @@ export default function TodayTab({
             const target = r.target_value || 1;
             const cur = r.current_value || 0;
             const nextVal = Math.max(0, Math.round((cur + delta) * 100) / 100);
+            computedNextVal = nextVal;
             const nextCompleted = nextVal >= target;
             const currentStreak = r.current_streak || 0;
             let newStreak = currentStreak;
@@ -743,7 +818,7 @@ export default function TodayTab({
       hapticFeedback('medium');
     }
 
-    updateRoutineProgress(routineId, { delta }).catch((err) => {
+    updateRoutineProgress(routineId, { current_value: computedNextVal, delta }).catch((err) => {
       console.error('Failed to update routine progress:', err);
       onRefresh?.();
     });
@@ -754,6 +829,7 @@ export default function TodayTab({
     setEditingNumericId(null);
     if (isNaN(val) || val < 0) return;
     hapticFeedback('light');
+    recordUserAction();
     let willComplete = false;
 
     if (setDashboardData) {
@@ -1137,26 +1213,46 @@ export default function TodayTab({
         }
       />
 
-      <div className="today-desktop-grid">
-        {/* LEFT COLUMN: Status & Habits */}
-        <div className="today-col-left">
-          {/* Day Progress & Time remaining card: hidden when all completed or 0 tasks */}
-          {total_count > 0 && completed_count < total_count && (
-            <div className="day-status-card">
-              <div className="day-progress-horizontal-group">
-                <div className="progress-track">
-                  <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-                </div>
-                <span className="day-progress-metric">
-                  {completed_count} из {total_count} ({progressPct}%)
-                </span>
-              </div>
-              <div className="day-status-actions">
-                {renderTimeChip()}
-              </div>
+      {/* Day Progress & Time remaining card: hidden when all completed or 0 tasks */}
+      {total_count > 0 && completed_count < total_count && (
+        <div className="day-status-card">
+          <div className="day-progress-horizontal-group">
+            <div className="progress-track">
+              <div className="progress-fill" style={{ width: `${progressPct}%` }} />
             </div>
-          )}
+            <span className="day-progress-metric">
+              {completed_count} из {total_count} ({progressPct}%)
+            </span>
+          </div>
+          <div className="day-status-actions">
+            {renderTimeChip()}
+          </div>
+        </div>
+      )}
 
+      {/* Top Quick Add Bar with Direct Voice Button */}
+      <QuickAddBar
+        placeholder="Быстрая задача на сегодня..."
+        value={quickTitle}
+        onChange={setQuickTitle}
+        onSubmit={handleQuickSubmit}
+        isSubmitting={isSubmittingQuick}
+        onVoiceClick={() => {
+          if (onOpenQuickAdd) {
+            onOpenQuickAdd({
+              initialCategory: 'one_time',
+              autoStartVoice: true,
+            });
+          }
+        }}
+        voiceTitle="Надиктовать задачу голосом"
+        submitTitle="Создать задачу"
+        className="today-quick-add-wrap"
+      />
+
+      <div className="today-desktop-grid">
+        {/* LEFT COLUMN: Habits */}
+        <div className="today-col-left">
           {/* SECTION 2: Daily Routines / Habits */}
           {routine_tasks.length > 0 && (
             <section className="linear-section today-routines-section">
@@ -1290,29 +1386,8 @@ export default function TodayTab({
           )}
         </div>
 
-        {/* RIGHT COLUMN: Quick Add, Overdue & Today Tasks */}
+        {/* RIGHT COLUMN: Overdue & Today Tasks */}
         <div className="today-col-right">
-          {/* Inline Quick Add Task input */}
-          <div className="today-quick-add-wrap">
-            <form onSubmit={handleQuickSubmit} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                type="text"
-                className="quick-bar-input"
-                placeholder="Быстрая задача на сегодня..."
-                value={quickTitle}
-                onChange={(e) => setQuickTitle(e.target.value)}
-              />
-              <button
-                type="submit"
-                className="quick-bar-btn quick-bar-btn-submit"
-                disabled={!quickTitle.trim() || isSubmittingQuick}
-                title="Создать задачу"
-                aria-label="Создать задачу"
-              >
-                <Plus size={16} />
-              </button>
-            </form>
-          </div>
 
           {/* All Done Celebration State with Mascot */}
           {isDayAllDone && (

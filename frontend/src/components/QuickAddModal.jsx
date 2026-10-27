@@ -1035,7 +1035,7 @@ export default function QuickAddModal({
               const updated = {
                 ...prev,
                 today_tasks: (prev.today_tasks || []).map((t) =>
-                  t.id === tempId ? { ...realTask, is_optimistic: false } : t
+                  t.id === tempId ? { ...realTask, goal_title: realTask.goal_title || optTask.goal_title || t.goal_title, is_optimistic: false } : t
                 ),
               };
               setCachedDashboard(updated);
@@ -1047,7 +1047,7 @@ export default function QuickAddModal({
               const updated = (prev || []).map((g) => {
                 if (g.id === gId) {
                   const subtasks = (g.subtasks || []).map((st) =>
-                    st.id === tempId ? { ...realTask, is_optimistic: false } : st
+                    st.id === tempId ? { ...realTask, goal_title: realTask.goal_title || optSubtask.goal_title || st.goal_title, is_optimistic: false } : st
                   );
                   return { ...g, subtasks };
                 }
@@ -1232,7 +1232,8 @@ export default function QuickAddModal({
   };
 
   // Review Screen: Save selected extracted tasks
-  const handleSaveExtracted = () => {
+  // Review Screen: Save selected extracted tasks
+  const handleSaveExtracted = async () => {
     const selected = (extractedTasks || []).filter((t) => t.selected);
     if (selected.length === 0) {
       setErrorMsg('Выберите хотя бы одну задачу.');
@@ -1245,6 +1246,7 @@ export default function QuickAddModal({
 
     const todayStr = new Date().toISOString().split('T')[0];
     const createdGoalsMap = {};
+    const goalPromises = [];
 
     // 1. Pass 1: Goals
     selected.forEach((t, i) => {
@@ -1280,7 +1282,7 @@ export default function QuickAddModal({
 
       addPendingMutation({ id: mutationId, type: 'create_goal', tempId, title: cleanTitle, timestamp: Date.now() });
 
-      createGoal({ title: cleanTitle, description: t.description || null, target_date: t.target_date || null })
+      const p = createGoal({ title: cleanTitle, description: t.description || null, target_date: t.target_date || null })
         .then((real) => {
           removePendingMutation(mutationId);
           if (setGoalsData && real && real.id) {
@@ -1293,9 +1295,18 @@ export default function QuickAddModal({
             });
             createdGoalsMap[cleanTitle.toLowerCase()] = real;
           }
+          return real;
         })
-        .catch(() => removePendingMutation(mutationId));
+        .catch(() => {
+          removePendingMutation(mutationId);
+          return null;
+        });
+      goalPromises.push(p);
     });
+
+    if (goalPromises.length > 0) {
+      await Promise.all(goalPromises);
+    }
 
     // 2. Pass 2: Routines, Subtasks, One-Time tasks
     selected.forEach((t, i) => {
@@ -1369,11 +1380,12 @@ export default function QuickAddModal({
         let targetGoalId = t.goal_id || null;
         let targetGoalTitle = t.goal_title ? capitalizeFirst(t.goal_title) : null;
 
-        if (!targetGoalId && targetGoalTitle) {
+        if (targetGoalTitle) {
           const matchedNew = createdGoalsMap[targetGoalTitle.toLowerCase()];
-          if (matchedNew) {
+          if (matchedNew && typeof matchedNew.id === 'number') {
             targetGoalId = matchedNew.id;
-          } else {
+            targetGoalTitle = matchedNew.title;
+          } else if (!targetGoalId) {
             const matchedExisting = (goalsData || []).find(
               (g) => g.title && g.title.toLowerCase().includes(targetGoalTitle.toLowerCase())
             );
@@ -1470,19 +1482,30 @@ export default function QuickAddModal({
                 const updated = {
                   ...prev,
                   today_tasks: (prev.today_tasks || []).map((tk) =>
-                    tk.id === tempId ? { ...real, is_optimistic: false } : tk
+                    tk.id === tempId ? {
+                      ...real,
+                      goal_id: real.goal_id || (typeof targetGoalId === 'number' ? targetGoalId : tk.goal_id),
+                      goal_title: real.goal_title || targetGoalTitle || tk.goal_title,
+                      is_optimistic: false,
+                    } : tk
                   ),
                 };
                 setCachedDashboard(updated);
                 return updated;
               });
             }
-            if (setGoalsData && real && targetGoalId) {
+            if (setGoalsData && real && (targetGoalId || real.goal_id)) {
+              const effectiveGId = real.goal_id || targetGoalId;
               setGoalsData((prev) => {
                 const updated = (prev || []).map((g) => {
-                  if (g.id === targetGoalId || g.id === real.goal_id) {
+                  if (g.id === effectiveGId || (g.title && targetGoalTitle && g.title.toLowerCase() === targetGoalTitle.toLowerCase())) {
                     const subtasks = (g.subtasks || []).map((st) =>
-                      st.id === tempId ? { ...real, is_optimistic: false } : st
+                      st.id === tempId ? {
+                        ...real,
+                        goal_id: effectiveGId,
+                        goal_title: real.goal_title || targetGoalTitle || st.goal_title,
+                        is_optimistic: false,
+                      } : st
                     );
                     return { ...g, subtasks };
                   }
