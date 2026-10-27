@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Plus } from 'lucide-react';
 import {
-  Calendar,
-  Target,
-  Settings,
-  Plus,
-  ShoppingCart,
-} from 'lucide-react';
+  AnimatedCalendar,
+  AnimatedShoppingCart,
+  AnimatedTarget,
+  AnimatedSettings,
+} from './components/ui/icons';
 import {
   currentUser,
   syncUserTimezone,
@@ -90,6 +90,8 @@ export default function App() {
   const [quickAddOptions, setQuickAddOptions] = useState(null);
   const [mascotMood, setMascotMood] = useState('idle');
   const [avatarError, setAvatarError] = useState(false);
+  const [tabSwitchTrigger, setTabSwitchTrigger] = useState(0);
+  const [hoveredTab, setHoveredTab] = useState(null);
 
   const handleCloseQuickAdd = useCallback(() => {
     setIsQuickAddOpen(false);
@@ -354,6 +356,7 @@ export default function App() {
   const handleTabSwitch = (tab) => {
     hapticFeedback('selection');
     setActiveTab(tab);
+    setTabSwitchTrigger((prev) => prev + 1);
     // Silent auto-refresh on tab switch if last fetch was > 4 seconds ago
     if (Date.now() - lastFetchedRef.current > 4000) {
       loadData(false, true);
@@ -452,9 +455,16 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'today' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('today')}
+              onMouseEnter={() => setHoveredTab('today')}
+              onMouseLeave={() => setHoveredTab(null)}
               title="Сегодня"
             >
-              <Calendar size={18} />
+              <AnimatedCalendar
+                size={18}
+                active={activeTab === 'today'}
+                trigger={tabSwitchTrigger}
+                hovered={hoveredTab === 'today'}
+              />
               <span>Сегодня</span>
               {overdueCount > 0 && <span className="dock-badge-dot" />}
             </button>
@@ -462,9 +472,16 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'groceries' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('groceries')}
+              onMouseEnter={() => setHoveredTab('groceries')}
+              onMouseLeave={() => setHoveredTab(null)}
               title="Продукты"
             >
-              <ShoppingCart size={18} />
+              <AnimatedShoppingCart
+                size={18}
+                active={activeTab === 'groceries'}
+                trigger={tabSwitchTrigger}
+                hovered={hoveredTab === 'groceries'}
+              />
               <span>Продукты</span>
               {unboughtGroceriesCount > 0 && (
                 <span className="dock-badge-num">
@@ -476,18 +493,32 @@ export default function App() {
             <button
               className={`sidebar-nav-item ${activeTab === 'goals' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('goals')}
+              onMouseEnter={() => setHoveredTab('goals')}
+              onMouseLeave={() => setHoveredTab(null)}
               title="Цели & Проекты"
             >
-              <Target size={18} />
+              <AnimatedTarget
+                size={18}
+                active={activeTab === 'goals'}
+                trigger={tabSwitchTrigger}
+                hovered={hoveredTab === 'goals'}
+              />
               <span>Цели & Проекты</span>
             </button>
 
             <button
               className={`sidebar-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('settings')}
+              onMouseEnter={() => setHoveredTab('settings')}
+              onMouseLeave={() => setHoveredTab(null)}
               title="Настройки"
             >
-              <Settings size={18} />
+              <AnimatedSettings
+                size={18}
+                active={activeTab === 'settings'}
+                trigger={tabSwitchTrigger}
+                hovered={hoveredTab === 'settings'}
+              />
               <span>Настройки</span>
             </button>
           </nav>
@@ -640,7 +671,11 @@ export default function App() {
                 whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('today')}
               >
-                <Calendar size={18} />
+                <AnimatedCalendar
+                  size={18}
+                  active={activeTab === 'today'}
+                  trigger={tabSwitchTrigger}
+                />
                 <span>Сегодня</span>
                 {overdueCount > 0 && <span className="dock-badge-dot" />}
               </motion.button>
@@ -650,7 +685,11 @@ export default function App() {
                 whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('groceries')}
               >
-                <ShoppingCart size={18} />
+                <AnimatedShoppingCart
+                  size={18}
+                  active={activeTab === 'groceries'}
+                  trigger={tabSwitchTrigger}
+                />
                 <span>Продукты</span>
                 {unboughtGroceriesCount > 0 && (
                   <span className="dock-badge-num">
@@ -664,7 +703,11 @@ export default function App() {
                 whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('goals')}
               >
-                <Target size={18} />
+                <AnimatedTarget
+                  size={18}
+                  active={activeTab === 'goals'}
+                  trigger={tabSwitchTrigger}
+                />
                 <span>Цели</span>
               </motion.button>
 
@@ -673,7 +716,11 @@ export default function App() {
                 whileTap={{ scale: 0.92 }}
                 onClick={() => handleTabSwitch('settings')}
               >
-                <Settings size={18} />
+                <AnimatedSettings
+                  size={18}
+                  active={activeTab === 'settings'}
+                  trigger={tabSwitchTrigger}
+                />
                 <span>Настройки</span>
               </motion.button>
             </div>

@@ -135,9 +135,11 @@
   --dock-card-bg: rgba(22, 22, 22, 0.94);
   --dock-item-active-bg: rgba(255, 255, 255, 0.08);
 
-  --sheet-scrim-stop1: rgba(20, 20, 20, 0.96);
-  --sheet-scrim-stop2: rgba(20, 20, 20, 0.72);
+  --sheet-scrim-stop1: rgba(20, 20, 20, 0.90);
+  --sheet-scrim-stop2: rgba(20, 20, 20, 0.65);
   --sheet-scrim-stop3: rgba(20, 20, 20, 0.25);
+  --sheet-scrim-stop4: rgba(20, 20, 20, 0.06);
+  --sheet-scrim-zero: rgba(20, 20, 20, 0);
 
   --chip-active-bg: rgba(255, 255, 255, 0.18);
   --chip-active-text: #ffffff;
@@ -205,9 +207,11 @@
   --dock-card-bg: rgba(255, 255, 255, 0.92);
   --dock-item-active-bg: rgba(0, 0, 0, 0.06);
 
-  --sheet-scrim-stop1: rgba(255, 255, 255, 0.96);
-  --sheet-scrim-stop2: rgba(255, 255, 255, 0.72);
+  --sheet-scrim-stop1: rgba(255, 255, 255, 0.90);
+  --sheet-scrim-stop2: rgba(255, 255, 255, 0.65);
   --sheet-scrim-stop3: rgba(255, 255, 255, 0.25);
+  --sheet-scrim-stop4: rgba(255, 255, 255, 0.06);
+  --sheet-scrim-zero: rgba(255, 255, 255, 0);
 
   --chip-active-bg: #09090b;
   --chip-active-text: #ffffff;
@@ -1603,17 +1607,14 @@ body.is-tg-fullscreen .header-actions {
   top: 0;
   left: 0;
   right: 0;
-  bottom: -18px;
+  bottom: -12px;
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--bg-surface) 88%, transparent) 0%,
-    color-mix(in srgb, var(--bg-surface) 78%, transparent) 15%,
-    color-mix(in srgb, var(--bg-surface) 62%, transparent) 30%,
-    color-mix(in srgb, var(--bg-surface) 42%, transparent) 50%,
-    color-mix(in srgb, var(--bg-surface) 24%, transparent) 70%,
-    color-mix(in srgb, var(--bg-surface) 10%, transparent) 85%,
-    color-mix(in srgb, var(--bg-surface) 3%, transparent) 94%,
-    transparent 100%
+    var(--sheet-scrim-stop1) 0%,
+    var(--sheet-scrim-stop2) 30%,
+    var(--sheet-scrim-stop3) 60%,
+    var(--sheet-scrim-stop4) 85%,
+    var(--sheet-scrim-zero) 100%
   );
   pointer-events: none;
   z-index: -1;
