@@ -224,6 +224,12 @@ async def exchange_telegram_code(
 
     # Verify ID token via Telegram JWKS
     claims = await verify_telegram_id_token(id_token, client_id)
+
+    # In case Telegram returns additional user attributes in token_data (e.g. id, user)
+    for k, v in token_data.items():
+        if k not in claims and k not in ("access_token", "id_token", "refresh_token", "token_type", "expires_in"):
+            claims[k] = v
+
     return claims
 
 
@@ -382,11 +388,28 @@ def extract_user_profile(claims: Dict[str, Any]) -> Dict[str, Any]:
     Extracts standard fields (telegram_id, first_name, username, photo_url)
     from Telegram OIDC claims.
     """
-    raw_sub = claims.get("sub") or claims.get("id")
+    # Prioritize Telegram user ID ('id', 'user_id', 'telegram_id') over OIDC 'sub'.
+    # Telegram's OIDC 'sub' is a 64-bit unsigned subject identifier which can exceed signed int64,
+    # whereas 'id' is the canonical numeric Telegram user ID matching Bot API and WebApp.
+    raw_id = (
+        claims.get("id")
+        or claims.get("user_id")
+        or claims.get("telegram_id")
+        or claims.get("sub")
+    )
+    if raw_id is None:
+        raise ValueError("Missing user ID or subject claim in Telegram token")
+
     try:
-        telegram_id = int(raw_sub)
+        telegram_id = int(raw_id)
     except (ValueError, TypeError):
-        raise ValueError(f"Invalid subject claim: {raw_sub}")
+        raise ValueError(f"Invalid user ID claim: {raw_id}")
+
+    # Boundary check for PostgreSQL BIGINT (signed 64-bit integer: -9223372036854775808 to 9223372036854775807).
+    # If raw_id came from an unsigned 64-bit "sub" claim (> 2^63 - 1), map it to signed 64-bit range
+    # via two's complement wrap around to prevent asyncpg/PostgreSQL integer overflow.
+    if telegram_id >= (1 << 63):
+        telegram_id -= (1 << 64)
 
     first_name = (
         claims.get("given_name")

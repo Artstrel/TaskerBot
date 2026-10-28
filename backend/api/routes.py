@@ -1,8 +1,11 @@
 from datetime import date, datetime
 from typing import List, Optional
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from backend.database import get_db
 from backend.models import User
@@ -103,6 +106,9 @@ async def get_current_user(
             effective_id = telegram_id
         else:
             raise HTTPException(status_code=401, detail="Authentication credentials required")
+
+    if effective_id is not None and effective_id >= (1 << 63):
+        effective_id -= (1 << 64)
 
     user = await get_or_create_user(session, effective_id, username, first_name)
     return user
@@ -261,13 +267,20 @@ async def exchange_telegram_auth(
                 detail=f"Telegram authentication failed: {str(e)}",
             )
 
-    user = await get_or_create_user(
-        session=session,
-        telegram_id=profile["telegram_id"],
-        username=profile.get("username"),
-        first_name=profile.get("first_name"),
-        photo_url=profile.get("photo_url"),
-    )
+    try:
+        user = await get_or_create_user(
+            session=session,
+            telegram_id=profile["telegram_id"],
+            username=profile.get("username"),
+            first_name=profile.get("first_name"),
+            photo_url=profile.get("photo_url"),
+        )
+    except Exception as e:
+        logger.error(f"Failed to get_or_create_user in auth exchange: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database user creation failed: {str(e)}",
+        )
 
     token, expires_in = create_access_token(
         telegram_id=user.telegram_id,
@@ -303,13 +316,20 @@ async def authenticate_telegram_id_token(
             detail=f"Telegram ID token validation failed: {str(e)}",
         )
 
-    user = await get_or_create_user(
-        session=session,
-        telegram_id=profile["telegram_id"],
-        username=profile.get("username"),
-        first_name=profile.get("first_name"),
-        photo_url=profile.get("photo_url"),
-    )
+    try:
+        user = await get_or_create_user(
+            session=session,
+            telegram_id=profile["telegram_id"],
+            username=profile.get("username"),
+            first_name=profile.get("first_name"),
+            photo_url=profile.get("photo_url"),
+        )
+    except Exception as e:
+        logger.error(f"Failed to get_or_create_user in ID token auth: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Database user creation failed: {str(e)}",
+        )
 
     token, expires_in = create_access_token(
         telegram_id=user.telegram_id,

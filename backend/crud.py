@@ -180,9 +180,21 @@ async def get_or_create_user(
     first_name: Optional[str] = None,
     photo_url: Optional[str] = None,
 ) -> User:
+    # Ensure telegram_id fits into PostgreSQL signed 64-bit integer
+    if telegram_id is not None and telegram_id >= (1 << 63):
+        telegram_id -= (1 << 64)
+
     stmt = select(User).where(User.telegram_id == telegram_id)
     res = await session.execute(stmt)
     user = res.scalar_one_or_none()
+
+    # Fallback: if user is not found by ID (e.g., pseudonymized OIDC sub), match existing account by verified username
+    if not user and username:
+        stmt_user = select(User).where(func.lower(User.username) == username.lower())
+        res_user = await session.execute(stmt_user)
+        existing = res_user.scalar_one_or_none()
+        if existing:
+            user = existing
 
     if not user:
         user = User(
@@ -215,6 +227,9 @@ async def get_or_create_user(
 async def update_user(
     session: AsyncSession, telegram_id: int, update_data: UserUpdate
 ) -> Optional[User]:
+    if telegram_id is not None and telegram_id >= (1 << 63):
+        telegram_id -= (1 << 64)
+
     stmt = select(User).where(User.telegram_id == telegram_id)
     res = await session.execute(stmt)
     user = res.scalar_one_or_none()
