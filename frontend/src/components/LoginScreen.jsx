@@ -128,9 +128,9 @@ const SLIDES = [
           <BarVisualizer
             state="processing"
             barCount={7}
-            height={46}
-            barWidth={8}
-            gap={6}
+            height={32}
+            barWidth={7}
+            gap={5}
           />
         </div>
 

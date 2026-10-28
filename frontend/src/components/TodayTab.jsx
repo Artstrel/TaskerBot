@@ -1265,7 +1265,52 @@ export default function TodayTab({
         className="today-quick-add-wrap"
       />
 
-      <div className="today-desktop-grid">
+      {/* Completely Empty State (only when not syncing) */}
+      {isDayCompletelyEmpty && !isSyncing && (
+        <div className="empty-state-mascot-card">
+          <Mascot state="sleep" size={96} interactive={true} />
+          <div className="empty-mascot-title">На сегодня пусто</div>
+          <div className="empty-mascot-desc">
+            Запланируйте задачи через строку выше или нажмите «+» для умного голосового ввода.
+          </div>
+        </div>
+      )}
+
+      {/* Syncing Skeleton placeholder when empty */}
+      {isDayCompletelyEmpty && isSyncing && (
+        <section className="linear-section">
+          <div className="linear-section-header">
+            <div className="linear-section-title">
+              <div className="skeleton-shimmer" style={{ width: '120px', height: '16px' }} />
+            </div>
+          </div>
+          <div className="linear-list">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="skeleton-list-item">
+                <div className="skeleton-shimmer skeleton-checkbox" />
+                <div className="skeleton-content">
+                  <div className="skeleton-shimmer skeleton-title" style={{ width: n === 1 ? '65%' : n === 2 ? '80%' : '50%' }} />
+                  <div className="skeleton-shimmer skeleton-subtitle" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* All Done Celebration State when no habits exist */}
+      {isDayAllDone && routine_tasks.length === 0 && (
+        <div className="empty-state-mascot-card">
+          <Mascot state="done" size={96} interactive={true} />
+          <div className="empty-mascot-title">День закрыт!</div>
+          <div className="empty-mascot-desc">
+            Все задачи и привычки на сегодня выполнены. Отличная работа!
+          </div>
+        </div>
+      )}
+
+      {!isDayCompletelyEmpty && !(isDayAllDone && routine_tasks.length === 0) && (
+        <div className="today-desktop-grid">
         {/* LEFT COLUMN: Habits */}
         <div className="today-col-left">
           {/* SECTION 2: Daily Routines / Habits */}
@@ -1402,8 +1447,8 @@ export default function TodayTab({
         {/* RIGHT COLUMN: Overdue & Today Tasks */}
         <div className="today-col-right">
 
-          {/* All Done Celebration State with Mascot */}
-          {isDayAllDone && (
+          {/* All Done Celebration State with Mascot (when habits exist in left col) */}
+          {isDayAllDone && routine_tasks.length > 0 && (
             <div className="empty-state-mascot-card">
               <Mascot state="done" size={96} interactive={true} />
               <div className="empty-mascot-title">День закрыт!</div>
@@ -1411,39 +1456,6 @@ export default function TodayTab({
                 Все задачи и привычки на сегодня выполнены. Отличная работа!
               </div>
             </div>
-          )}
-
-          {/* Completely Empty State (only when not syncing) */}
-          {isDayCompletelyEmpty && !isSyncing && (
-            <div className="empty-state-mascot-card">
-              <Mascot state="sleep" size={96} interactive={true} />
-              <div className="empty-mascot-title">На сегодня пусто</div>
-              <div className="empty-mascot-desc">
-                Запланируйте задачи через строку выше или нажмите «+» для умного голосового ввода.
-              </div>
-            </div>
-          )}
-
-          {/* Syncing Skeleton placeholder when empty */}
-          {isDayCompletelyEmpty && isSyncing && (
-            <section className="linear-section">
-              <div className="linear-section-header">
-                <div className="linear-section-title">
-                  <div className="skeleton-shimmer" style={{ width: '120px', height: '16px' }} />
-                </div>
-              </div>
-              <div className="linear-list">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="skeleton-list-item">
-                    <div className="skeleton-shimmer skeleton-checkbox" />
-                    <div className="skeleton-content">
-                      <div className="skeleton-shimmer skeleton-title" style={{ width: n === 1 ? '65%' : n === 2 ? '80%' : '50%' }} />
-                      <div className="skeleton-shimmer skeleton-subtitle" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
           )}
 
           {/* SECTION 1: Overdue Tasks */}
@@ -1796,6 +1808,7 @@ export default function TodayTab({
           )}
         </div>
       </div>
-    </div>
-  );
+    )}
+  </div>
+);
 }
