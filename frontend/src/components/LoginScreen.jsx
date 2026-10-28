@@ -1,23 +1,188 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Calendar,
-  CheckCircle2,
+  Flame,
   ShoppingCart,
   Mic,
   ArrowRight,
   ShieldCheck,
   Sparkles,
   Terminal,
+  Check,
 } from 'lucide-react';
-import Mascot from './Mascot';
 import { getTelegramAuthUrl, exchangeTelegramWidgetAuth, authenticateWithTelegramIdToken, devLogin, setDemoMode, hapticFeedback } from '../api';
 
+const SLIDES = [
+  {
+    id: 'today',
+    badge: 'Планирование',
+    title: 'Фокус на сегодня',
+    subtitle: 'Умные дедлайны, приоритизация и автоматический перенос незавершенных задач',
+    icon: Calendar,
+    renderVisual: () => (
+      <div className="slide-mockup-card">
+        <div className="slide-mockup-header">
+          <span className="slide-mockup-tag">
+            <Calendar size={12} /> Сегодня
+          </span>
+          <span className="slide-mockup-time">18:00</span>
+        </div>
+        <div className="slide-mockup-body">
+          <div className="slide-mockup-check active">
+            <Check size={13} strokeWidth={2.8} />
+          </div>
+          <div className="slide-mockup-text-col">
+            <div className="slide-mockup-task-title">Завершить квартальный отчет</div>
+            <div className="slide-mockup-meta">Высокий приоритет • 2 подзадачи</div>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'habits',
+    badge: 'Дисциплина',
+    title: 'Привычки & Стрики',
+    subtitle: 'Формируйте дисциплину с наглядной цепочкой дней и мотивационными стриками',
+    icon: Flame,
+    renderVisual: () => (
+      <div className="slide-mockup-card">
+        <div className="slide-mockup-header">
+          <span className="slide-mockup-tag streak">
+            <Flame size={12} /> 14 дней стрик
+          </span>
+          <span className="slide-mockup-score">+120 XP</span>
+        </div>
+        <div className="slide-mockup-habit-row">
+          <div className="slide-mockup-habit-title">Утренняя медитация 15 мин</div>
+        </div>
+        <div className="slide-mockup-days">
+          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day, idx) => {
+            const isCompleted = idx < 6;
+            return (
+              <div
+                key={day}
+                className={`slide-mockup-day ${isCompleted ? 'completed' : 'today'}`}
+              >
+                <span>{day}</span>
+                {isCompleted ? (
+                  <Check size={10} strokeWidth={3} />
+                ) : (
+                  <div className="dot-pulse" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'groceries',
+    badge: 'Списки',
+    title: 'Список покупок',
+    subtitle: 'Быстрый чек-лист с мгновенной сортировкой, категориями и отметками прямо в пути',
+    icon: ShoppingCart,
+    renderVisual: () => (
+      <div className="slide-mockup-card">
+        <div className="slide-mockup-header">
+          <span className="slide-mockup-tag">
+            <ShoppingCart size={12} /> Супермаркет
+          </span>
+          <span className="slide-mockup-count">2 из 3 готово</span>
+        </div>
+        <div className="slide-mockup-list">
+          <div className="slide-mockup-item done">
+            <div className="slide-mockup-item-check">
+              <Check size={10} strokeWidth={3} />
+            </div>
+            <span className="slide-mockup-item-name">Кофе зерновой арабика</span>
+            <span className="slide-mockup-item-qty">1 кг</span>
+          </div>
+          <div className="slide-mockup-item">
+            <div className="slide-mockup-item-check empty" />
+            <span className="slide-mockup-item-name">Овсяное молоко Barista</span>
+            <span className="slide-mockup-item-qty">2 шт</span>
+          </div>
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 'voice',
+    badge: 'AI Ассистент',
+    title: 'Голосовой AI-ввод',
+    subtitle: 'Надиктуйте мысль голосом — искусственный интеллект сам выделит задачу, дату и контекст',
+    icon: Mic,
+    renderVisual: () => (
+      <div className="slide-mockup-card">
+        <div className="slide-mockup-header">
+          <span className="slide-mockup-tag ai">
+            <Sparkles size={12} /> Распознано AI
+          </span>
+          <span className="slide-mockup-meta">Авто-сохранение</span>
+        </div>
+        <div className="slide-mockup-voice-visual">
+          <div className="slide-mockup-mic-badge">
+            <Mic size={17} />
+          </div>
+          <div className="slide-mockup-soundwave">
+            <span className="sw-bar b1" />
+            <span className="sw-bar b2" />
+            <span className="sw-bar b3" />
+            <span className="sw-bar b4" />
+            <span className="sw-bar b5" />
+            <span className="sw-bar b6" />
+            <span className="sw-bar b7" />
+          </div>
+        </div>
+        <div className="slide-mockup-transcription">
+          «Напомни завтра в 11 позвонить врачу»
+        </div>
+      </div>
+    ),
+  },
+];
+
 export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [slideDirection, setSlideDirection] = useState(1);
+  const [isPaused, setIsPaused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showDevPanel, setShowDevPanel] = useState(false);
-  const [mascotMood, setMascotMood] = useState('idle');
+  const timerRef = useRef(null);
+
+  const goToSlide = useCallback((index, dir = 1) => {
+    setSlideDirection(dir);
+    setCurrentSlide(index);
+  }, []);
+
+  const nextSlide = useCallback(() => {
+    setSlideDirection(1);
+    setCurrentSlide((prev) => (prev + 1) % SLIDES.length);
+  }, []);
+
+  const prevSlide = useCallback(() => {
+    setSlideDirection(-1);
+    setCurrentSlide((prev) => (prev - 1 + SLIDES.length) % SLIDES.length);
+  }, []);
+
+  // Auto-slide effect (4.5s) with pause on touch/hover
+  useEffect(() => {
+    if (isPaused) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    timerRef.current = setInterval(() => {
+      nextSlide();
+    }, 4500);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isPaused, nextSlide]);
 
   useEffect(() => {
     const handleMessage = async (event) => {
@@ -34,7 +199,6 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             setIsLoading(false);
             return;
           }
-          // Direct Telegram OIDC id_token (from telegram-login.js or oauth.telegram.org postMessage)
           if (typeof msg.result === 'string') {
             setIsLoading(true);
             const data = await authenticateWithTelegramIdToken(msg.result);
@@ -55,7 +219,6 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             }
             return;
           }
-          // Direct internal session object from popup AuthCallback
           if (typeof msg.result === 'object' && msg.result.access_token) {
             setIsLoading(true);
             if (onLoginSuccess) {
@@ -65,7 +228,6 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             }
             return;
           }
-          // Legacy Telegram widget hash payload
           if (typeof msg.result === 'object' && msg.result.hash) {
             setIsLoading(true);
             const data = await exchangeTelegramWidgetAuth(msg.result);
@@ -95,7 +257,6 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
       const redirectUri = `${window.location.origin}/auth/callback`;
       const data = await getTelegramAuthUrl(redirectUri);
       if (data?.auth_url) {
-        // On desktop screens, open a centered popup so Telegram can self-close via postMessage upon authorization
         const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
         if (isDesktop) {
           const width = 540;
@@ -111,7 +272,6 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             return;
           }
         }
-        // Direct redirect for mobile devices or popup-blocked browsers
         window.location.href = data.auth_url;
       } else {
         throw new Error('Не получен URL авторизации от бэкенда');
@@ -120,7 +280,6 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
       console.error('Telegram login initiation error:', err);
       setIsLoading(false);
       setErrorMessage(err.message || 'Ошибка подключения к серверу авторизации');
-      setMascotMood('sad');
     }
   };
 
@@ -152,163 +311,173 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
     }
   };
 
+  const currentSlideData = SLIDES[currentSlide];
+
   return (
     <div className="login-screen-wrapper">
       <div className="login-screen-glow" />
 
-      <motion.div
-        className="login-screen-card"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: 'easeOut' }}
-      >
-        {/* Top Mascot & Status */}
-        <div className="login-mascot-box">
-          <Mascot
-            state={mascotMood}
-            size={72}
-            interactive={true}
-            onClick={() => {
-              setMascotMood(m => (m === 'idle' ? 'happy' : m === 'happy' ? 'thinking' : 'idle'));
-            }}
-          />
-          <div className="login-badge">
-            <Sparkles size={13} className="text-accent" />
-            <span>TaskerBot Web</span>
+      <div className="login-screen-card login-screen-onboarding">
+        {/* Top Header: Compact Brand Badge */}
+        <header className="login-top-bar">
+          <div className="login-brand-badge">
+            <Sparkles size={14} className="login-brand-icon" />
+            <span className="login-brand-text">TaskerBot Web</span>
           </div>
-        </div>
+        </header>
 
-        {/* Hero title & text */}
-        <div className="login-hero-header">
-          <h1 className="login-title">Организуйте день без хаоса</h1>
-          <p className="login-subtitle">
-            Привычки, задачи, списки покупок и голосовой AI-ассистент — синхронизировано с вашим Telegram.
-          </p>
-        </div>
-
-        {/* Feature Pills Grid */}
-        <div className="login-features-grid">
-          <div className="login-feature-item">
-            <div className="login-feature-icon">
-              <Calendar size={17} />
-            </div>
-            <div className="login-feature-texts">
-              <span className="login-feature-title">Фокус на сегодня</span>
-              <span className="login-feature-desc">Умные дедлайны и перенос задач</span>
-            </div>
-          </div>
-
-          <div className="login-feature-item">
-            <div className="login-feature-icon">
-              <CheckCircle2 size={17} />
-            </div>
-            <div className="login-feature-texts">
-              <span className="login-feature-title">Привычки & Стрики</span>
-              <span className="login-feature-desc">Отслеживание ежедневного прогресса</span>
-            </div>
-          </div>
-
-          <div className="login-feature-item">
-            <div className="login-feature-icon">
-              <ShoppingCart size={17} />
-            </div>
-            <div className="login-feature-texts">
-              <span className="login-feature-title">Список покупок</span>
-              <span className="login-feature-desc">Быстрый чек-лист с количеством</span>
-            </div>
-          </div>
-
-          <div className="login-feature-item">
-            <div className="login-feature-icon">
-              <Mic size={17} />
-            </div>
-            <div className="login-feature-texts">
-              <span className="login-feature-title">Голосовой AI-ввод</span>
-              <span className="login-feature-desc">Авто-распознавание любых заметок</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Error notification */}
-        {errorMessage && (
-          <motion.div
-            className="login-error-banner"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-          >
-            <span>{errorMessage}</span>
-          </motion.div>
-        )}
-
-        {/* Actions block */}
-        <div className="login-actions">
-          <button
-            type="button"
-            className="login-btn-telegram"
-            onClick={handleTelegramLogin}
-            disabled={isLoading}
-          >
-            <svg
-              className="tg-icon-svg"
-              viewBox="0 0 24 24"
-              width="22"
-              height="22"
-              fill="currentColor"
-            >
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
-            </svg>
-            <span>{isLoading ? 'Перенаправление в Telegram...' : 'Войти через Telegram'}</span>
-            <ArrowRight size={18} className="login-btn-arrow" />
-          </button>
-
-          <button
-            type="button"
-            className="login-btn-demo"
-            onClick={handleDemoClick}
-            disabled={isLoading}
-          >
-            <span>Попробовать в демо-режиме</span>
-          </button>
-        </div>
-
-        {/* Dev sandbox toggle */}
-        <div className="login-dev-toggle-row">
-          <button
-            type="button"
-            className="login-dev-link"
-            onClick={() => setShowDevPanel(!showDevPanel)}
-          >
-            <Terminal size={13} />
-            <span>Локальное тестирование</span>
-          </button>
-
-          {showDevPanel && (
-            <motion.div
-              className="login-dev-panel"
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
-                Вход без необходимости настройки домена в BotFather:
-              </div>
-              <button
-                type="button"
-                className="login-dev-btn"
-                onClick={handleDevLogin}
-                disabled={isLoading}
+        {/* Center: Interactive Carousel */}
+        <section
+          className="login-slider-container"
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={() => setIsPaused(false)}
+          onTouchStart={() => setIsPaused(true)}
+          onTouchEnd={() => setIsPaused(false)}
+        >
+          <div className="login-slide-viewport">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={currentSlideData.id}
+                className="login-slide-content"
+                initial={{ opacity: 0, x: slideDirection > 0 ? 36 : -36 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: slideDirection > 0 ? -36 : 36 }}
+                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+                drag="x"
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.2}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -40 || info.velocity.x < -300) {
+                    hapticFeedback('selection');
+                    nextSlide();
+                  } else if (info.offset.x > 40 || info.velocity.x > 300) {
+                    hapticFeedback('selection');
+                    prevSlide();
+                  }
+                }}
               >
-                Быстрый вход разработчика (ID 123456789)
-              </button>
+                {/* Visual UI Mockup */}
+                <div className="slide-visual-wrapper">
+                  {currentSlideData.renderVisual()}
+                </div>
+
+                {/* Text Block */}
+                <div className="login-slide-info">
+                  <div className="login-slide-badge">
+                    {React.createElement(currentSlideData.icon, { size: 12 })}
+                    <span>{currentSlideData.badge}</span>
+                  </div>
+                  <h1 className="login-slide-title">{currentSlideData.title}</h1>
+                  <p className="login-slide-desc">{currentSlideData.subtitle}</p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          {/* Pagination Indicators (Dots) */}
+          <div className="login-slider-dots" role="tablist" aria-label="Слайды возможностей">
+            {SLIDES.map((slide, index) => {
+              const isActive = index === currentSlide;
+              return (
+                <button
+                  key={slide.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-label={slide.title}
+                  className={`login-slider-dot ${isActive ? 'active' : ''}`}
+                  onClick={() => {
+                    hapticFeedback('selection');
+                    goToSlide(index, index > currentSlide ? 1 : -1);
+                  }}
+                />
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Bottom Section: Unified UI Kit Buttons and Auth */}
+        <footer className="login-bottom-section">
+          {errorMessage && (
+            <motion.div
+              className="login-error-banner"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+            >
+              <span>{errorMessage}</span>
             </motion.div>
           )}
-        </div>
 
-        {/* Security footnote */}
-        <div className="login-footnote">
-          <ShieldCheck size={14} className="text-tertiary" />
-          <span>Официальный протокол Telegram OpenID Connect. Пароли не требуются.</span>
-        </div>
-      </motion.div>
+          <div className="login-actions">
+            <button
+              type="button"
+              className="btn btn-primary login-btn-primary"
+              onClick={handleTelegramLogin}
+              disabled={isLoading}
+            >
+              <svg
+                className="tg-icon-svg"
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="currentColor"
+              >
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
+              </svg>
+              <span>{isLoading ? 'Перенаправление в Telegram...' : 'Войти через Telegram'}</span>
+              <ArrowRight size={17} className="login-btn-arrow" />
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-secondary login-btn-secondary"
+              onClick={handleDemoClick}
+              disabled={isLoading}
+            >
+              <span>Попробовать в демо-режиме</span>
+            </button>
+          </div>
+
+          {/* Dev sandbox toggle */}
+          <div className="login-dev-toggle-row">
+            <button
+              type="button"
+              className="login-dev-link"
+              onClick={() => setShowDevPanel((prev) => !prev)}
+            >
+              <Terminal size={12} />
+              <span>Локальное тестирование</span>
+            </button>
+
+            {showDevPanel && (
+              <motion.div
+                className="login-dev-panel"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
+                  Вход без необходимости настройки домена в BotFather:
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm login-dev-btn"
+                  onClick={handleDevLogin}
+                  disabled={isLoading}
+                >
+                  Быстрый вход разработчика (ID 123456789)
+                </button>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Security footnote */}
+          <div className="login-footnote">
+            <ShieldCheck size={13} className="text-tertiary" />
+            <span>Официальный протокол Telegram OpenID Connect. Пароли не требуются.</span>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }
+
