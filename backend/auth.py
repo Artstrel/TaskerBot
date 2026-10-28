@@ -177,7 +177,8 @@ async def exchange_telegram_code(
     if code_verifier:
         payload["code_verifier"] = code_verifier
 
-    # Use client_secret_post per RFC 6749 Section 2.3; never send both auth header and body secret simultaneously
+    # Use client_secret_basic via auth header as required by Telegram manual OIDC flow
+    auth = (client_id, client_secret) if client_secret else None
     if client_secret:
         payload["client_secret"] = client_secret
 
@@ -185,6 +186,7 @@ async def exchange_telegram_code(
         resp = await client.post(
             "https://oauth.telegram.org/token",
             data=payload,
+            auth=auth,
             headers={"Accept": "application/json"},
         )
         if resp.status_code != 200:
@@ -207,6 +209,54 @@ async def exchange_telegram_code(
     # Verify ID token via Telegram JWKS
     claims = await verify_telegram_id_token(id_token, client_id)
     return claims
+
+
+def validate_telegram_widget_data(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validates data received from Telegram Login Widget / tgAuthResult
+    per specification: https://core.telegram.org/widgets/login#checking-authorization
+    """
+    if not settings.BOT_TOKEN or not settings.BOT_TOKEN.strip():
+        raise ValueError("BOT_TOKEN is not configured on the server")
+
+    data_copy = dict(data)
+    received_hash = data_copy.pop("hash", None)
+    if not received_hash:
+        raise ValueError("Missing hash parameter in Telegram widget data")
+
+    # Filter out None values and convert to string
+    items = []
+    for k, v in data_copy.items():
+        if v is not None and v != "":
+            items.append(f"{k}={v}")
+    items.sort()
+    data_check_string = "\n".join(items)
+
+    # For Telegram Login Widget: secret_key is SHA256 of bot token
+    secret_key = hashlib.sha256(settings.BOT_TOKEN.strip().encode("utf-8")).digest()
+    expected_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(received_hash, expected_hash):
+        raise ValueError("Invalid Telegram Login Widget signature (hash mismatch)")
+
+    # Validate auth_date freshness (allow up to 48 hours)
+    auth_date = data.get("auth_date")
+    if auth_date:
+        try:
+            auth_timestamp = int(auth_date)
+            now = datetime.now(timezone.utc).timestamp()
+            if now - auth_timestamp > 86400 * 2:
+                raise ValueError("Telegram widget authorization has expired")
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "telegram_id": int(data["id"]),
+        "first_name": data.get("first_name", ""),
+        "last_name": data.get("last_name", ""),
+        "username": data.get("username", ""),
+        "photo_url": data.get("photo_url"),
+    }
 
 
 def validate_telegram_webapp_init_data(init_data: str) -> Dict[str, Any]:

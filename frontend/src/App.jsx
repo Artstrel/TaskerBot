@@ -86,10 +86,12 @@ class ErrorBoundary extends React.Component {
 export default function App() {
   const [authed, setAuthed] = useState(() => isAuthenticated());
   const [isCallbackRoute, setIsCallbackRoute] = useState(() => {
-    if (typeof window === 'undefined') return false;
     const isCallback = (
       window.location.pathname.includes('/auth/callback') ||
-      new URLSearchParams(window.location.search).has('code')
+      new URLSearchParams(window.location.search).has('code') ||
+      new URLSearchParams(window.location.search).has('hash') ||
+      window.location.hash.includes('tgAuthResult') ||
+      window.location.hash.includes('code=')
     );
     if (isCallback && isAuthenticated()) {
       window.history.replaceState({}, document.title, '/');

@@ -29,6 +29,7 @@ from backend.schemas import (
     TelegramAuthUrlResponse,
     TelegramAuthExchangeRequest,
     TelegramWebAppAuthRequest,
+    TelegramWidgetAuthRequest,
     AuthTokenResponse,
 )
 from backend.crud import (
@@ -69,6 +70,7 @@ from backend.auth import (
     pop_oauth_state,
     extract_user_profile,
     validate_telegram_webapp_init_data,
+    validate_telegram_widget_data,
 )
 
 router = APIRouter(prefix="/api")
@@ -126,6 +128,46 @@ async def authenticate_telegram_webapp(
         raise HTTPException(
             status_code=400,
             detail=f"Telegram WebApp validation failed: {str(e)}",
+        )
+
+    user = await get_or_create_user(
+        session=session,
+        telegram_id=profile["telegram_id"],
+        username=profile.get("username"),
+        first_name=profile.get("first_name"),
+        photo_url=profile.get("photo_url"),
+    )
+
+    token, expires_in = create_access_token(
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        photo_url=user.photo_url,
+    )
+
+    return AuthTokenResponse(
+        access_token=token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=user,
+    )
+
+
+@router.post("/auth/telegram/widget", response_model=AuthTokenResponse)
+async def authenticate_telegram_widget(
+    data: TelegramWidgetAuthRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Authenticates a user from Telegram Login Widget or tgAuthResult fragment callback (SHA256 HMAC).
+    Issues an internal JWT session token.
+    """
+    try:
+        profile = validate_telegram_widget_data(data.model_dump())
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Telegram widget validation failed: {str(e)}",
         )
 
     user = await get_or_create_user(

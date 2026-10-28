@@ -11,13 +11,46 @@ import {
   Terminal,
 } from 'lucide-react';
 import Mascot from './Mascot';
-import { getTelegramAuthUrl, devLogin, setDemoMode, hapticFeedback } from '../api';
+import { getTelegramAuthUrl, exchangeTelegramWidgetAuth, devLogin, setDemoMode, hapticFeedback } from '../api';
 
 export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showDevPanel, setShowDevPanel] = useState(false);
   const [mascotMood, setMascotMood] = useState('idle');
+
+  useEffect(() => {
+    const handleMessage = async (event) => {
+      try {
+        let msg = event.data;
+        if (typeof msg === 'string') {
+          try {
+            msg = JSON.parse(msg);
+          } catch (_) {}
+        }
+        if (msg?.event === 'auth_result' && msg?.result) {
+          if (msg.result === false) {
+            setErrorMessage('Авторизация отменена в Telegram');
+            setIsLoading(false);
+            return;
+          }
+          if (typeof msg.result === 'object' && msg.result.hash) {
+            setIsLoading(true);
+            const data = await exchangeTelegramWidgetAuth(msg.result);
+            if (onLoginSuccess) {
+              onLoginSuccess(data.user);
+            } else {
+              window.location.replace('/');
+            }
+          }
+        }
+      } catch (err) {
+        console.error('PostMessage auth error:', err);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onLoginSuccess]);
 
   const handleTelegramLogin = async () => {
     hapticFeedback('medium');
@@ -27,7 +60,19 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
       const redirectUri = `${window.location.origin}/auth/callback`;
       const data = await getTelegramAuthUrl(redirectUri);
       if (data?.auth_url) {
-        window.location.href = data.auth_url;
+        const width = 540;
+        const height = 660;
+        const left = window.screenLeft !== undefined ? window.screenLeft + (window.outerWidth - width) / 2 : 100;
+        const top = window.screenTop !== undefined ? window.screenTop + (window.outerHeight - height) / 2 : 100;
+        const popup = window.open(
+          data.auth_url,
+          'telegram_auth_popup',
+          `width=${width},height=${height},left=${left},top=${top},status=0,toolbar=0,location=1`
+        );
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+          // Fallback to direct redirect if popup blocked
+          window.location.href = data.auth_url;
+        }
       } else {
         throw new Error('Не получен URL авторизации от бэкенда');
       }

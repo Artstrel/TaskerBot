@@ -223,6 +223,27 @@ export const authenticateWithTelegramWebApp = async (initData) => {
   return data;
 };
 
+export const exchangeTelegramWidgetAuth = async (userData) => {
+  const url = `${API_BASE}/auth/telegram/widget`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    });
+  } catch (netErr) {
+    throw new Error(`Не удалось связаться с сервером для авторизации: ${netErr.message || 'сеть недоступна'}`);
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Ошибка авторизации Telegram (HTTP ${res.status})`);
+  }
+  const data = await res.json();
+  setAuthSession(data.access_token, data.user);
+  return data;
+};
+
 export const devLogin = async (customId, firstName, username) => {
   const url = `${API_BASE}/auth/dev-login?telegram_id=${customId || 123456789}&first_name=${encodeURIComponent(firstName || 'Разработчик')}&username=${encodeURIComponent(username || 'dev_user')}`;
   let res;

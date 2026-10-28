@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowLeft, RotateCw } from 'lucide-react';
 import Mascot from './Mascot';
-import { exchangeTelegramAuthCode, hapticFeedback, isAuthenticated } from '../api';
+import { exchangeTelegramAuthCode, exchangeTelegramWidgetAuth, hapticFeedback, isAuthenticated } from '../api';
 
 export default function AuthCallback({ onLoginSuccess, onCancel }) {
   const [status, setStatus] = useState('processing'); // 'processing' | 'success' | 'error'
@@ -29,7 +29,7 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
     const performExchange = async () => {
       try {
         const searchParams = new URLSearchParams(window.location.search);
-        const code = searchParams.get('code');
+        let code = searchParams.get('code');
         const state = searchParams.get('state');
         const error = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
@@ -38,16 +38,55 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
           throw new Error(errorDescription || `Ошибка Telegram: ${error}`);
         }
 
-        if (!code) {
-          // If no code and not authed, return to home/login
+        // 1. Check for Telegram tgAuthResult in hash (e.g. #tgAuthResult=eyJpZCI6...)
+        let widgetData = null;
+        const hash = window.location.hash;
+        if (hash && hash.includes('tgAuthResult=')) {
+          const rawHash = hash.split('tgAuthResult=')[1].split('&')[0];
+          try {
+            const decoded = atob(rawHash);
+            if (decoded === 'false') {
+              throw new Error('Авторизация отменена в Telegram');
+            }
+            widgetData = JSON.parse(decoded);
+          } catch (e) {
+            if (e.message && e.message.includes('отменена')) throw e;
+            console.warn('Could not parse tgAuthResult JSON:', e);
+          }
+        }
+
+        // 2. Check for Telegram Login Widget parameters in query string
+        if (!widgetData && searchParams.has('hash') && searchParams.has('id')) {
+          widgetData = {
+            id: Number(searchParams.get('id')),
+            first_name: searchParams.get('first_name') || '',
+            last_name: searchParams.get('last_name') || '',
+            username: searchParams.get('username') || '',
+            photo_url: searchParams.get('photo_url') || '',
+            auth_date: Number(searchParams.get('auth_date') || 0),
+            hash: searchParams.get('hash'),
+          };
+        }
+
+        // 3. Check for code in hash if missing in search
+        if (!code && !widgetData && hash && hash.includes('code=')) {
+          const hashParams = new URLSearchParams(hash.replace(/^#/, ''));
+          code = hashParams.get('code');
+        }
+
+        let result = null;
+        if (widgetData) {
+          result = await exchangeTelegramWidgetAuth(widgetData);
+        } else if (code) {
+          const redirectUri = `${window.location.origin}/auth/callback`;
+          const savedVerifier = typeof window !== 'undefined' ? sessionStorage.getItem('tg_code_verifier') : null;
+          result = await exchangeTelegramAuthCode(code, state, redirectUri, savedVerifier);
+        } else {
+          // If neither widget data nor OAuth code is present
           window.history.replaceState({}, document.title, '/');
           if (onCancel) onCancel();
           return;
         }
-
-        const redirectUri = `${window.location.origin}/auth/callback`;
-        const savedVerifier = typeof window !== 'undefined' ? sessionStorage.getItem('tg_code_verifier') : null;
-        const result = await exchangeTelegramAuthCode(code, state, redirectUri, savedVerifier);
 
         if (!isMounted) return;
 
