@@ -4035,10 +4035,13 @@ body,
 }
 
 @keyframes dotPulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 0.3;
     transform: scale(0.8);
   }
+
   50% {
     opacity: 1;
     transform: scale(1.2);
@@ -4220,7 +4223,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
+  padding: 0 16px;
   box-sizing: border-box;
   cursor: pointer;
   border: none;
