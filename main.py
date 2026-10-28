@@ -136,6 +136,12 @@ if frontend_dist.exists() and (frontend_dist / "index.html").exists():
         # Don't intercept API routes
         if full_path.startswith("api"):
             return None
+        # Handle cases where nested routes like /auth/assets/... request static assets
+        if "assets/" in full_path:
+            asset_filename = full_path.split("assets/", 1)[1]
+            candidate_asset = frontend_dist / "assets" / asset_filename
+            if candidate_asset.is_file():
+                return FileResponse(candidate_asset)
         file_path = frontend_dist / full_path
         if file_path.is_file():
             return FileResponse(file_path)

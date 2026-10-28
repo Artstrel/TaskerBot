@@ -86,10 +86,15 @@ export default function App() {
   const [authed, setAuthed] = useState(() => isAuthenticated());
   const [isCallbackRoute, setIsCallbackRoute] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return (
+    const isCallback = (
       window.location.pathname.includes('/auth/callback') ||
       new URLSearchParams(window.location.search).has('code')
     );
+    if (isCallback && isAuthenticated()) {
+      window.history.replaceState({}, document.title, '/');
+      return false;
+    }
+    return isCallback;
   });
   const [activeTab, setActiveTab] = useState('today');
   // Initialize synchronously with cached data for instant 0ms load
@@ -112,6 +117,7 @@ export default function App() {
   const handleLoginSuccess = useCallback((user) => {
     setAuthed(true);
     setIsCallbackRoute(false);
+    window.history.replaceState({}, document.title, '/');
   }, []);
 
   const handleEnterDemo = useCallback(() => {

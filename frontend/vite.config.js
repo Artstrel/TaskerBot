@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
-    base: './',
+    base: '/',
     envDir: '../',
     envPrefix: ['VITE_', 'GEMINI_', 'GROQ_', 'OPENROUTER_'],
     define: {

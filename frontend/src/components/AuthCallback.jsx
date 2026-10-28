@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowLeft, RotateCw } from 'lucide-react';
 import Mascot from './Mascot';
-import { exchangeTelegramAuthCode, hapticFeedback } from '../api';
+import { exchangeTelegramAuthCode, hapticFeedback, isAuthenticated } from '../api';
 
 export default function AuthCallback({ onLoginSuccess, onCancel }) {
   const [status, setStatus] = useState('processing'); // 'processing' | 'success' | 'error'
@@ -10,6 +10,17 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
 
   useEffect(() => {
     let isMounted = true;
+
+    // If session is already established (e.g. from previous successful exchange or refresh), redirect immediately
+    if (isAuthenticated()) {
+      window.history.replaceState({}, document.title, '/');
+      if (onLoginSuccess) {
+        onLoginSuccess();
+      } else {
+        window.location.replace('/');
+      }
+      return;
+    }
 
     const performExchange = async () => {
       try {
@@ -24,7 +35,10 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
         }
 
         if (!code) {
-          throw new Error('Код авторизации Telegram не найден в URL параметрах');
+          // If no code and not authed, return to home/login
+          window.history.replaceState({}, document.title, '/');
+          if (onCancel) onCancel();
+          return;
         }
 
         const redirectUri = `${window.location.origin}/auth/callback`;
@@ -35,16 +49,16 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
         hapticFeedback('success');
         setStatus('success');
 
-        // Clean up URL parameters without refreshing
-        window.history.replaceState({}, document.title, window.location.pathname.replace('/auth/callback', '') || '/');
+        // Immediately clean up URL in address bar to '/'
+        window.history.replaceState({}, document.title, '/');
 
         setTimeout(() => {
           if (onLoginSuccess) {
             onLoginSuccess(result.user);
           } else {
-            window.location.reload();
+            window.location.replace('/');
           }
-        }, 600);
+        }, 400);
       } catch (err) {
         console.error('AuthCallback exchange error:', err);
         if (!isMounted) return;
