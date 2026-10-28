@@ -7,7 +7,6 @@ import {
   Mic,
   ArrowRight,
   ShieldCheck,
-  Sparkles,
   Terminal,
   Check,
   Clock,
@@ -15,6 +14,7 @@ import {
 import BarVisualizer from './BarVisualizer';
 import { getTelegramAuthUrl, exchangeTelegramWidgetAuth, authenticateWithTelegramIdToken, devLogin, setDemoMode, hapticFeedback } from '../api';
 import { LOGIN_CONTENT } from '../constants/loginContent';
+import brandAvatar from '../assets/brand-avatar.png';
 
 const SLIDES = [
   {
@@ -318,7 +318,13 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
         {/* Top Header: Compact Brand Badge */}
         <header className="login-top-bar">
           <div className="login-brand-badge">
-            <Sparkles size={14} className="login-brand-icon" />
+            <img
+              src={brandAvatar}
+              alt={LOGIN_CONTENT.brand.badgeText}
+              className="login-brand-avatar"
+              width="18"
+              height="18"
+            />
             <span className="login-brand-text">{LOGIN_CONTENT.brand.badgeText}</span>
           </div>
         </header>

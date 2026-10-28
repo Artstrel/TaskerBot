@@ -3830,6 +3830,16 @@ body,
   color: var(--text-primary);
 }
 
+.login-brand-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+  box-shadow: 0 0 0 1px var(--border-subtle, rgba(255, 255, 255, 0.15));
+}
+
 /* Center Carousel Section */
 .login-slider-container {
   flex: 1;
