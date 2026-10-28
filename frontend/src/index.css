@@ -245,15 +245,31 @@ html.is-tg-fullscreen.is-ios {
   -webkit-tap-highlight-color: transparent;
 }
 
+html {
+  background-color: var(--bg-app);
+  width: 100%;
+  height: 100%;
+  height: -webkit-fill-available;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background-color: var(--bg-app);
   color: var(--text-primary);
+  width: 100%;
   min-height: 100vh;
   min-height: -webkit-fill-available;
   overflow-x: hidden;
   overflow-x: clip;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   letter-spacing: -0.011em;
+}
+
+#root {
+  background-color: var(--bg-app);
+  width: 100%;
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
 }
 
 h1,
@@ -1616,11 +1632,13 @@ body.is-tg-fullscreen .header-actions {
   max-width: 540px;
   width: 100%;
   margin: 0 auto;
-  max-height: 88vh;
+  max-height: calc(90dvh - var(--safe-top));
+  padding-bottom: max(var(--safe-bottom), 16px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   overscroll-behavior: contain;
+  box-sizing: border-box;
 }
 
 .sheet-handle-bar {
@@ -1711,9 +1729,11 @@ body.is-tg-fullscreen .header-actions {
 
 .sheet-body {
   margin-top: -56px;
-  padding: calc(56px + 14px) 18px 24px 18px;
+  padding: calc(56px + 14px) 18px calc(24px + var(--safe-bottom)) 18px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 }
 
 /* Quick Add Unified Input Box */
@@ -3695,6 +3715,7 @@ body,
   position: fixed;
   inset: 0;
   width: 100vw;
+  width: 100%;
   height: 100vh;
   height: 100dvh;
   display: flex;
@@ -3703,6 +3724,7 @@ body,
   background-color: var(--bg-app);
   z-index: 1000;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .login-screen-glow {
@@ -3742,8 +3764,9 @@ body,
   border: none;
   box-shadow: none;
   background: transparent;
-  padding: calc(var(--safe-top) + 16px) 20px calc(var(--safe-bottom) + 16px);
+  padding: calc(var(--safe-top) + 16px) calc(var(--safe-right) + 20px) calc(var(--safe-bottom) + 16px) calc(var(--safe-left) + 20px);
   justify-content: space-between;
+  box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
@@ -3810,7 +3833,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 0;
+  min-height: 288px;
 }
 
 .login-slide-content {
@@ -3828,7 +3851,11 @@ body,
 .slide-visual-wrapper {
   width: 100%;
   max-width: 320px;
-  margin-bottom: 22px;
+  height: 152px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
 }
 
 /* Stylized Mockup Cards - Soft 6% Shadow & Monochrome Palette */
@@ -4074,6 +4101,9 @@ body,
   align-items: center;
   text-align: center;
   padding: 0 12px;
+  min-height: 110px;
+  justify-content: flex-start;
+  width: 100%;
 }
 
 .login-slide-badge {
@@ -4135,6 +4165,18 @@ body,
 .login-slider-dot.active {
   width: 24px;
   height: 7px;
+  background: var(--text-primary);
+}
+
+[data-theme="light"] .login-slider-dot {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+[data-theme="light"] .login-slider-dot:hover:not(.active) {
+  background: rgba(0, 0, 0, 0.50);
+}
+
+[data-theme="light"] .login-slider-dot.active {
   background: var(--text-primary);
 }
 

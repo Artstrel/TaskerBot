@@ -78,6 +78,21 @@ function isDaytimeInTimezone(timezone, startStr = '07:00', endStr = '20:00') {
 }
 
 /**
+ * Detects if Telegram WebApp environment is active with authentic Telegram context.
+ * In standalone browsers, telegram-web-app.js leaves platform='unknown' and initData=''
+ */
+export function isTelegramWebAppActive() {
+  if (typeof window === 'undefined') return false;
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return false;
+  if (tg.initData && tg.initData.length > 0) return true;
+  if (tg.initDataUnsafe?.user) return true;
+  if (tg.platform && tg.platform !== 'unknown') return true;
+  if (window.location?.hash && window.location.hash.includes('tgWebAppData')) return true;
+  return false;
+}
+
+/**
  * Determine the active theme ('light' or 'dark') given the configuration
  */
 export function resolveEffectiveTheme(config = currentConfig, timezone = currentTimezone) {
@@ -96,14 +111,19 @@ export function resolveEffectiveTheme(config = currentConfig, timezone = current
     return isDay ? 'light' : 'dark';
   }
 
-  // Telegram colorScheme if available
-  if (typeof window !== 'undefined' && window.Telegram?.WebApp?.colorScheme) {
+  // Telegram colorScheme only when running inside authentic Telegram WebApp
+  if (isTelegramWebAppActive() && window.Telegram?.WebApp?.colorScheme) {
     return window.Telegram.WebApp.colorScheme === 'light' ? 'light' : 'dark';
   }
 
-  // System preference
+  // System preference (Browser / OS)
   if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+      return 'light';
+    }
   }
 
   return 'dark';
@@ -142,16 +162,24 @@ export function applyTheme(config = null, timezone = null) {
       document.body.setAttribute('data-theme', effectiveTheme);
     }
 
-    // Sync Telegram WebApp native colors
+    // Sync Telegram WebApp native colors and meta theme-color
+    const themeColor = effectiveTheme === 'light' ? '#f4f4f6' : '#0d0d0d';
+    const metaThemeColors = document.querySelectorAll('meta[name="theme-color"]');
+    if (metaThemeColors.length > 0) {
+      metaThemeColors.forEach((m) => m.setAttribute('content', themeColor));
+    }
+
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
-      const themeColor = effectiveTheme === 'light' ? '#f4f4f6' : '#0d0d0d';
       try {
         if (typeof tg.setHeaderColor === 'function') {
           tg.setHeaderColor(themeColor);
         }
         if (typeof tg.setBackgroundColor === 'function') {
           tg.setBackgroundColor(themeColor);
+        }
+        if (typeof tg.setBottomBarColor === 'function') {
+          tg.setBottomBarColor(themeColor);
         }
       } catch (_) {}
     }
@@ -190,8 +218,8 @@ export function initTheme(initialTimezone = null) {
   if (isInitialized) return;
   isInitialized = true;
 
-  // Telegram theme change listener
-  if (window.Telegram?.WebApp) {
+  // Telegram theme change listener (active only when running in Telegram WebApp)
+  if (window.Telegram?.WebApp && isTelegramWebAppActive()) {
     try {
       window.Telegram.WebApp.onEvent('themeChanged', () => {
         if (currentConfig.mode === 'auto' && !currentConfig.scheduleEnabled) {
@@ -201,10 +229,10 @@ export function initTheme(initialTimezone = null) {
     } catch (_) {}
   }
 
-  // OS system theme change listener
-  if (window.matchMedia) {
+  // OS system theme change listener (for browsers and environments respecting prefers-color-scheme)
+  if (typeof window !== 'undefined' && window.matchMedia) {
     try {
-      const media = window.matchMedia('(prefers-color-scheme: light)');
+      const media = window.matchMedia('(prefers-color-scheme: dark)');
       const listener = () => {
         if (currentConfig.mode === 'auto' && !currentConfig.scheduleEnabled) {
           applyTheme();

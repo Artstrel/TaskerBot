@@ -14,53 +14,54 @@ import {
 } from 'lucide-react';
 import BarVisualizer from './BarVisualizer';
 import { getTelegramAuthUrl, exchangeTelegramWidgetAuth, authenticateWithTelegramIdToken, devLogin, setDemoMode, hapticFeedback } from '../api';
+import { LOGIN_CONTENT } from '../constants/loginContent';
 
 const SLIDES = [
   {
-    id: 'today',
-    badge: 'Планирование',
-    title: 'Фокус на сегодня',
-    subtitle: 'Умные дедлайны, приоритизация и автоматический перенос незавершенных задач',
+    id: LOGIN_CONTENT.slides[0].id,
+    badge: LOGIN_CONTENT.slides[0].badge,
+    title: LOGIN_CONTENT.slides[0].title,
+    subtitle: LOGIN_CONTENT.slides[0].subtitle,
     icon: Calendar,
     renderVisual: () => (
       <div className="slide-mockup-card">
         <div className="slide-mockup-header">
           <span className="slide-mockup-tag">
-            <Calendar size={12} /> Сегодня
+            <Calendar size={12} /> {LOGIN_CONTENT.slides[0].mockup.tag}
           </span>
-          <span className="slide-mockup-time">18:00</span>
+          <span className="slide-mockup-time">{LOGIN_CONTENT.slides[0].mockup.time}</span>
         </div>
         <div className="slide-mockup-body">
           <div className="slide-mockup-check active">
             <Check size={13} strokeWidth={2.8} />
           </div>
           <div className="slide-mockup-text-col">
-            <div className="slide-mockup-task-title">Завершить квартальный отчет</div>
-            <div className="slide-mockup-meta">Высокий приоритет • 2 подзадачи</div>
+            <div className="slide-mockup-task-title">{LOGIN_CONTENT.slides[0].mockup.taskTitle}</div>
+            <div className="slide-mockup-meta">{LOGIN_CONTENT.slides[0].mockup.meta}</div>
           </div>
         </div>
       </div>
     ),
   },
   {
-    id: 'habits',
-    badge: 'Дисциплина',
-    title: 'Привычки & Стрики',
-    subtitle: 'Формируйте дисциплину с наглядной цепочкой дней и мотивационными стриками',
+    id: LOGIN_CONTENT.slides[1].id,
+    badge: LOGIN_CONTENT.slides[1].badge,
+    title: LOGIN_CONTENT.slides[1].title,
+    subtitle: LOGIN_CONTENT.slides[1].subtitle,
     icon: Flame,
     renderVisual: () => (
       <div className="slide-mockup-card">
         <div className="slide-mockup-header">
           <span className="slide-mockup-tag streak">
-            <Flame size={12} /> 14 дней стрик
+            <Flame size={12} /> {LOGIN_CONTENT.slides[1].mockup.streakTag}
           </span>
-          <span className="slide-mockup-score">+120 XP</span>
+          <span className="slide-mockup-score">{LOGIN_CONTENT.slides[1].mockup.score}</span>
         </div>
         <div className="slide-mockup-habit-row">
-          <div className="slide-mockup-habit-title">Утренняя медитация 15 мин</div>
+          <div className="slide-mockup-habit-title">{LOGIN_CONTENT.slides[1].mockup.habitTitle}</div>
         </div>
         <div className="slide-mockup-days">
-          {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day, idx) => {
+          {LOGIN_CONTENT.slides[1].mockup.days.map((day, idx) => {
             const isCompleted = idx < 6;
             return (
               <div
@@ -81,49 +82,46 @@ const SLIDES = [
     ),
   },
   {
-    id: 'groceries',
-    badge: 'Списки',
-    title: 'Список покупок',
-    subtitle: 'Быстрый чек-лист с мгновенной сортировкой, категориями и отметками прямо в пути',
+    id: LOGIN_CONTENT.slides[2].id,
+    badge: LOGIN_CONTENT.slides[2].badge,
+    title: LOGIN_CONTENT.slides[2].title,
+    subtitle: LOGIN_CONTENT.slides[2].subtitle,
     icon: ShoppingCart,
     renderVisual: () => (
       <div className="slide-mockup-card">
         <div className="slide-mockup-header">
           <span className="slide-mockup-tag">
-            <ShoppingCart size={12} /> Супермаркет
+            <ShoppingCart size={12} /> {LOGIN_CONTENT.slides[2].mockup.tag}
           </span>
-          <span className="slide-mockup-count">2 из 3 готово</span>
+          <span className="slide-mockup-count">{LOGIN_CONTENT.slides[2].mockup.count}</span>
         </div>
         <div className="slide-mockup-list">
-          <div className="slide-mockup-item done">
-            <div className="slide-mockup-item-check">
-              <Check size={10} strokeWidth={3} />
+          {LOGIN_CONTENT.slides[2].mockup.items.map((item) => (
+            <div key={item.name} className={`slide-mockup-item ${item.done ? 'done' : ''}`}>
+              <div className={`slide-mockup-item-check ${item.done ? '' : 'empty'}`}>
+                {item.done && <Check size={10} strokeWidth={3} />}
+              </div>
+              <span className="slide-mockup-item-name">{item.name}</span>
+              <span className="slide-mockup-item-qty">{item.qty}</span>
             </div>
-            <span className="slide-mockup-item-name">Кофе зерновой арабика</span>
-            <span className="slide-mockup-item-qty">1 кг</span>
-          </div>
-          <div className="slide-mockup-item">
-            <div className="slide-mockup-item-check empty" />
-            <span className="slide-mockup-item-name">Овсяное молоко Barista</span>
-            <span className="slide-mockup-item-qty">2 шт</span>
-          </div>
+          ))}
         </div>
       </div>
     ),
   },
   {
-    id: 'voice',
-    badge: 'AI Ассистент',
-    title: 'Голосовой AI-ввод',
-    subtitle: 'Надиктуйте мысль голосом — искусственный интеллект сам выделит задачу, дату и контекст',
+    id: LOGIN_CONTENT.slides[3].id,
+    badge: LOGIN_CONTENT.slides[3].badge,
+    title: LOGIN_CONTENT.slides[3].title,
+    subtitle: LOGIN_CONTENT.slides[3].subtitle,
     icon: Mic,
     renderVisual: () => (
       <div className="slide-mockup-card slide-mockup-island">
         <div className="voice-stage-top">
           <div className="voice-timer-pill">
             <Clock size={11} style={{ opacity: 0.7 }} />
-            <span className="voice-timer-display">00:04</span>
-            <span className="voice-timer-limit">/ 02:00</span>
+            <span className="voice-timer-display">{LOGIN_CONTENT.slides[3].mockup.timerDisplay}</span>
+            <span className="voice-timer-limit">{LOGIN_CONTENT.slides[3].mockup.timerLimit}</span>
           </div>
         </div>
 
@@ -138,7 +136,7 @@ const SLIDES = [
         </div>
 
         <div className="voice-island-hint">
-          «Напомни завтра в 11 позвонить врачу»
+          {LOGIN_CONTENT.slides[3].mockup.hint}
         </div>
       </div>
     ),
@@ -191,7 +189,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
         if (typeof msg === 'string') {
           try {
             msg = JSON.parse(msg);
-          } catch (_) {}
+          } catch (_) { }
         }
         if (msg?.event === 'auth_result' && msg?.result) {
           if (msg.result === false) {
@@ -307,7 +305,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
     } catch (err) {
       console.error('Dev login error:', err);
       setIsLoading(false);
-      setErrorMessage(err.message || 'Ошибка тестового входа');
+      setErrorMessage(err.message || LOGIN_CONTENT.errors.devLoginFailed);
     }
   };
 
@@ -322,7 +320,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
         <header className="login-top-bar">
           <div className="login-brand-badge">
             <Sparkles size={14} className="login-brand-icon" />
-            <span className="login-brand-text">TaskerBot Web</span>
+            <span className="login-brand-text">{LOGIN_CONTENT.brand.badgeText}</span>
           </div>
         </header>
 
@@ -375,7 +373,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
           </div>
 
           {/* Pagination Indicators (Dots) */}
-          <div className="login-slider-dots" role="tablist" aria-label="Слайды возможностей">
+          <div className="login-slider-dots" role="tablist" aria-label={LOGIN_CONTENT.sliderAriaLabel}>
             {SLIDES.map((slide, index) => {
               const isActive = index === currentSlide;
               return (
@@ -425,7 +423,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
                 >
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
                 </svg>
-                <span>{isLoading ? 'Перенаправление в Telegram...' : 'Войти через Telegram'}</span>
+                <span>{isLoading ? LOGIN_CONTENT.actions.telegramRedirecting : LOGIN_CONTENT.actions.telegramLogin}</span>
               </div>
               <ArrowRight size={17} className="login-btn-arrow" />
             </button>
@@ -436,7 +434,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
               onClick={handleDemoClick}
               disabled={isLoading}
             >
-              <span>Попробовать в демо-режиме</span>
+              <span>{LOGIN_CONTENT.actions.demoMode}</span>
             </button>
           </div>
 
@@ -448,7 +446,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
               onClick={() => setShowDevPanel((prev) => !prev)}
             >
               <Terminal size={12} />
-              <span>Локальное тестирование</span>
+              <span>{LOGIN_CONTENT.actions.devLink}</span>
             </button>
 
             {showDevPanel && (
@@ -458,7 +456,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
                 animate={{ opacity: 1, y: 0 }}
               >
                 <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '8px' }}>
-                  Вход без необходимости настройки домена в BotFather:
+                  {LOGIN_CONTENT.actions.devHint}
                 </div>
                 <button
                   type="button"
@@ -466,7 +464,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
                   onClick={handleDevLogin}
                   disabled={isLoading}
                 >
-                  Быстрый вход разработчика (ID 123456789)
+                  {LOGIN_CONTENT.actions.devLoginBtn}
                 </button>
               </motion.div>
             )}
@@ -475,7 +473,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
           {/* Security footnote */}
           <div className="login-footnote">
             <ShieldCheck size={13} className="text-tertiary" />
-            <span>Официальный протокол Telegram OpenID Connect. Пароли не требуются.</span>
+            <span>{LOGIN_CONTENT.actions.securityFootnote}</span>
           </div>
         </footer>
       </div>
