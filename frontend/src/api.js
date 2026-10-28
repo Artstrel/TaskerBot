@@ -1,5 +1,14 @@
 export const isInsideTelegram = () => {
-  return typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp?.initDataUnsafe?.user);
+  if (typeof window === 'undefined') return false;
+  if (window.Telegram?.WebApp) {
+    if (window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0) return true;
+    if (window.Telegram.WebApp.initDataUnsafe?.user) return true;
+    if (window.Telegram.WebApp.platform && window.Telegram.WebApp.platform !== 'unknown') return true;
+  }
+  if (typeof window.location !== 'undefined' && window.location.hash && window.location.hash.includes('tgWebAppData')) {
+    return true;
+  }
+  return false;
 };
 
 export const getAuthToken = () => {
@@ -54,25 +63,60 @@ export const isAuthenticated = () => {
 };
 
 const resolveInitialUser = () => {
-  if (isInsideTelegram()) {
-    return window.Telegram.WebApp.initDataUnsafe.user;
-  }
-  const stored = getStoredUser();
-  if (stored) {
-    return stored;
-  }
-  if (isDemoMode()) {
-    return {
-      id: 123456789,
-      first_name: 'Демо-Пользователь',
-      username: 'demo_user',
-      photo_url: null,
-      isDemo: true,
-      isGuest: false,
-    };
+  if (typeof window !== 'undefined') {
+    // 1. Direct Telegram WebApp user object
+    if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+      const u = window.Telegram.WebApp.initDataUnsafe.user;
+      return {
+        id: u.id,
+        telegram_id: u.id,
+        first_name: u.first_name || '',
+        username: u.username || '',
+        photo_url: u.photo_url || null,
+        isGuest: false,
+        isDemo: false,
+      };
+    }
+    // 2. Parse user from initData string if available
+    if (window.Telegram?.WebApp?.initData) {
+      try {
+        const params = new URLSearchParams(window.Telegram.WebApp.initData);
+        const rawUser = params.get('user');
+        if (rawUser) {
+          const u = JSON.parse(rawUser);
+          return {
+            id: u.id,
+            telegram_id: u.id,
+            first_name: u.first_name || '',
+            username: u.username || '',
+            photo_url: u.photo_url || null,
+            isGuest: false,
+            isDemo: false,
+          };
+        }
+      } catch (_) {}
+    }
+    // 3. Stored profile in localStorage
+    const stored = getStoredUser();
+    if (stored) {
+      return stored;
+    }
+    // 4. Demo mode
+    if (isDemoMode()) {
+      return {
+        id: 123456789,
+        telegram_id: 123456789,
+        first_name: 'Демо-Пользователь',
+        username: 'demo_user',
+        photo_url: null,
+        isDemo: true,
+        isGuest: false,
+      };
+    }
   }
   return {
     id: 0,
+    telegram_id: 0,
     first_name: 'Гость',
     username: 'guest',
     photo_url: null,
@@ -111,6 +155,7 @@ export const clearAuthSession = () => {
     localStorage.removeItem('tasker_demo_mode');
     window.__tasker_is_demo = false;
     currentUser.id = 0;
+    currentUser.telegram_id = 0;
     currentUser.first_name = 'Гость';
     currentUser.username = 'guest';
     currentUser.photo_url = null;
@@ -119,10 +164,10 @@ export const clearAuthSession = () => {
   }
 };
 
-// Automatic Authorization Header injection for all /api calls
+// Automatic Authorization Header injection & 401 handling for all /api calls
 if (typeof window !== 'undefined' && window.fetch) {
   const _origFetch = window.fetch.bind(window);
-  window.fetch = (input, init = {}) => {
+  window.fetch = async (input, init = {}) => {
     try {
       const urlStr = typeof input === 'string' ? input : input?.url || '';
       if (urlStr.includes('/api')) {
@@ -132,7 +177,15 @@ if (typeof window !== 'undefined' && window.fetch) {
           if (!headers.has('Authorization')) {
             headers.set('Authorization', `Bearer ${token}`);
           }
-          return _origFetch(input, { ...init, headers });
+          const res = await _origFetch(input, { ...init, headers });
+          if (res.status === 401 && !urlStr.includes('/auth/')) {
+            console.warn('API returned 401 Unauthorized, clearing stale token');
+            clearAuthSession();
+            if (window.Telegram?.WebApp?.initData) {
+              authenticateWithTelegramWebApp(window.Telegram.WebApp.initData).catch(() => {});
+            }
+          }
+          return res;
         }
       }
     } catch (_) {}
@@ -238,6 +291,27 @@ export const exchangeTelegramWidgetAuth = async (userData) => {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Ошибка авторизации Telegram (HTTP ${res.status})`);
+  }
+  const data = await res.json();
+  setAuthSession(data.access_token, data.user);
+  return data;
+};
+
+export const authenticateWithTelegramIdToken = async (idToken) => {
+  const url = `${API_BASE}/auth/telegram/id-token`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: idToken }),
+    });
+  } catch (netErr) {
+    throw new Error(`Не удалось связаться с сервером для проверки токена: ${netErr.message || 'сеть недоступна'}`);
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Ошибка верификации токена Telegram (HTTP ${res.status})`);
   }
   const data = await res.json();
   setAuthSession(data.access_token, data.user);

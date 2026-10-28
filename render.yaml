@@ -23,5 +23,7 @@ services:
         sync: false
       - key: TELEGRAM_OIDC_CLIENT_SECRET
         sync: false
+      - key: JWT_SECRET
+        sync: false
       - key: PORT
         value: 8000

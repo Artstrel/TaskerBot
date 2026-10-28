@@ -28,6 +28,7 @@ from backend.schemas import (
     GroceryListResponse,
     TelegramAuthUrlResponse,
     TelegramAuthExchangeRequest,
+    TelegramIdTokenAuthRequest,
     TelegramWebAppAuthRequest,
     TelegramWidgetAuthRequest,
     AuthTokenResponse,
@@ -71,6 +72,8 @@ from backend.auth import (
     extract_user_profile,
     validate_telegram_webapp_init_data,
     validate_telegram_widget_data,
+    verify_telegram_id_token,
+    get_telegram_client_id,
 )
 
 router = APIRouter(prefix="/api")
@@ -227,6 +230,48 @@ async def exchange_telegram_auth(
                 status_code=400,
                 detail=f"Telegram authentication failed: {str(e)}",
             )
+
+    user = await get_or_create_user(
+        session=session,
+        telegram_id=profile["telegram_id"],
+        username=profile.get("username"),
+        first_name=profile.get("first_name"),
+        photo_url=profile.get("photo_url"),
+    )
+
+    token, expires_in = create_access_token(
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        photo_url=user.photo_url,
+    )
+
+    return AuthTokenResponse(
+        access_token=token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=user,
+    )
+
+
+@router.post("/auth/telegram/id-token", response_model=AuthTokenResponse)
+async def authenticate_telegram_id_token(
+    data: TelegramIdTokenAuthRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Direct Telegram OIDC ID Token validation (RS256 signed JWT via oauth.telegram.org JWKS).
+    Allows client-side / popup authentication (telegram-login.js) with zero backend client_secret exposure.
+    """
+    client_id = get_telegram_client_id()
+    try:
+        claims = await verify_telegram_id_token(data.id_token, client_id)
+        profile = extract_user_profile(claims)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Telegram ID token validation failed: {str(e)}",
+        )
 
     user = await get_or_create_user(
         session=session,

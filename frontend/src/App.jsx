@@ -86,10 +86,14 @@ class ErrorBoundary extends React.Component {
 export default function App() {
   const [authed, setAuthed] = useState(() => isAuthenticated());
   const [isCallbackRoute, setIsCallbackRoute] = useState(() => {
+    // Mini App launched with #tgWebAppData should never be treated as an OAuth callback
+    if (typeof window !== 'undefined' && window.location.hash && window.location.hash.includes('tgWebAppData')) {
+      return false;
+    }
     const isCallback = (
       window.location.pathname.includes('/auth/callback') ||
       new URLSearchParams(window.location.search).has('code') ||
-      new URLSearchParams(window.location.search).has('hash') ||
+      (new URLSearchParams(window.location.search).has('hash') && new URLSearchParams(window.location.search).has('id')) ||
       window.location.hash.includes('tgAuthResult') ||
       window.location.hash.includes('code=')
     );
@@ -158,14 +162,17 @@ export default function App() {
         // Telegram Bot API < 7.7
       }
 
-      if (tg.initData && !localStorage.getItem('tasker_auth_token')) {
+      if (tg.initData) {
         authenticateWithTelegramWebApp(tg.initData)
           .then((res) => {
             if (res?.access_token) {
               setAuthed(true);
+              loadData(true, false, true);
             }
           })
-          .catch(() => {});
+          .catch((err) => {
+            console.warn('Telegram WebApp auth error:', err);
+          });
       }
 
       const updateTelegramMetrics = () => {

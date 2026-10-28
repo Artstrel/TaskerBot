@@ -11,7 +11,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import Mascot from './Mascot';
-import { getTelegramAuthUrl, exchangeTelegramWidgetAuth, devLogin, setDemoMode, hapticFeedback } from '../api';
+import { getTelegramAuthUrl, exchangeTelegramWidgetAuth, authenticateWithTelegramIdToken, devLogin, setDemoMode, hapticFeedback } from '../api';
 
 export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -34,6 +34,28 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             setIsLoading(false);
             return;
           }
+          // Direct Telegram OIDC id_token (from telegram-login.js or oauth.telegram.org postMessage)
+          if (typeof msg.result === 'string') {
+            setIsLoading(true);
+            const data = await authenticateWithTelegramIdToken(msg.result);
+            if (onLoginSuccess) {
+              onLoginSuccess(data.user);
+            } else {
+              window.location.replace('/');
+            }
+            return;
+          }
+          if (typeof msg.result === 'object' && msg.result.id_token) {
+            setIsLoading(true);
+            const data = await authenticateWithTelegramIdToken(msg.result.id_token);
+            if (onLoginSuccess) {
+              onLoginSuccess(data.user);
+            } else {
+              window.location.replace('/');
+            }
+            return;
+          }
+          // Legacy Telegram widget hash payload
           if (typeof msg.result === 'object' && msg.result.hash) {
             setIsLoading(true);
             const data = await exchangeTelegramWidgetAuth(msg.result);
@@ -42,10 +64,13 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             } else {
               window.location.replace('/');
             }
+            return;
           }
         }
       } catch (err) {
         console.error('PostMessage auth error:', err);
+        setErrorMessage(err.message || 'Ошибка обработки ответа Telegram');
+        setIsLoading(false);
       }
     };
     window.addEventListener('message', handleMessage);

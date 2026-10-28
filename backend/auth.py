@@ -168,31 +168,49 @@ async def exchange_telegram_code(
     client_id = get_telegram_client_id()
     client_secret = settings.TELEGRAM_OIDC_CLIENT_SECRET.strip()
 
-    payload = {
+    if not client_secret:
+        raise ValueError(
+            "TELEGRAM_OIDC_CLIENT_SECRET is not configured on the server. "
+            "Please configure TELEGRAM_OIDC_CLIENT_SECRET in your server environment variables (Render Dashboard)."
+        )
+
+    base_payload = {
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": redirect_uri,
         "client_id": client_id,
     }
     if code_verifier:
-        payload["code_verifier"] = code_verifier
+        base_payload["code_verifier"] = code_verifier
 
-    # Use client_secret_basic via auth header as required by Telegram manual OIDC flow
-    auth = (client_id, client_secret) if client_secret else None
-    if client_secret:
-        payload["client_secret"] = client_secret
-
+    # Per Telegram OIDC spec (https://core.telegram.org/bots/telegram-login.md) and RFC 6749 Section 2.3:
+    # Clients MUST NOT send multiple authentication methods in the same request.
+    # Strategy 1 (Primary): client_secret_basic via HTTP Basic Auth header
+    # Strategy 2 (Fallback): client_secret_post via form body without Basic Auth header
     async with httpx.AsyncClient(timeout=10.0) as client:
+        # Attempt 1: client_secret_basic
         resp = await client.post(
             "https://oauth.telegram.org/token",
-            data=payload,
-            auth=auth,
+            data=base_payload,
+            auth=(client_id, client_secret),
             headers={"Accept": "application/json"},
         )
-        if resp.status_code != 200:
-            raise ValueError(f"Telegram token endpoint returned HTTP {resp.status_code}: {resp.text}")
+        token_data = resp.json() if resp.status_code == 200 else {}
 
-        token_data = resp.json()
+        # If Strategy 1 returned invalid_client or 401, retry with Strategy 2 (client_secret_post)
+        if resp.status_code != 200 or token_data.get("error") in ("invalid_client", "unauthorized_client"):
+            post_payload = dict(base_payload)
+            post_payload["client_secret"] = client_secret
+            resp_fallback = await client.post(
+                "https://oauth.telegram.org/token",
+                data=post_payload,
+                headers={"Accept": "application/json"},
+            )
+            if resp_fallback.status_code == 200:
+                resp = resp_fallback
+                token_data = resp.json()
+            elif resp.status_code != 200:
+                raise ValueError(f"Telegram token endpoint returned HTTP {resp.status_code}: {resp.text}")
 
     # Telegram returns HTTP 200 with {"error": "..."} upon failures
     if "error" in token_data:
@@ -270,6 +288,8 @@ def validate_telegram_webapp_init_data(init_data: str) -> Dict[str, Any]:
 
     parsed = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
     received_hash = parsed.pop("hash", None)
+    # Telegram Bot API 7.0+ may include third-party signature which must not be part of HMAC data-check-string
+    parsed.pop("signature", None)
     if not received_hash:
         raise ValueError("Missing hash parameter in Telegram WebApp initData")
 

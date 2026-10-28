@@ -164,6 +164,10 @@ class TelegramWebAppAuthRequest(BaseModel):
     init_data: str
 
 
+class TelegramIdTokenAuthRequest(BaseModel):
+    id_token: str
+
+
 class TelegramWidgetAuthRequest(BaseModel):
     id: int
     first_name: Optional[str] = ""
