@@ -3,10 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" id="meta-theme-color-dark" />
-    <meta name="theme-color" content="#f4f4f6" media="(prefers-color-scheme: light)" id="meta-theme-color-light" />
+    <meta name="theme-color" content="#0d0d0d" id="meta-theme-color" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>TaskerBot — Трекер задач и целей</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,7 +32,7 @@
               var isDay = start <= end ? (cur >= start && cur < end) : (cur >= start || cur < end);
             } else {
               var tg = window.Telegram && window.Telegram.WebApp;
-              var isTg = tg && ((tg.initData && tg.initData.length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user) || (tg.platform && tg.platform !== 'unknown') || (window.location.hash && window.location.hash.indexOf('tgWebAppData') !== -1));
+              var isTg = tg && ((tg.initData && tg.initData.length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user) || (tg.platform && tg.platform !== 'unknown') || (window.location.hash && window.location.hash.indexOf('tgWebAppData')) !== -1);
               if (isTg && tg.colorScheme) {
                 theme = tg.colorScheme === 'light' ? 'light' : 'dark';
               } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
@@ -45,6 +44,19 @@
           }
           document.documentElement.setAttribute('data-theme', theme);
           document.documentElement.style.colorScheme = theme;
+          var themeColor = theme === 'light' ? '#f4f4f6' : '#0d0d0d';
+          var metaTheme = document.getElementById('meta-theme-color');
+          if (metaTheme) {
+            metaTheme.setAttribute('content', themeColor);
+          }
+          if (window.Telegram && window.Telegram.WebApp) {
+            try {
+              var tgObj = window.Telegram.WebApp;
+              if (typeof tgObj.setHeaderColor === 'function') tgObj.setHeaderColor(themeColor);
+              if (typeof tgObj.setBackgroundColor === 'function') tgObj.setBackgroundColor(themeColor);
+              if (typeof tgObj.setBottomBarColor === 'function') tgObj.setBottomBarColor(themeColor);
+            } catch (_) {}
+          }
         } catch (_) {}
       })();
     </script>

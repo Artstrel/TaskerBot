@@ -55,7 +55,6 @@ const SLIDES = [
           <span className="slide-mockup-tag streak">
             <Flame size={12} /> {LOGIN_CONTENT.slides[1].mockup.streakTag}
           </span>
-          <span className="slide-mockup-score">{LOGIN_CONTENT.slides[1].mockup.score}</span>
         </div>
         <div className="slide-mockup-habit-row">
           <div className="slide-mockup-habit-title">{LOGIN_CONTENT.slides[1].mockup.habitTitle}</div>
@@ -361,10 +360,6 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
 
                 {/* Text Block */}
                 <div className="login-slide-info">
-                  <div className="login-slide-badge">
-                    {React.createElement(currentSlideData.icon, { size: 12 })}
-                    <span>{currentSlideData.badge}</span>
-                  </div>
                   <h1 className="login-slide-title">{currentSlideData.title}</h1>
                   <p className="login-slide-desc">{currentSlideData.subtitle}</p>
                 </div>
