@@ -89,6 +89,10 @@ def generate_state() -> str:
     return secrets.token_urlsafe(32)
 
 
+import hmac
+import json
+import urllib.parse
+
 def generate_pkce_pair() -> Tuple[str, str]:
     """Generates PKCE code_verifier and S256 code_challenge."""
     verifier = secrets.token_urlsafe(64)
@@ -99,8 +103,8 @@ def generate_pkce_pair() -> Tuple[str, str]:
 
 def store_oauth_state(state: str, code_verifier: Optional[str] = None, redirect_uri: Optional[str] = None) -> None:
     now = datetime.now(timezone.utc).timestamp()
-    # Prune expired states older than 10 minutes
-    expired = [k for k, v in _oauth_states.items() if now - v.get("created_at", 0) > 600]
+    # Prune expired states older than 15 minutes
+    expired = [k for k, v in _oauth_states.items() if now - v.get("created_at", 0) > 900]
     for k in expired:
         _oauth_states.pop(k, None)
 
@@ -112,7 +116,16 @@ def store_oauth_state(state: str, code_verifier: Optional[str] = None, redirect_
 
 
 def pop_oauth_state(state: str) -> Optional[Dict[str, Any]]:
-    return _oauth_states.pop(state, None)
+    state_data = _oauth_states.get(state)
+    if not state_data:
+        return None
+    # Allow a 60-second grace window for concurrent requests (e.g. React StrictMode)
+    now = datetime.now(timezone.utc).timestamp()
+    if "first_accessed" not in state_data:
+        state_data["first_accessed"] = now
+    elif now - state_data["first_accessed"] > 60:
+        _oauth_states.pop(state, None)
+    return state_data
 
 
 def build_telegram_auth_url(redirect_uri: str) -> Tuple[str, str, str]:
@@ -125,7 +138,6 @@ def build_telegram_auth_url(redirect_uri: str) -> Tuple[str, str, str]:
     verifier, challenge = generate_pkce_pair()
     store_oauth_state(state, code_verifier=verifier, redirect_uri=redirect_uri)
 
-    import urllib.parse
     parsed_redirect = urllib.parse.urlsplit(redirect_uri)
     origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
 
@@ -165,30 +177,94 @@ async def exchange_telegram_code(
     if code_verifier:
         payload["code_verifier"] = code_verifier
 
-    auth = None
+    # Use client_secret_post per RFC 6749 Section 2.3; never send both auth header and body secret simultaneously
     if client_secret:
-        auth = (client_id, client_secret)
         payload["client_secret"] = client_secret
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             "https://oauth.telegram.org/token",
             data=payload,
-            auth=auth,
             headers={"Accept": "application/json"},
         )
         if resp.status_code != 200:
-            raise ValueError(f"Telegram token endpoint returned {resp.status_code}: {resp.text}")
+            raise ValueError(f"Telegram token endpoint returned HTTP {resp.status_code}: {resp.text}")
 
         token_data = resp.json()
 
+    # Telegram returns HTTP 200 with {"error": "..."} upon failures
+    if "error" in token_data:
+        err = token_data.get("error")
+        desc = token_data.get("error_description") or ""
+        msg = f"{err} ({desc})" if desc else str(err)
+        raise ValueError(f"Telegram OAuth error: {msg}")
+
     id_token = token_data.get("id_token")
     if not id_token:
-        raise ValueError("Missing id_token in Telegram token response")
+        keys_present = list(token_data.keys())
+        raise ValueError(f"Missing id_token in Telegram token response (keys received: {keys_present})")
 
     # Verify ID token via Telegram JWKS
     claims = await verify_telegram_id_token(id_token, client_id)
     return claims
+
+
+def validate_telegram_webapp_init_data(init_data: str) -> Dict[str, Any]:
+    """
+    Validates Telegram WebApp initData string using HMAC-SHA256
+    per Telegram WebApp specification:
+    https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+    """
+    if not settings.BOT_TOKEN or not settings.BOT_TOKEN.strip():
+        raise ValueError("BOT_TOKEN is not configured on the server")
+
+    parsed = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
+    received_hash = parsed.pop("hash", None)
+    if not received_hash:
+        raise ValueError("Missing hash parameter in Telegram WebApp initData")
+
+    # Sort key-value pairs alphabetically
+    data_check_arr = [f"{k}={v}" for k, v in sorted(parsed.items())]
+    data_check_string = "\n".join(data_check_arr)
+
+    # Secret key is HMAC-SHA256 of bot token with key "WebAppData"
+    secret_key = hmac.new(b"WebAppData", settings.BOT_TOKEN.strip().encode("utf-8"), hashlib.sha256).digest()
+    expected_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(received_hash, expected_hash):
+        raise ValueError("Invalid Telegram WebApp initData signature")
+
+    # Check auth_date expiration (allow up to 7 days for mobile webview caching)
+    auth_date = parsed.get("auth_date")
+    if auth_date:
+        try:
+            auth_timestamp = int(auth_date)
+            now = datetime.now(timezone.utc).timestamp()
+            if now - auth_timestamp > 86400 * 7:
+                raise ValueError("Telegram WebApp initData has expired")
+        except (ValueError, TypeError):
+            pass
+
+    user_raw = parsed.get("user")
+    if not user_raw:
+        raise ValueError("Missing user object in Telegram WebApp initData")
+
+    try:
+        user_data = json.loads(user_raw)
+    except json.JSONDecodeError:
+        raise ValueError("Invalid user JSON in Telegram WebApp initData")
+
+    telegram_id = user_data.get("id")
+    if not telegram_id:
+        raise ValueError("Missing id in Telegram user data")
+
+    return {
+        "telegram_id": int(telegram_id),
+        "first_name": user_data.get("first_name", ""),
+        "last_name": user_data.get("last_name", ""),
+        "username": user_data.get("username", ""),
+        "photo_url": user_data.get("photo_url"),
+    }
 
 
 async def verify_telegram_id_token(id_token: str, client_id: str) -> Dict[str, Any]:

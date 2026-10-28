@@ -28,6 +28,7 @@ from backend.schemas import (
     GroceryListResponse,
     TelegramAuthUrlResponse,
     TelegramAuthExchangeRequest,
+    TelegramWebAppAuthRequest,
     AuthTokenResponse,
 )
 from backend.crud import (
@@ -67,6 +68,7 @@ from backend.auth import (
     exchange_telegram_code,
     pop_oauth_state,
     extract_user_profile,
+    validate_telegram_webapp_init_data,
 )
 
 router = APIRouter(prefix="/api")
@@ -101,12 +103,52 @@ async def get_current_user(
     return user
 
 
-# --- Telegram OpenID Connect (OIDC) Endpoints ---
+# --- Telegram OpenID Connect (OIDC) & WebApp Endpoints ---
 @router.get("/auth/telegram/url", response_model=TelegramAuthUrlResponse)
 async def get_telegram_auth_url(redirect_uri: str = Query(...)):
     """Generates the Telegram OIDC authorization URL with state and PKCE parameters."""
-    auth_url, state, _ = build_telegram_auth_url(redirect_uri)
-    return TelegramAuthUrlResponse(auth_url=auth_url, state=state)
+    auth_url, state, verifier = build_telegram_auth_url(redirect_uri)
+    return TelegramAuthUrlResponse(auth_url=auth_url, state=state, code_verifier=verifier)
+
+
+@router.post("/auth/telegram/webapp", response_model=AuthTokenResponse)
+async def authenticate_telegram_webapp(
+    data: TelegramWebAppAuthRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """
+    Authenticates a Telegram Mini App user directly via validated WebApp initData (HMAC-SHA256).
+    Issues an internal JWT session token.
+    """
+    try:
+        profile = validate_telegram_webapp_init_data(data.init_data)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Telegram WebApp validation failed: {str(e)}",
+        )
+
+    user = await get_or_create_user(
+        session=session,
+        telegram_id=profile["telegram_id"],
+        username=profile.get("username"),
+        first_name=profile.get("first_name"),
+        photo_url=profile.get("photo_url"),
+    )
+
+    token, expires_in = create_access_token(
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        photo_url=user.photo_url,
+    )
+
+    return AuthTokenResponse(
+        access_token=token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=user,
+    )
 
 
 @router.post("/auth/telegram/exchange", response_model=AuthTokenResponse)

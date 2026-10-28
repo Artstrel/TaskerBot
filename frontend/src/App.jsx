@@ -28,6 +28,7 @@ import {
   isDemoMode,
   setDemoMode,
   clearAuthSession,
+  authenticateWithTelegramWebApp,
 } from './api';
 import Mascot from './components/Mascot';
 import TodayTab from './components/TodayTab';
@@ -153,6 +154,16 @@ export default function App() {
         }
       } catch (_) {
         // Telegram Bot API < 7.7
+      }
+
+      if (tg.initData && !localStorage.getItem('tasker_auth_token')) {
+        authenticateWithTelegramWebApp(tg.initData)
+          .then((res) => {
+            if (res?.access_token) {
+              setAuthed(true);
+            }
+          })
+          .catch(() => {});
       }
 
       const updateTelegramMetrics = () => {

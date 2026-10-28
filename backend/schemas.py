@@ -150,6 +150,7 @@ class UserUpdate(BaseModel):
 class TelegramAuthUrlResponse(BaseModel):
     auth_url: str
     state: str
+    code_verifier: Optional[str] = None
 
 
 class TelegramAuthExchangeRequest(BaseModel):
@@ -157,6 +158,10 @@ class TelegramAuthExchangeRequest(BaseModel):
     code_verifier: Optional[str] = None
     state: Optional[str] = None
     redirect_uri: Optional[str] = None
+
+
+class TelegramWebAppAuthRequest(BaseModel):
+    init_data: str
 
 
 class AuthTokenResponse(BaseModel):

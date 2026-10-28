@@ -156,12 +156,22 @@ export const getTelegramAuthUrl = async (redirectUri) => {
     }
     throw new Error(err.detail || `Ошибка сервера (HTTP ${res.status}): не удалось сформировать ссылку Telegram`);
   }
-  return await res.json();
+  const data = await res.json();
+  if (typeof window !== 'undefined') {
+    if (data?.code_verifier) {
+      sessionStorage.setItem('tg_code_verifier', data.code_verifier);
+    }
+    if (data?.state) {
+      sessionStorage.setItem('tg_oauth_state', data.state);
+    }
+  }
+  return data;
 };
 
-export const exchangeTelegramAuthCode = async (code, state, redirectUri) => {
+export const exchangeTelegramAuthCode = async (code, state, redirectUri, explicitVerifier) => {
   const uri = redirectUri || `${window.location.origin}/auth/callback`;
   const url = `${API_BASE}/auth/telegram/exchange`;
+  const codeVerifier = explicitVerifier || (typeof window !== 'undefined' ? sessionStorage.getItem('tg_code_verifier') : null);
   let res;
   try {
     res = await fetch(url, {
@@ -171,6 +181,7 @@ export const exchangeTelegramAuthCode = async (code, state, redirectUri) => {
         code,
         state,
         redirect_uri: uri,
+        code_verifier: codeVerifier || undefined,
       }),
     });
   } catch (netErr) {
@@ -179,6 +190,33 @@ export const exchangeTelegramAuthCode = async (code, state, redirectUri) => {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Ошибка авторизации через Telegram (HTTP ${res.status})`);
+  }
+  const data = await res.json();
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('tg_code_verifier');
+    sessionStorage.removeItem('tg_oauth_state');
+  }
+  setAuthSession(data.access_token, data.user);
+  return data;
+};
+
+export const authenticateWithTelegramWebApp = async (initData) => {
+  if (!initData) return null;
+  const url = `${API_BASE}/auth/telegram/webapp`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ init_data: initData }),
+    });
+  } catch (netErr) {
+    console.warn('Telegram WebApp auth network error:', netErr);
+    return null;
+  }
+  if (!res.ok) {
+    console.warn(`Telegram WebApp auth returned HTTP ${res.status}`);
+    return null;
   }
   const data = await res.json();
   setAuthSession(data.access_token, data.user);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowLeft, RotateCw } from 'lucide-react';
 import Mascot from './Mascot';
@@ -7,6 +7,7 @@ import { exchangeTelegramAuthCode, hapticFeedback, isAuthenticated } from '../ap
 export default function AuthCallback({ onLoginSuccess, onCancel }) {
   const [status, setStatus] = useState('processing'); // 'processing' | 'success' | 'error'
   const [errorMessage, setErrorMessage] = useState(null);
+  const hasExecutedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -21,6 +22,9 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
       }
       return;
     }
+
+    if (hasExecutedRef.current) return;
+    hasExecutedRef.current = true;
 
     const performExchange = async () => {
       try {
@@ -42,7 +46,8 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
         }
 
         const redirectUri = `${window.location.origin}/auth/callback`;
-        const result = await exchangeTelegramAuthCode(code, state, redirectUri);
+        const savedVerifier = typeof window !== 'undefined' ? sessionStorage.getItem('tg_code_verifier') : null;
+        const result = await exchangeTelegramAuthCode(code, state, redirectUri, savedVerifier);
 
         if (!isMounted) return;
 
