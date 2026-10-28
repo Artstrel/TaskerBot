@@ -103,6 +103,13 @@ export default function App() {
     }
     return isCallback;
   });
+  const [tgAuthStatus, setTgAuthStatus] = useState(() => {
+    if (isInsideTelegram() && !isAuthenticated()) {
+      return 'authenticating';
+    }
+    return 'idle';
+  });
+  const [tgAuthError, setTgAuthError] = useState(null);
   const [activeTab, setActiveTab] = useState('today');
   // Initialize synchronously with cached data for instant 0ms load
   const [dashboardData, setDashboardData] = useState(() => getCachedDashboard());
@@ -163,16 +170,27 @@ export default function App() {
       }
 
       if (tg.initData) {
+        setTgAuthStatus('authenticating');
+        setTgAuthError(null);
         authenticateWithTelegramWebApp(tg.initData)
           .then((res) => {
             if (res?.access_token) {
+              setTgAuthStatus('success');
               setAuthed(true);
               loadData(true, false, true);
+            } else {
+              setTgAuthStatus('failed');
+              setTgAuthError('Не получен токен сессии от сервера');
             }
           })
           .catch((err) => {
             console.warn('Telegram WebApp auth error:', err);
+            setTgAuthStatus('failed');
+            setTgAuthError(err.message || 'Ошибка валидации Telegram WebApp');
           });
+      } else if (isInsideTelegram() && !isAuthenticated()) {
+        setTgAuthStatus('failed');
+        setTgAuthError('Отсутствуют параметры запуска Telegram WebApp');
       }
 
       const updateTelegramMetrics = () => {
@@ -465,6 +483,88 @@ export default function App() {
   }
 
   if (!authed) {
+    if (isInsideTelegram() && (tgAuthStatus === 'authenticating' || tgAuthStatus === 'failed')) {
+      return (
+        <ErrorBoundary>
+          <div className="login-screen-wrapper">
+            <div className="login-screen-glow" />
+            <motion.div
+              className="login-screen-card text-center"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
+              style={{ maxWidth: 420 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+                <Mascot
+                  state={tgAuthStatus === 'failed' ? 'sad' : 'thinking'}
+                  size={76}
+                  interactive={false}
+                />
+              </div>
+
+              {tgAuthStatus === 'authenticating' ? (
+                <>
+                  <h1 className="login-screen-title" style={{ fontSize: '1.35rem', marginBottom: 8 }}>
+                    Вход через Telegram...
+                  </h1>
+                  <p className="login-screen-subtitle" style={{ fontSize: '0.88rem', marginBottom: 24 }}>
+                    Инициализация и проверка защищенной сессии Mini App
+                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10 }}>
+                    <div className="skeleton" style={{ width: 44, height: 6, borderRadius: 3 }} />
+                    <div className="skeleton" style={{ width: 64, height: 6, borderRadius: 3 }} />
+                    <div className="skeleton" style={{ width: 44, height: 6, borderRadius: 3 }} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h1 className="login-screen-title" style={{ fontSize: '1.35rem', marginBottom: 8, color: 'var(--accent-red, #ef4444)' }}>
+                    Сбой входа в Telegram
+                  </h1>
+                  <p className="login-screen-subtitle" style={{ fontSize: '0.88rem', marginBottom: 20 }}>
+                    {tgAuthError || 'Не удалось подтвердить подпись Telegram WebApp.'}
+                  </p>
+                  <button
+                    type="button"
+                    className="login-btn-telegram"
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+                        const tg = window.Telegram.WebApp;
+                        if (tg.initData) {
+                          setTgAuthStatus('authenticating');
+                          setTgAuthError(null);
+                          hapticFeedback('medium');
+                          authenticateWithTelegramWebApp(tg.initData)
+                            .then((res) => {
+                              if (res?.access_token) {
+                                setTgAuthStatus('success');
+                                setAuthed(true);
+                                loadData(true, false, true);
+                              } else {
+                                setTgAuthStatus('failed');
+                                setTgAuthError('Не получен токен сессии от сервера');
+                              }
+                            })
+                            .catch((err) => {
+                              setTgAuthStatus('failed');
+                              setTgAuthError(err.message || 'Ошибка валидации Telegram WebApp');
+                            });
+                        }
+                      }
+                    }}
+                    style={{ width: '100%', justifyContent: 'center' }}
+                  >
+                    Повторить попытку
+                  </button>
+                </>
+              )}
+            </motion.div>
+          </div>
+        </ErrorBoundary>
+      );
+    }
+
     return (
       <ErrorBoundary>
         <LoginScreen

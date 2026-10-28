@@ -85,19 +85,8 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
       const redirectUri = `${window.location.origin}/auth/callback`;
       const data = await getTelegramAuthUrl(redirectUri);
       if (data?.auth_url) {
-        const width = 540;
-        const height = 660;
-        const left = window.screenLeft !== undefined ? window.screenLeft + (window.outerWidth - width) / 2 : 100;
-        const top = window.screenTop !== undefined ? window.screenTop + (window.outerHeight - height) / 2 : 100;
-        const popup = window.open(
-          data.auth_url,
-          'telegram_auth_popup',
-          `width=${width},height=${height},left=${left},top=${top},status=0,toolbar=0,location=1`
-        );
-        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-          // Fallback to direct redirect if popup blocked
-          window.location.href = data.auth_url;
-        }
+        // Full-page redirect prevents popup blockers and cross-context sessionStorage loss
+        window.location.href = data.auth_url;
       } else {
         throw new Error('Не получен URL авторизации от бэкенда');
       }

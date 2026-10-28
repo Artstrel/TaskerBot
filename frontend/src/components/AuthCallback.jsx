@@ -79,7 +79,9 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
           result = await exchangeTelegramWidgetAuth(widgetData);
         } else if (code) {
           const redirectUri = `${window.location.origin}/auth/callback`;
-          const savedVerifier = typeof window !== 'undefined' ? sessionStorage.getItem('tg_code_verifier') : null;
+          const savedVerifier = typeof window !== 'undefined'
+            ? (localStorage.getItem('tg_code_verifier') || sessionStorage.getItem('tg_code_verifier'))
+            : null;
           result = await exchangeTelegramAuthCode(code, state, redirectUri, savedVerifier);
         } else {
           // If neither widget data nor OAuth code is present
@@ -95,6 +97,17 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
 
         // Immediately clean up URL in address bar to '/'
         window.history.replaceState({}, document.title, '/');
+
+        // If opened inside popup, notify opener and close
+        if (window.opener && typeof window.opener.postMessage === 'function') {
+          try {
+            window.opener.postMessage({ event: 'auth_result', result: result }, window.location.origin);
+            setTimeout(() => {
+              try { window.close(); } catch (_) {}
+            }, 300);
+            return;
+          } catch (_) {}
+        }
 
         setTimeout(() => {
           if (onLoginSuccess) {

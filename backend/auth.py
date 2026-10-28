@@ -136,10 +136,13 @@ def build_telegram_auth_url(redirect_uri: str) -> Tuple[str, str, str]:
     client_id = get_telegram_client_id()
     state = generate_state()
     verifier, challenge = generate_pkce_pair()
-    store_oauth_state(state, code_verifier=verifier, redirect_uri=redirect_uri)
 
+    # Strictly normalize redirect_uri and origin per RFC 6454 / RFC 6749
+    redirect_uri = redirect_uri.strip().rstrip("/")
     parsed_redirect = urllib.parse.urlsplit(redirect_uri)
-    origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
+    origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}".rstrip("/")
+
+    store_oauth_state(state, code_verifier=verifier, redirect_uri=redirect_uri)
 
     params = {
         "client_id": client_id,
@@ -174,6 +177,9 @@ async def exchange_telegram_code(
             "Please configure TELEGRAM_OIDC_CLIENT_SECRET in your server environment variables (Render Dashboard)."
         )
 
+    # Strictly normalize redirect_uri
+    redirect_uri = redirect_uri.strip().rstrip("/")
+
     base_payload = {
         "grant_type": "authorization_code",
         "code": code,
@@ -183,17 +189,20 @@ async def exchange_telegram_code(
     if code_verifier:
         base_payload["code_verifier"] = code_verifier
 
-    # Per Telegram OIDC spec (https://core.telegram.org/bots/telegram-login.md) and RFC 6749 Section 2.3:
+    # Per Telegram OIDC spec and RFC 6749 Section 2.3:
     # Clients MUST NOT send multiple authentication methods in the same request.
-    # Strategy 1 (Primary): client_secret_basic via HTTP Basic Auth header
-    # Strategy 2 (Fallback): client_secret_post via form body without Basic Auth header
+    # Token endpoint requires application/x-www-form-urlencoded
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
     async with httpx.AsyncClient(timeout=10.0) as client:
         # Attempt 1: client_secret_basic
         resp = await client.post(
             "https://oauth.telegram.org/token",
             data=base_payload,
             auth=(client_id, client_secret),
-            headers={"Accept": "application/json"},
+            headers=headers,
         )
         token_data = resp.json() if resp.status_code == 200 else {}
 
@@ -204,7 +213,7 @@ async def exchange_telegram_code(
             resp_fallback = await client.post(
                 "https://oauth.telegram.org/token",
                 data=post_payload,
-                headers={"Accept": "application/json"},
+                headers=headers,
             )
             if resp_fallback.status_code == 200:
                 resp = resp_fallback

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -110,9 +110,28 @@ async def get_current_user(
 
 # --- Telegram OpenID Connect (OIDC) & WebApp Endpoints ---
 @router.get("/auth/telegram/url", response_model=TelegramAuthUrlResponse)
-async def get_telegram_auth_url(redirect_uri: str = Query(...)):
+async def get_telegram_auth_url(redirect_uri: str = Query(...), response: Response = None):
     """Generates the Telegram OIDC authorization URL with state and PKCE parameters."""
     auth_url, state, verifier = build_telegram_auth_url(redirect_uri)
+    if response:
+        response.set_cookie(
+            key="tg_pkce_verifier",
+            value=verifier,
+            max_age=900,
+            httponly=True,
+            samesite="lax",
+            secure=True,
+            path="/",
+        )
+        response.set_cookie(
+            key="tg_pkce_state",
+            value=state,
+            max_age=900,
+            httponly=True,
+            samesite="lax",
+            secure=True,
+            path="/",
+        )
     return TelegramAuthUrlResponse(auth_url=auth_url, state=state, code_verifier=verifier)
 
 
@@ -199,15 +218,26 @@ async def authenticate_telegram_widget(
 @router.post("/auth/telegram/exchange", response_model=AuthTokenResponse)
 async def exchange_telegram_auth(
     data: TelegramAuthExchangeRequest,
+    request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_db),
 ):
     """Exchanges Telegram authorization code for tokens, verifies claims, and issues session JWT."""
-    code_verifier = data.code_verifier
-    state_data = pop_oauth_state(data.state) if data.state else None
+    cookie_verifier = request.cookies.get("tg_pkce_verifier")
+    cookie_state = request.cookies.get("tg_pkce_state")
+
+    code_verifier = data.code_verifier or cookie_verifier
+    effective_state = data.state or cookie_state
+
+    state_data = pop_oauth_state(effective_state) if effective_state else None
     if state_data and not code_verifier:
         code_verifier = state_data.get("code_verifier")
 
     redirect_uri = data.redirect_uri or (state_data.get("redirect_uri") if state_data else "")
+
+    # Cleanup transient PKCE cookies
+    response.delete_cookie(key="tg_pkce_verifier", path="/")
+    response.delete_cookie(key="tg_pkce_state", path="/")
 
     # Mock code support for dev / sandbox
     if data.code.startswith("mock_dev_"):

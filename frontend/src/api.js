@@ -198,7 +198,7 @@ export const getTelegramAuthUrl = async (redirectUri) => {
   const url = `${API_BASE}/auth/telegram/url?redirect_uri=${encodeURIComponent(uri)}`;
   let res;
   try {
-    res = await fetch(url);
+    res = await fetch(url, { credentials: 'include' });
   } catch (netErr) {
     throw new Error(`Не удалось связаться с сервером (${API_BASE}): ${netErr.message || 'сеть недоступна'}. Убедитесь, что бэкенд запущен.`);
   }
@@ -213,9 +213,12 @@ export const getTelegramAuthUrl = async (redirectUri) => {
   if (typeof window !== 'undefined') {
     if (data?.code_verifier) {
       sessionStorage.setItem('tg_code_verifier', data.code_verifier);
+      localStorage.setItem('tg_code_verifier', data.code_verifier);
+      localStorage.setItem('tg_code_verifier_time', Date.now().toString());
     }
     if (data?.state) {
       sessionStorage.setItem('tg_oauth_state', data.state);
+      localStorage.setItem('tg_oauth_state', data.state);
     }
   }
   return data;
@@ -224,12 +227,16 @@ export const getTelegramAuthUrl = async (redirectUri) => {
 export const exchangeTelegramAuthCode = async (code, state, redirectUri, explicitVerifier) => {
   const uri = redirectUri || `${window.location.origin}/auth/callback`;
   const url = `${API_BASE}/auth/telegram/exchange`;
-  const codeVerifier = explicitVerifier || (typeof window !== 'undefined' ? sessionStorage.getItem('tg_code_verifier') : null);
+  let codeVerifier = explicitVerifier;
+  if (!codeVerifier && typeof window !== 'undefined') {
+    codeVerifier = localStorage.getItem('tg_code_verifier') || sessionStorage.getItem('tg_code_verifier');
+  }
   let res;
   try {
     res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         code,
         state,
@@ -248,6 +255,9 @@ export const exchangeTelegramAuthCode = async (code, state, redirectUri, explici
   if (typeof window !== 'undefined') {
     sessionStorage.removeItem('tg_code_verifier');
     sessionStorage.removeItem('tg_oauth_state');
+    localStorage.removeItem('tg_code_verifier');
+    localStorage.removeItem('tg_code_verifier_time');
+    localStorage.removeItem('tg_oauth_state');
   }
   setAuthSession(data.access_token, data.user);
   return data;
