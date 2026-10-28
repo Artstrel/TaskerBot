@@ -34,6 +34,7 @@ import {
   createGroceryItem,
   hapticFeedback,
   setCachedDashboard,
+  getCachedDashboard,
   setCachedGoals,
   setCachedGroceries,
   addPendingMutation,
@@ -79,14 +80,25 @@ export default function QuickAddModal({
     editingItem ? (editingItem.goal_title || (editingItem.goal ? editingItem.goal.title : '')) : (initialGoalTitle || '')
   );
 
+  const getEffectiveTodayDate = () => {
+    const cached = getCachedDashboard();
+    if (cached?.date) return cached.date;
+    return new Date().toISOString().split('T')[0];
+  };
+
+  const getEffectiveTomorrowDate = () => {
+    const todayStr = getEffectiveTodayDate();
+    const d = new Date(`${todayStr}T12:00:00`);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  };
+
   // Compute initial due date option for tasks
   const computeInitialDueDateOption = () => {
     if (!editingItem) return 'today';
     if (!editingItem.scheduled_date) return 'none';
-    const todayStr = new Date().toISOString().split('T')[0];
-    const tomDate = new Date();
-    tomDate.setDate(tomDate.getDate() + 1);
-    const tomorrowStr = tomDate.toISOString().split('T')[0];
+    const todayStr = getEffectiveTodayDate();
+    const tomorrowStr = getEffectiveTomorrowDate();
     if (editingItem.scheduled_date === todayStr) return 'today';
     if (editingItem.scheduled_date === tomorrowStr) return 'tomorrow';
     return 'custom';
@@ -238,13 +250,12 @@ export default function QuickAddModal({
   const getSelectedDate = () => {
     if (dueDateOption === 'none') return null;
     if (dueDateOption === 'custom') {
-      return customDueDate || new Date().toISOString().split('T')[0];
+      return customDueDate || getEffectiveTodayDate();
     }
-    const d = new Date();
     if (dueDateOption === 'tomorrow') {
-      d.setDate(d.getDate() + 1);
+      return getEffectiveTomorrowDate();
     }
-    return d.toISOString().split('T')[0];
+    return getEffectiveTodayDate();
   };
 
   // Map and attach goal associations to extracted AI tasks
@@ -662,7 +673,7 @@ export default function QuickAddModal({
       const gId = category === 'subtask' || selectedGoalId ? selectedGoalId : null;
       const goalObj = (goalsData || []).find((g) => g.id === gId);
       const goalTitle = goalObj ? goalObj.title : (selectedGoalTitle || null);
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getEffectiveTodayDate();
       const isDueToday = selectedDate === todayStr;
 
       if (setDashboardData) {
@@ -839,6 +850,7 @@ export default function QuickAddModal({
 
     const tempId = `temp_${Date.now()}`;
     const selectedDate = getSelectedDate();
+    const todayStr = getEffectiveTodayDate();
     const prioInt = 0;
     const mutationId = `create_${category}_${tempId}`;
 
@@ -908,10 +920,12 @@ export default function QuickAddModal({
               return updated;
             });
           }
+          onTaskCreated?.();
         })
         .catch((err) => {
           console.error('Failed to create routine on server:', err);
           removePendingMutation(mutationId);
+          onTaskCreated?.();
         });
     } else if (category === 'goal') {
       if (setGoalsData) {
@@ -944,17 +958,19 @@ export default function QuickAddModal({
               return updated;
             });
           }
+          onTaskCreated?.();
         })
         .catch((err) => {
           console.error('Failed to create goal on server:', err);
           removePendingMutation(mutationId);
+          onTaskCreated?.();
         });
     } else if (category === 'subtask' || selectedGoalId) {
       const gId = selectedGoalId;
       const goalObj = (goalsData || []).find((g) => g.id === gId);
       const goalTitle = goalObj ? goalObj.title : (selectedGoalTitle || null);
-      const todayStr = new Date().toISOString().split('T')[0];
       const sched = selectedDate || todayStr;
+      const isDueToday = sched === todayStr;
 
       if (setGoalsData && gId) {
         setGoalsData((prev) => {
@@ -988,7 +1004,7 @@ export default function QuickAddModal({
         });
       }
 
-      if (setDashboardData && sched === todayStr) {
+      if (setDashboardData && isDueToday) {
         setDashboardData((prev) => {
           if (!prev) return prev;
           const optTask = {
@@ -1030,13 +1046,13 @@ export default function QuickAddModal({
       })
         .then((realTask) => {
           removePendingMutation(mutationId);
-          if (setDashboardData && realTask) {
+          if (setDashboardData && realTask && isDueToday) {
             setDashboardData((prev) => {
               if (!prev) return prev;
               const updated = {
                 ...prev,
                 today_tasks: (prev.today_tasks || []).map((t) =>
-                  t.id === tempId ? { ...realTask, goal_title: realTask.goal_title || optTask.goal_title || t.goal_title, is_optimistic: false } : t
+                  t.id === tempId ? { ...realTask, goal_title: realTask.goal_title || goalTitle || t.goal_title, is_optimistic: false } : t
                 ),
               };
               setCachedDashboard(updated);
@@ -1048,7 +1064,7 @@ export default function QuickAddModal({
               const updated = (prev || []).map((g) => {
                 if (g.id === gId) {
                   const subtasks = (g.subtasks || []).map((st) =>
-                    st.id === tempId ? { ...realTask, goal_title: realTask.goal_title || optSubtask.goal_title || st.goal_title, is_optimistic: false } : st
+                    st.id === tempId ? { ...realTask, goal_title: realTask.goal_title || goalTitle || st.goal_title, is_optimistic: false } : st
                   );
                   return { ...g, subtasks };
                 }
@@ -1058,10 +1074,12 @@ export default function QuickAddModal({
               return updated;
             });
           }
+          onTaskCreated?.();
         })
         .catch((err) => {
           console.error('Failed to create subtask on server:', err);
           removePendingMutation(mutationId);
+          onTaskCreated?.();
         });
     } else if (category === 'grocery') {
       if (setGroceriesData) {
@@ -1113,13 +1131,16 @@ export default function QuickAddModal({
               return updated;
             });
           }
+          onTaskCreated?.();
         })
         .catch((err) => {
           console.error('Failed to create grocery item on server:', err);
           removePendingMutation(mutationId);
+          onTaskCreated?.();
         });
     } else {
-      if (setDashboardData && (!selectedDate || selectedDate === todayStr)) {
+      const isDueToday = !selectedDate || selectedDate === todayStr;
+      if (setDashboardData && isDueToday) {
         setDashboardData((prev) => {
           if (!prev) return prev;
           const optTask = {
@@ -1158,7 +1179,7 @@ export default function QuickAddModal({
       })
         .then((realTask) => {
           removePendingMutation(mutationId);
-          if (setDashboardData && realTask) {
+          if (setDashboardData && realTask && isDueToday) {
             setDashboardData((prev) => {
               if (!prev) return prev;
               const updated = {
@@ -1171,10 +1192,24 @@ export default function QuickAddModal({
               return updated;
             });
           }
+          onTaskCreated?.();
         })
         .catch((err) => {
           console.error('Failed to create task on server:', err);
           removePendingMutation(mutationId);
+          if (setDashboardData && isDueToday) {
+            setDashboardData((prev) => {
+              if (!prev) return prev;
+              const updated = {
+                ...prev,
+                today_tasks: (prev.today_tasks || []).filter((t) => t.id !== tempId),
+                total_count: Math.max(0, (prev.total_count || 0) - 1),
+              };
+              setCachedDashboard(updated);
+              return updated;
+            });
+          }
+          onTaskCreated?.();
         });
     }
   };
@@ -2291,8 +2326,8 @@ export default function QuickAddModal({
                           color: 'var(--text-primary)',
                           outline: 'none',
                         }}
-                        value={customDueDate || new Date().toISOString().split('T')[0]}
-                        min={new Date().toISOString().split('T')[0]}
+                        value={customDueDate || getEffectiveTodayDate()}
+                        min={getEffectiveTodayDate()}
                         onChange={(e) => {
                           setCustomDueDate(e.target.value);
                           setDueDateOption('custom');

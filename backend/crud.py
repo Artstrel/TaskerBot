@@ -1012,6 +1012,7 @@ async def get_day_summary(
 
     return DaySummary(
         date=effective_date,
+        day_end_time=user.day_end_time or "00:00",
         hours_left_in_day=round(hours_left, 1),
         urgency_level=urgency,
         overdue_tasks=overdue_tasks,

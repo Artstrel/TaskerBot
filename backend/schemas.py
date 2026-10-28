@@ -411,6 +411,7 @@ class OneTimeTaskUpdate(BaseModel):
 # --- Dashboard Day Summary ---
 class DaySummary(BaseModel):
     date: date
+    day_end_time: str = "00:00"
     hours_left_in_day: float
     urgency_level: Literal["normal", "warning_6h", "warning_3h", "critical_1h"]
     overdue_tasks: List[OneTimeTaskRead]

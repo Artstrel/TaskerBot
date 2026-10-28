@@ -1416,7 +1416,7 @@ body.is-tg-fullscreen .header-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 24px;
 }
 
 .day-progress-bar-wrap {
@@ -1433,11 +1433,10 @@ body.is-tg-fullscreen .header-actions {
 }
 
 .day-progress-horizontal-group .progress-track {
-  width: 90px;
-  max-width: 120px;
+  flex: 1;
+  min-width: 0;
   height: 6px;
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--border-subtle);
   border-radius: var(--radius-full);
   overflow: hidden;
 }
@@ -1447,6 +1446,7 @@ body.is-tg-fullscreen .header-actions {
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .day-status-actions {
@@ -1454,6 +1454,10 @@ body.is-tg-fullscreen .header-actions {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.day-status-actions:empty {
+  display: none;
 }
 
 .day-status-action-btn {
@@ -3063,20 +3067,14 @@ body,
   height: 42px;
   border-radius: 10px;
   background: var(--bg-card-hover);
+  border: 1px solid var(--border-subtle);
   pointer-events: none;
   z-index: 1;
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar-active-pill::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--text-primary);
+  display: none;
 }
 
 .sidebar-nav-item {
@@ -3497,8 +3495,10 @@ body,
   }
 
   .sidebar-nav-item .dock-badge-dot {
+    position: absolute;
     top: 8px;
     right: 8px;
+    margin-left: 0;
   }
 
   .sidebar-nav-item .dock-badge-num {

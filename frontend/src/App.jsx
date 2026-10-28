@@ -13,6 +13,7 @@ import {
   fetchDashboard,
   fetchGoals,
   fetchGroceries,
+  fetchUserSettings,
   getCachedDashboard,
   getCachedGoals,
   getCachedGroceries,
@@ -230,6 +231,7 @@ export default function App() {
         fetchDashboard(),
         fetchGoals(),
         fetchGroceries(),
+        fetchUserSettings().catch(() => null),
       ]);
 
       // If a newer fetch was launched, discard this stale response

@@ -661,6 +661,12 @@ export const fetchDashboard = async () => {
         window.__tasker_server_connected = true;
       }
       const data = await res.json();
+      if (data?.day_end_time) {
+        const cachedSettings = getCachedUserSettings() || {};
+        if (cachedSettings.day_end_time !== data.day_end_time) {
+          setCachedUserSettings({ ...cachedSettings, day_end_time: data.day_end_time });
+        }
+      }
       const reconciled = reconcileDashboardWithPending(data);
       setCachedDashboard(reconciled);
       return reconciled;

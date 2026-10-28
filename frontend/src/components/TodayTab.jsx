@@ -33,6 +33,7 @@ import {
   createTask,
   hapticFeedback,
   calculateDayEndAndUrgency,
+  getCachedUserSettings,
   setCachedDashboard,
   setCachedGoals,
   addPendingMutation,
@@ -84,17 +85,27 @@ export default function TodayTab({
 
   useEffect(() => {
     if (!dashboardData) return;
+    let prevHoursLeft = null;
     const updateCountdown = () => {
-      const dayEndTime = dashboardData.day_end_time || '00:00';
+      const dayEndTime =
+        dashboardData.day_end_time ||
+        getCachedUserSettings()?.day_end_time ||
+        '00:00';
       const calc = calculateDayEndAndUrgency(dayEndTime);
       setLiveHoursLeft(calc.hours_left_in_day);
       setLiveUrgency(calc.urgency_level);
+
+      // Auto-trigger refresh when day rolls over past cutoff
+      if (prevHoursLeft !== null && prevHoursLeft < 0.01 && calc.hours_left_in_day > 20) {
+        if (onRefresh) onRefresh();
+      }
+      prevHoursLeft = calc.hours_left_in_day;
     };
 
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [dashboardData?.day_end_time, dashboardData?.hours_left_in_day]);
+  }, [dashboardData?.day_end_time, dashboardData?.hours_left_in_day, onRefresh]);
 
   const handleStartEdit = (task) => {
     hapticFeedback('selection');
@@ -168,9 +179,11 @@ export default function TodayTab({
       });
   };
 
-  const now = new Date();
-  const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(now);
-  const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(now);
+  const effectiveDateObj = dashboardData?.date
+    ? new Date(`${dashboardData.date}T12:00:00`)
+    : new Date();
+  const weekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' }).format(effectiveDateObj);
+  const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(effectiveDateObj);
   const todayDateSubtitle = `${weekday}, ${dayMonth}`;
 
   if (!dashboardData) {
@@ -583,7 +596,7 @@ export default function TodayTab({
               completed_count: wasCompleted ? (prev.completed_count || 0) + 1 : prev.completed_count,
             };
             setCachedDashboard(updated);
-            return rolledBack;
+            return updated;
           });
         }
       });
@@ -999,7 +1012,7 @@ export default function TodayTab({
 
     const tempId = `temp_task_${Date.now()}`;
     const mutationId = `create_task_${tempId}`;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = dashboardData?.date || new Date().toISOString().split('T')[0];
 
     const optimisticTask = {
       id: tempId,
