@@ -178,6 +178,7 @@ async def get_or_create_user(
     telegram_id: int,
     username: Optional[str] = None,
     first_name: Optional[str] = None,
+    photo_url: Optional[str] = None,
 ) -> User:
     stmt = select(User).where(User.telegram_id == telegram_id)
     res = await session.execute(stmt)
@@ -188,6 +189,7 @@ async def get_or_create_user(
             telegram_id=telegram_id,
             username=username,
             first_name=first_name,
+            photo_url=photo_url,
         )
         session.add(user)
         await session.commit()
@@ -199,6 +201,9 @@ async def get_or_create_user(
             changed = True
         if first_name and user.first_name != first_name:
             user.first_name = first_name
+            changed = True
+        if photo_url and user.photo_url != photo_url:
+            user.photo_url = photo_url
             changed = True
         if changed:
             await session.commit()

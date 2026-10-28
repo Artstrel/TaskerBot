@@ -59,6 +59,7 @@ async def init_db() -> None:
             ("users", "theme_schedule_enabled", "BOOLEAN DEFAULT FALSE"),
             ("users", "theme_schedule_start", "VARCHAR(5) DEFAULT '07:00'"),
             ("users", "theme_schedule_end", "VARCHAR(5) DEFAULT '20:00'"),
+            ("users", "photo_url", "VARCHAR(1024)"),
             ("routine_tasks", "target_value", "FLOAT"),
             ("routine_tasks", "step", "FLOAT DEFAULT 1.0"),
             ("routine_tasks", "unit", "VARCHAR(32)"),

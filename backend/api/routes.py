@@ -1,10 +1,12 @@
 from datetime import date, datetime
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
 from backend.models import User
+from backend.config import settings
 from backend.schemas import (
     UserRead,
     UserUpdate,
@@ -24,6 +26,9 @@ from backend.schemas import (
     GroceryItemUpdate,
     GroceryItemRead,
     GroceryListResponse,
+    TelegramAuthUrlResponse,
+    TelegramAuthExchangeRequest,
+    AuthTokenResponse,
 )
 from backend.crud import (
     get_or_create_user,
@@ -55,17 +60,145 @@ from backend.crud import (
     clear_completed_groceries,
 )
 from backend.ai_service import ai_service
+from backend.auth import (
+    decode_access_token,
+    create_access_token,
+    build_telegram_auth_url,
+    exchange_telegram_code,
+    pop_oauth_state,
+    extract_user_profile,
+)
 
 router = APIRouter(prefix="/api")
+security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    telegram_id: int = Query(...),
+    auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    telegram_id: Optional[int] = Query(None),
     username: Optional[str] = Query(None),
     first_name: Optional[str] = Query(None),
     session: AsyncSession = Depends(get_db),
 ) -> User:
-    user = await get_or_create_user(session, telegram_id, username, first_name)
+    effective_id: Optional[int] = None
+
+    if auth and auth.credentials:
+        payload = decode_access_token(auth.credentials)
+        if payload and "telegram_id" in payload:
+            effective_id = payload["telegram_id"]
+            if not username:
+                username = payload.get("username")
+            if not first_name:
+                first_name = payload.get("first_name")
+
+    if effective_id is None:
+        if telegram_id is not None:
+            effective_id = telegram_id
+        else:
+            raise HTTPException(status_code=401, detail="Authentication credentials required")
+
+    user = await get_or_create_user(session, effective_id, username, first_name)
+    return user
+
+
+# --- Telegram OpenID Connect (OIDC) Endpoints ---
+@router.get("/auth/telegram/url", response_model=TelegramAuthUrlResponse)
+async def get_telegram_auth_url(redirect_uri: str = Query(...)):
+    """Generates the Telegram OIDC authorization URL with state and PKCE parameters."""
+    auth_url, state, _ = build_telegram_auth_url(redirect_uri)
+    return TelegramAuthUrlResponse(auth_url=auth_url, state=state)
+
+
+@router.post("/auth/telegram/exchange", response_model=AuthTokenResponse)
+async def exchange_telegram_auth(
+    data: TelegramAuthExchangeRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    """Exchanges Telegram authorization code for tokens, verifies claims, and issues session JWT."""
+    code_verifier = data.code_verifier
+    state_data = pop_oauth_state(data.state) if data.state else None
+    if state_data and not code_verifier:
+        code_verifier = state_data.get("code_verifier")
+
+    redirect_uri = data.redirect_uri or (state_data.get("redirect_uri") if state_data else "")
+
+    # Mock code support for dev / sandbox
+    if data.code.startswith("mock_dev_"):
+        profile = {
+            "telegram_id": 123456789,
+            "first_name": "Тестовый Пользователь",
+            "username": "tasker_tester",
+            "photo_url": "https://telegram.org/img/t_logo.png",
+        }
+    else:
+        try:
+            claims = await exchange_telegram_code(
+                code=data.code,
+                redirect_uri=redirect_uri or "",
+                code_verifier=code_verifier,
+            )
+            profile = extract_user_profile(claims)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Telegram authentication failed: {str(e)}",
+            )
+
+    user = await get_or_create_user(
+        session=session,
+        telegram_id=profile["telegram_id"],
+        username=profile.get("username"),
+        first_name=profile.get("first_name"),
+        photo_url=profile.get("photo_url"),
+    )
+
+    token, expires_in = create_access_token(
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        photo_url=user.photo_url,
+    )
+
+    return AuthTokenResponse(
+        access_token=token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=user,
+    )
+
+
+@router.post("/auth/dev-login", response_model=AuthTokenResponse)
+async def dev_login(
+    telegram_id: Optional[int] = Query(None),
+    first_name: Optional[str] = Query("Разработчик"),
+    username: Optional[str] = Query("dev_user"),
+    session: AsyncSession = Depends(get_db),
+):
+    """Quick dev login for testing in local browser without BotFather OAuth client."""
+    dev_id = telegram_id or 123456789
+    user = await get_or_create_user(
+        session=session,
+        telegram_id=dev_id,
+        username=username,
+        first_name=first_name,
+        photo_url="https://telegram.org/img/t_logo.png",
+    )
+    token, expires_in = create_access_token(
+        telegram_id=user.telegram_id,
+        username=user.username,
+        first_name=user.first_name,
+        photo_url=user.photo_url,
+    )
+    return AuthTokenResponse(
+        access_token=token,
+        token_type="bearer",
+        expires_in=expires_in,
+        user=user,
+    )
+
+
+@router.get("/auth/me", response_model=UserRead)
+async def get_authenticated_user(user: User = Depends(get_current_user)):
     return user
 
 

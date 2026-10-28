@@ -23,6 +23,11 @@ import {
   reconcileDashboardWithPending,
   reconcileGoalsWithPending,
   reconcileGroceriesWithPending,
+  isAuthenticated,
+  isInsideTelegram,
+  isDemoMode,
+  setDemoMode,
+  clearAuthSession,
 } from './api';
 import Mascot from './components/Mascot';
 import TodayTab from './components/TodayTab';
@@ -30,6 +35,8 @@ import GoalsTab from './components/GoalsTab';
 import GroceriesTab from './components/GroceriesTab';
 import SettingsTab from './components/SettingsTab';
 import QuickAddModal from './components/QuickAddModal';
+import LoginScreen from './components/LoginScreen';
+import AuthCallback from './components/AuthCallback';
 import { initTheme } from './theme';
 
 class ErrorBoundary extends React.Component {
@@ -76,6 +83,14 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  const [authed, setAuthed] = useState(() => isAuthenticated());
+  const [isCallbackRoute, setIsCallbackRoute] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.location.pathname.includes('/auth/callback') ||
+      new URLSearchParams(window.location.search).has('code')
+    );
+  });
   const [activeTab, setActiveTab] = useState('today');
   // Initialize synchronously with cached data for instant 0ms load
   const [dashboardData, setDashboardData] = useState(() => getCachedDashboard());
@@ -93,6 +108,22 @@ export default function App() {
   const [avatarError, setAvatarError] = useState(false);
   const [tabSwitchTrigger, setTabSwitchTrigger] = useState(0);
   const [hoveredTab, setHoveredTab] = useState(null);
+
+  const handleLoginSuccess = useCallback((user) => {
+    setAuthed(true);
+    setIsCallbackRoute(false);
+  }, []);
+
+  const handleEnterDemo = useCallback(() => {
+    setDemoMode(true);
+    setAuthed(true);
+  }, []);
+
+  const handleExitDemo = useCallback(() => {
+    setDemoMode(false);
+    clearAuthSession();
+    setAuthed(false);
+  }, []);
 
   const handleCloseQuickAdd = useCallback(() => {
     setIsQuickAddOpen(false);
@@ -170,12 +201,18 @@ export default function App() {
     // Initialize Theme
     initTheme();
 
-    // Auto-sync timezone
-    syncUserTimezone();
-
-    // Initial background data load (passes isInitial = true to bypass mutation lock)
-    loadData(false, false, true);
+    if (isAuthenticated()) {
+      syncUserTimezone();
+      loadData(false, false, true);
+    }
   }, []);
+
+  useEffect(() => {
+    if (authed) {
+      syncUserTimezone();
+      loadData(false, false, true);
+    }
+  }, [authed]);
 
   // Global desktop keyboard shortcuts
   useEffect(() => {
@@ -387,13 +424,38 @@ export default function App() {
     }
   }, [isSyncing, loadData]);
 
+  if (isCallbackRoute) {
+    return (
+      <ErrorBoundary>
+        <AuthCallback
+          onLoginSuccess={handleLoginSuccess}
+          onCancel={() => {
+            setIsCallbackRoute(false);
+            setAuthed(isAuthenticated());
+          }}
+        />
+      </ErrorBoundary>
+    );
+  }
+
+  if (!authed) {
+    return (
+      <ErrorBoundary>
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          onEnterDemo={handleEnterDemo}
+        />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <div className="app-shell">
         {/* Desktop Sidebar (hidden on mobile, visible >= 768px) */}
         <aside className="desktop-sidebar">
           {/* Desktop Sidebar Top: Profile Bubble (Tap to refresh) */}
-          <div className="sidebar-top-bar">
+          <div className="sidebar-top-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
             <button
               type="button"
               className={`header-profile-bubble ${isSyncing ? 'is-syncing' : ''}`}
@@ -425,6 +487,17 @@ export default function App() {
                 <span className="header-bubble-date">{todayFormatted}</span>
               </div>
             </button>
+            {currentUser.isDemo && (
+              <button
+                type="button"
+                className="header-demo-chip"
+                onClick={handleExitDemo}
+                title="Нажмите для входа через Telegram"
+              >
+                <span>Демо</span>
+                <span style={{ textDecoration: 'underline' }}>Войти</span>
+              </button>
+            )}
           </div>
 
           {/* Sidebar Quick Action Button */}
@@ -563,6 +636,17 @@ export default function App() {
                 <span className="header-bubble-date">{todayFormatted}</span>
               </div>
             </button>
+            {currentUser.isDemo && (
+              <button
+                type="button"
+                className="header-demo-chip"
+                onClick={handleExitDemo}
+                title="Нажмите для входа через Telegram"
+              >
+                <span>Демо</span>
+                <span style={{ textDecoration: 'underline' }}>Войти</span>
+              </button>
+            )}
           </header>
 
           {/* Main Content Area */}

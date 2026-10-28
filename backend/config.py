@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     PORT: int = 8000
     DEBUG: bool = False
 
+    # Telegram OpenID Connect (oauth.telegram.org) & JWT
+    TELEGRAM_OIDC_CLIENT_ID: str = ""
+    TELEGRAM_OIDC_CLIENT_SECRET: str = ""
+    JWT_SECRET: str = ""
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRATION_DAYS: int = 30
+
     @field_validator("WEBAPP_URL", mode="before")
     @classmethod
     def assemble_webapp_url(cls, v: str) -> str:

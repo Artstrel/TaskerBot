@@ -14,6 +14,7 @@ import {
   SunMoon,
   Sunrise,
   Sunset,
+  LogOut,
 } from 'lucide-react';
 import {
   fetchUserSettings,
@@ -30,6 +31,8 @@ import {
   setOpenRouterKey,
   sendTestNotification,
   getCachedUserSettings,
+  clearAuthSession,
+  isInsideTelegram,
 } from '../api';
 import { applyTheme, getStoredThemeConfig } from '../theme';
 import ViewHeader from './ViewHeader';
@@ -432,6 +435,20 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing, isIn
             <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
               Telegram ID: {currentUser.id}
             </div>
+            {!isInsideTelegram() && (
+              <button
+                type="button"
+                className="settings-logout-btn"
+                onClick={() => {
+                  hapticFeedback('warning');
+                  clearAuthSession();
+                  window.location.reload();
+                }}
+              >
+                <LogOut size={13} />
+                <span>{currentUser.isDemo ? 'Выйти из демо-режима' : 'Выйти из аккаунта'}</span>
+              </button>
+            )}
           </div>
         </div>
 

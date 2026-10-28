@@ -100,6 +100,7 @@ class UserBase(BaseModel):
     telegram_id: int
     username: Optional[str] = None
     first_name: Optional[str] = None
+    photo_url: Optional[str] = None
     timezone: str = "Europe/Moscow"
     day_end_time: str = "00:00"
     reminder_6h_enabled: bool = True
@@ -125,6 +126,9 @@ class UserRead(UserBase):
 
 
 class UserUpdate(BaseModel):
+    first_name: Optional[str] = None
+    username: Optional[str] = None
+    photo_url: Optional[str] = None
     timezone: Optional[str] = None
     day_end_time: Optional[str] = None
     reminder_6h_enabled: Optional[bool] = None
@@ -140,6 +144,26 @@ class UserUpdate(BaseModel):
     theme_schedule_enabled: Optional[bool] = None
     theme_schedule_start: Optional[str] = None
     theme_schedule_end: Optional[str] = None
+
+
+# --- Auth & OIDC Schemas ---
+class TelegramAuthUrlResponse(BaseModel):
+    auth_url: str
+    state: str
+
+
+class TelegramAuthExchangeRequest(BaseModel):
+    code: str
+    code_verifier: Optional[str] = None
+    state: Optional[str] = None
+    redirect_uri: Optional[str] = None
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserRead
 
 
 # --- Routine Schemas ---

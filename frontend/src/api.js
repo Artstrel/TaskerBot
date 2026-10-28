@@ -1,16 +1,186 @@
-const getTelegramUser = () => {
-  if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user) {
+export const isInsideTelegram = () => {
+  return typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp?.initDataUnsafe?.user);
+};
+
+export const getAuthToken = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('tasker_auth_token') || '';
+  }
+  return '';
+};
+
+export const getStoredUser = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('tasker_user_profile');
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+  }
+  return null;
+};
+
+export const isDemoMode = () => {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('tasker_demo_mode') === 'true' || !!window.__tasker_is_demo;
+  }
+  return false;
+};
+
+export const setDemoMode = (enabled) => {
+  if (typeof window !== 'undefined') {
+    if (enabled) {
+      localStorage.setItem('tasker_demo_mode', 'true');
+      window.__tasker_is_demo = true;
+      if (currentUser) {
+        currentUser.id = 123456789;
+        currentUser.first_name = 'Демо-Пользователь';
+        currentUser.username = 'demo_user';
+        currentUser.isDemo = true;
+        currentUser.isGuest = false;
+      }
+    } else {
+      localStorage.removeItem('tasker_demo_mode');
+      window.__tasker_is_demo = false;
+    }
+  }
+};
+
+export const isAuthenticated = () => {
+  if (isInsideTelegram()) return true;
+  if (isDemoMode()) return true;
+  const token = getAuthToken();
+  const stored = getStoredUser();
+  return Boolean(token && stored);
+};
+
+const resolveInitialUser = () => {
+  if (isInsideTelegram()) {
     return window.Telegram.WebApp.initDataUnsafe.user;
   }
-  // Fallback for regular browser preview / desktop testing
+  const stored = getStoredUser();
+  if (stored) {
+    return stored;
+  }
+  if (isDemoMode()) {
+    return {
+      id: 123456789,
+      first_name: 'Демо-Пользователь',
+      username: 'demo_user',
+      photo_url: null,
+      isDemo: true,
+      isGuest: false,
+    };
+  }
   return {
-    id: 123456789,
-    first_name: 'Пользователь',
-    username: 'tasker_user',
+    id: 0,
+    first_name: 'Гость',
+    username: 'guest',
+    photo_url: null,
+    isGuest: true,
+    isDemo: false,
   };
 };
 
-export const currentUser = getTelegramUser();
+export const currentUser = resolveInitialUser();
+
+export const setAuthSession = (token, user) => {
+  if (typeof window !== 'undefined') {
+    if (token) localStorage.setItem('tasker_auth_token', token);
+    if (user) {
+      const normalizedUser = {
+        id: user.telegram_id || user.id,
+        telegram_id: user.telegram_id || user.id,
+        first_name: user.first_name || '',
+        username: user.username || '',
+        photo_url: user.photo_url || null,
+        isGuest: false,
+        isDemo: false,
+      };
+      localStorage.setItem('tasker_user_profile', JSON.stringify(normalizedUser));
+      Object.assign(currentUser, normalizedUser);
+    }
+    localStorage.removeItem('tasker_demo_mode');
+    window.__tasker_is_demo = false;
+  }
+};
+
+export const clearAuthSession = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('tasker_auth_token');
+    localStorage.removeItem('tasker_user_profile');
+    localStorage.removeItem('tasker_demo_mode');
+    window.__tasker_is_demo = false;
+    currentUser.id = 0;
+    currentUser.first_name = 'Гость';
+    currentUser.username = 'guest';
+    currentUser.photo_url = null;
+    currentUser.isGuest = true;
+    currentUser.isDemo = false;
+  }
+};
+
+// Automatic Authorization Header injection for all /api calls
+if (typeof window !== 'undefined' && window.fetch) {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    try {
+      const urlStr = typeof input === 'string' ? input : input?.url || '';
+      if (urlStr.includes('/api')) {
+        const token = localStorage.getItem('tasker_auth_token');
+        if (token) {
+          const headers = new Headers(init.headers || (typeof input === 'object' && input.headers ? input.headers : {}));
+          if (!headers.has('Authorization')) {
+            headers.set('Authorization', `Bearer ${token}`);
+          }
+          return _origFetch(input, { ...init, headers });
+        }
+      }
+    } catch (_) {}
+    return _origFetch(input, init);
+  };
+}
+
+export const getTelegramAuthUrl = async (redirectUri) => {
+  const uri = redirectUri || `${window.location.origin}/auth/callback`;
+  const res = await fetch(`${API_BASE}/auth/telegram/url?redirect_uri=${encodeURIComponent(uri)}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Не удалось сформировать ссылку для входа через Telegram');
+  }
+  return await res.json();
+};
+
+export const exchangeTelegramAuthCode = async (code, state, redirectUri) => {
+  const uri = redirectUri || `${window.location.origin}/auth/callback`;
+  const res = await fetch(`${API_BASE}/auth/telegram/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code,
+      state,
+      redirect_uri: uri,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Ошибка авторизации через Telegram');
+  }
+  const data = await res.json();
+  setAuthSession(data.access_token, data.user);
+  return data;
+};
+
+export const devLogin = async (customId, firstName, username) => {
+  const url = `${API_BASE}/auth/dev-login?telegram_id=${customId || 123456789}&first_name=${encodeURIComponent(firstName || 'Разработчик')}&username=${encodeURIComponent(username || 'dev_user')}`;
+  const res = await fetch(url, { method: 'POST' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Ошибка dev-входа');
+  }
+  const data = await res.json();
+  setAuthSession(data.access_token, data.user);
+  return data;
+};
 
 export const getCustomBackendUrl = () => {
   if (typeof window !== 'undefined') {
@@ -54,13 +224,6 @@ export const API_BASE = {
   toString() {
     return getApiBase();
   },
-};
-
-export const isDemoMode = () => {
-  if (typeof window !== 'undefined') {
-    return !!window.__tasker_is_demo;
-  }
-  return false;
 };
 
 export const hapticFeedback = (style = 'medium') => {

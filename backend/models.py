@@ -22,6 +22,7 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, index=True)
     username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     first_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    photo_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow")
     day_end_time: Mapped[str] = mapped_column(String(5), default="00:00")  # HH:MM
     reminder_6h_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
