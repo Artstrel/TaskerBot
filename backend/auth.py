@@ -137,16 +137,15 @@ def build_telegram_auth_url(redirect_uri: str) -> Tuple[str, str, str]:
     state = generate_state()
     verifier, challenge = generate_pkce_pair()
 
-    # Strictly normalize redirect_uri and origin per RFC 6454 / RFC 6749
+    # Strictly normalize redirect_uri per RFC 6749
     redirect_uri = redirect_uri.strip().rstrip("/")
-    parsed_redirect = urllib.parse.urlsplit(redirect_uri)
-    origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}".rstrip("/")
 
     store_oauth_state(state, code_verifier=verifier, redirect_uri=redirect_uri)
 
+    # Standard OIDC Authorization Request parameters (RFC 6749 / OpenID Connect Core 1.0)
+    # Non-standard parameters like 'origin' are intentionally omitted to avoid falling back to legacy widget behavior
     params = {
         "client_id": client_id,
-        "origin": origin,
         "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid profile",
@@ -166,7 +165,7 @@ async def exchange_telegram_code(
 ) -> Dict[str, Any]:
     """
     Exchanges an authorization code with Telegram OIDC Token Endpoint
-    (https://oauth.telegram.org/token) and extracts verified claims.
+    (https://oauth.telegram.org/token) using client_secret_post per OpenID Connect Core 1.0.
     """
     client_id = get_telegram_client_id()
     client_secret = settings.TELEGRAM_OIDC_CLIENT_SECRET.strip()
@@ -180,53 +179,43 @@ async def exchange_telegram_code(
     # Strictly normalize redirect_uri
     redirect_uri = redirect_uri.strip().rstrip("/")
 
-    base_payload = {
+    # OpenID Connect Core 1.0 Section 3.1.3.1 - client_secret_post
+    # Passing both Basic auth headers and POST body parameters violates RFC 6749 Section 2.3
+    # and burns the single-use authorization code. client_secret_post is the canonical format for Telegram OIDC.
+    token_payload = {
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": redirect_uri,
         "client_id": client_id,
+        "client_secret": client_secret,
     }
     if code_verifier:
-        base_payload["code_verifier"] = code_verifier
+        token_payload["code_verifier"] = code_verifier
 
-    # Per Telegram OIDC spec and RFC 6749 Section 2.3:
-    # Clients MUST NOT send multiple authentication methods in the same request.
-    # Token endpoint requires application/x-www-form-urlencoded
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
     }
+
     async with httpx.AsyncClient(timeout=10.0) as client:
-        # Attempt 1: client_secret_basic
         resp = await client.post(
             "https://oauth.telegram.org/token",
-            data=base_payload,
-            auth=(client_id, client_secret),
+            data=token_payload,
             headers=headers,
         )
-        token_data = resp.json() if resp.status_code == 200 else {}
-
-        # If Strategy 1 returned invalid_client or 401, retry with Strategy 2 (client_secret_post)
-        if resp.status_code != 200 or token_data.get("error") in ("invalid_client", "unauthorized_client"):
-            post_payload = dict(base_payload)
-            post_payload["client_secret"] = client_secret
-            resp_fallback = await client.post(
-                "https://oauth.telegram.org/token",
-                data=post_payload,
-                headers=headers,
-            )
-            if resp_fallback.status_code == 200:
-                resp = resp_fallback
-                token_data = resp.json()
-            elif resp.status_code != 200:
-                raise ValueError(f"Telegram token endpoint returned HTTP {resp.status_code}: {resp.text}")
+        if resp.status_code != 200:
+            raise ValueError(f"Telegram token endpoint returned HTTP {resp.status_code}: {resp.text}")
+        try:
+            token_data = resp.json()
+        except Exception:
+            raise ValueError(f"Failed to parse Telegram token response: {resp.text}")
 
     # Telegram returns HTTP 200 with {"error": "..."} upon failures
     if "error" in token_data:
         err = token_data.get("error")
         desc = token_data.get("error_description") or ""
         msg = f"{err} ({desc})" if desc else str(err)
-        raise ValueError(f"Telegram OAuth error: {msg}")
+        raise ValueError(f"Telegram OAuth error: {msg} [client_id={client_id}, redirect_uri={redirect_uri}]")
 
     id_token = token_data.get("id_token")
     if not id_token:

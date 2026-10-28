@@ -55,6 +55,16 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             }
             return;
           }
+          // Direct internal session object from popup AuthCallback
+          if (typeof msg.result === 'object' && msg.result.access_token) {
+            setIsLoading(true);
+            if (onLoginSuccess) {
+              onLoginSuccess(msg.result.user);
+            } else {
+              window.location.replace('/');
+            }
+            return;
+          }
           // Legacy Telegram widget hash payload
           if (typeof msg.result === 'object' && msg.result.hash) {
             setIsLoading(true);
@@ -85,7 +95,23 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
       const redirectUri = `${window.location.origin}/auth/callback`;
       const data = await getTelegramAuthUrl(redirectUri);
       if (data?.auth_url) {
-        // Full-page redirect prevents popup blockers and cross-context sessionStorage loss
+        // On desktop screens, open a centered popup so Telegram can self-close via postMessage upon authorization
+        const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
+        if (isDesktop) {
+          const width = 540;
+          const height = 660;
+          const left = window.screenLeft !== undefined ? window.screenLeft + (window.outerWidth - width) / 2 : 100;
+          const top = window.screenTop !== undefined ? window.screenTop + (window.outerHeight - height) / 2 : 100;
+          const popup = window.open(
+            data.auth_url,
+            'telegram_auth_popup',
+            `width=${width},height=${height},left=${left},top=${top},status=0,toolbar=0,location=1`
+          );
+          if (popup && !popup.closed) {
+            return;
+          }
+        }
+        // Direct redirect for mobile devices or popup-blocked browsers
         window.location.href = data.auth_url;
       } else {
         throw new Error('Не получен URL авторизации от бэкенда');
