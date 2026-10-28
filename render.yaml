@@ -19,5 +19,9 @@ services:
         sync: false
       - key: WEBAPP_URL
         value: https://taskerbot-plp5.onrender.com
+      - key: TELEGRAM_OIDC_CLIENT_ID
+        sync: false
+      - key: TELEGRAM_OIDC_CLIENT_SECRET
+        sync: false
       - key: PORT
         value: 8000

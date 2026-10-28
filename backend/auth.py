@@ -6,12 +6,27 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple, Dict, Any
 import httpx
 import jwt
-from jwt import PyJWKClient, PyJWKClientError
+from jwt import PyJWKSet, PyJWKClientError
 
 from backend.config import settings
 
 # In-memory PKCE & State store with TTL cleanup for CSRF protection
 _oauth_states: Dict[str, Dict[str, Any]] = {}
+_cached_jwks: Optional[Tuple[float, PyJWKSet]] = None
+
+
+async def get_telegram_jwks() -> PyJWKSet:
+    """Fetches Telegram JWKS with gzip handling and in-memory TTL caching."""
+    global _cached_jwks
+    now = datetime.now(timezone.utc).timestamp()
+    if _cached_jwks and (now - _cached_jwks[0] < 3600):
+        return _cached_jwks[1]
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get("https://oauth.telegram.org/.well-known/jwks.json")
+        resp.raise_for_status()
+        jwks = PyJWKSet.from_dict(resp.json())
+        _cached_jwks = (now, jwks)
+        return jwks
 
 def get_jwt_secret() -> str:
     if settings.JWT_SECRET and settings.JWT_SECRET.strip():
@@ -110,8 +125,13 @@ def build_telegram_auth_url(redirect_uri: str) -> Tuple[str, str, str]:
     verifier, challenge = generate_pkce_pair()
     store_oauth_state(state, code_verifier=verifier, redirect_uri=redirect_uri)
 
+    import urllib.parse
+    parsed_redirect = urllib.parse.urlsplit(redirect_uri)
+    origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
+
     params = {
         "client_id": client_id,
+        "origin": origin,
         "redirect_uri": redirect_uri,
         "response_type": "code",
         "scope": "openid profile",
@@ -119,7 +139,6 @@ def build_telegram_auth_url(redirect_uri: str) -> Tuple[str, str, str]:
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
-    import urllib.parse
     query_str = urllib.parse.urlencode(params)
     auth_url = f"https://oauth.telegram.org/auth?{query_str}"
     return auth_url, state, verifier
@@ -168,35 +187,50 @@ async def exchange_telegram_code(
         raise ValueError("Missing id_token in Telegram token response")
 
     # Verify ID token via Telegram JWKS
-    claims = verify_telegram_id_token(id_token, client_id)
+    claims = await verify_telegram_id_token(id_token, client_id)
     return claims
 
 
-def verify_telegram_id_token(id_token: str, client_id: str) -> Dict[str, Any]:
+async def verify_telegram_id_token(id_token: str, client_id: str) -> Dict[str, Any]:
     """
     Verifies a Telegram RS256/ES256 signed ID token against Telegram's public JWKS.
+    Handles gzip decompression and caches public keys.
     """
     try:
-        jwks_client = PyJWKClient("https://oauth.telegram.org/.well-known/jwks.json")
-        signing_key = jwks_client.get_signing_key_from_jwt(id_token)
+        jwks = await get_telegram_jwks()
+        header = jwt.get_unverified_header(id_token)
+        kid = header.get("kid")
+        alg = header.get("alg", "RS256")
+
+        signing_key = None
+        if kid:
+            try:
+                signing_key = jwks[kid].key
+            except KeyError:
+                pass
+
+        if not signing_key:
+            for k in jwks.keys:
+                if getattr(k, "key_id", None) == kid or getattr(k, "algorithm_name", None) == alg:
+                    signing_key = k.key
+                    break
+
+        if not signing_key and jwks.keys:
+            signing_key = jwks.keys[0].key
+
         claims = jwt.decode(
             id_token,
-            signing_key.key,
-            algorithms=["RS256", "ES256"],
-            audience=client_id,
+            signing_key,
+            algorithms=["RS256", "ES256", "EdDSA", "ES256K"],
+            audience=[client_id, str(client_id)],
             issuer="https://oauth.telegram.org",
             options={"verify_exp": True},
         )
         return claims
-    except PyJWKClientError as e:
-        # If JWKS lookup fails, decode without verify if in debug/dev or raise
-        if settings.DEBUG:
-            return jwt.decode(id_token, options={"verify_signature": False})
-        raise ValueError(f"Failed to verify Telegram token signature: {e}")
     except Exception as e:
         if settings.DEBUG:
             return jwt.decode(id_token, options={"verify_signature": False})
-        raise ValueError(f"Invalid Telegram ID Token: {e}")
+        raise ValueError(f"Failed to verify Telegram ID Token ({type(e).__name__}): {e}")
 
 
 def extract_user_profile(claims: Dict[str, Any]) -> Dict[str, Any]:

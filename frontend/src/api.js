@@ -142,28 +142,43 @@ if (typeof window !== 'undefined' && window.fetch) {
 
 export const getTelegramAuthUrl = async (redirectUri) => {
   const uri = redirectUri || `${window.location.origin}/auth/callback`;
-  const res = await fetch(`${API_BASE}/auth/telegram/url?redirect_uri=${encodeURIComponent(uri)}`);
+  const url = `${API_BASE}/auth/telegram/url?redirect_uri=${encodeURIComponent(uri)}`;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (netErr) {
+    throw new Error(`Не удалось связаться с сервером (${API_BASE}): ${netErr.message || 'сеть недоступна'}. Убедитесь, что бэкенд запущен.`);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'Не удалось сформировать ссылку для входа через Telegram');
+    if (res.status === 404) {
+      throw new Error(`Эндпоинт ${url} не найден (HTTP 404). Проверьте URL бэкенда.`);
+    }
+    throw new Error(err.detail || `Ошибка сервера (HTTP ${res.status}): не удалось сформировать ссылку Telegram`);
   }
   return await res.json();
 };
 
 export const exchangeTelegramAuthCode = async (code, state, redirectUri) => {
   const uri = redirectUri || `${window.location.origin}/auth/callback`;
-  const res = await fetch(`${API_BASE}/auth/telegram/exchange`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      code,
-      state,
-      redirect_uri: uri,
-    }),
-  });
+  const url = `${API_BASE}/auth/telegram/exchange`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code,
+        state,
+        redirect_uri: uri,
+      }),
+    });
+  } catch (netErr) {
+    throw new Error(`Не удалось связаться с сервером для обмена токенов: ${netErr.message || 'сеть недоступна'}`);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'Ошибка авторизации через Telegram');
+    throw new Error(err.detail || `Ошибка авторизации через Telegram (HTTP ${res.status})`);
   }
   const data = await res.json();
   setAuthSession(data.access_token, data.user);
@@ -172,10 +187,15 @@ export const exchangeTelegramAuthCode = async (code, state, redirectUri) => {
 
 export const devLogin = async (customId, firstName, username) => {
   const url = `${API_BASE}/auth/dev-login?telegram_id=${customId || 123456789}&first_name=${encodeURIComponent(firstName || 'Разработчик')}&username=${encodeURIComponent(username || 'dev_user')}`;
-  const res = await fetch(url, { method: 'POST' });
+  let res;
+  try {
+    res = await fetch(url, { method: 'POST' });
+  } catch (netErr) {
+    throw new Error(`Не удалось связаться с бэкендом для dev-входа: ${netErr.message || 'сеть недоступна'}`);
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || 'Ошибка dev-входа');
+    throw new Error(err.detail || `Ошибка dev-входа (HTTP ${res.status})`);
   }
   const data = await res.json();
   setAuthSession(data.access_token, data.user);
