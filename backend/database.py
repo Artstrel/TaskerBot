@@ -72,6 +72,7 @@ async def init_db() -> None:
             ("one_time_tasks", "current_value", "FLOAT DEFAULT 0.0"),
             ("one_time_tasks", "step", "FLOAT DEFAULT 1.0"),
             ("one_time_tasks", "unit", "VARCHAR(32)"),
+            ("one_time_tasks", "scheduled_time", "VARCHAR(5)"),
         ]
 
         if conn.dialect.name == "sqlite":

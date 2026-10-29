@@ -17,6 +17,7 @@ from backend.crud import (
     get_user_effective_date_and_urgency,
     get_user_routines_with_status,
     get_day_tasks,
+    get_day_and_upcoming_tasks,
     is_routine_scheduled_for_date,
     get_user_goals,
 )
@@ -83,9 +84,10 @@ def format_reminder_text(title: str, subtitle: str, routines: list, tasks: list)
         lines.append("⚡️ <b>Задачи на день:</b>")
         for t in tasks:
             overdue_tag = f" ⚠️ <i>(+{t.overdue_days} дн.)</i>" if t.is_overdue else ""
+            time_tag = f" 🕒 <b>{html.escape(t.scheduled_time)}</b>" if getattr(t, "scheduled_time", None) else ""
             unit_str = f" {html.escape(t.unit)}" if t.unit else ""
             prog = f" [{t.current_value:g}/{t.target_value:g}{unit_str}]" if t.target_value else ""
-            lines.append(f"• {html.escape(t.title)}{prog}{overdue_tag}")
+            lines.append(f"• {html.escape(t.title)}{time_tag}{prog}{overdue_tag}")
         lines.append("")
     return "\n".join(lines).strip()
 
@@ -405,10 +407,82 @@ async def check_user_reminders_and_rollover():
                     uncompleted_routines = [r for r in routines if not r.is_completed_today]
                     completed_routines = [r for r in routines if r.is_completed_today]
 
-                    overdue, today_tasks = await get_day_tasks(session, user.telegram_id, effective_date)
+                    overdue, today_tasks, upcoming_tasks = await get_day_and_upcoming_tasks(
+                        session, user.telegram_id, effective_date
+                    )
                     all_tasks = overdue + today_tasks
                     uncompleted_tasks = [t for t in all_tasks if not t.is_completed]
                     completed_tasks = [t for t in all_tasks if t.is_completed]
+
+                    # --- 3a. Per-Task Scheduled Time Reminders (15m before & at exact scheduled_time) ---
+                    timed_candidates = [
+                        t
+                        for t in (today_tasks + upcoming_tasks)
+                        if not t.is_completed and getattr(t, "scheduled_time", None)
+                    ]
+                    for t in timed_candidates:
+                        try:
+                            t_parts = t.scheduled_time.split(":")
+                            th, tm = int(t_parts[0]), int(t_parts[1])
+                            task_dt = datetime(
+                                t.scheduled_date.year,
+                                t.scheduled_date.month,
+                                t.scheduled_date.day,
+                                th,
+                                tm,
+                                tzinfo=now.tzinfo,
+                            )
+                            diff_mins = (task_dt - now).total_seconds() / 60.0
+                            clean_hhmm = t.scheduled_time.replace(":", "")
+                            stage_15m = f"t15:{t.id}:{clean_hhmm}"
+                            stage_0m = f"t0:{t.id}:{clean_hhmm}"
+
+                            if (
+                                10.0 <= diff_mins <= 16.0
+                                and not await is_stage_sent(session, user.telegram_id, t.scheduled_date, stage_15m)
+                            ):
+                                unit_str = f" {html.escape(t.unit)}" if t.unit else ""
+                                prog = f" [{t.current_value:g}/{t.target_value:g}{unit_str}]" if t.target_value else ""
+                                goal_str = f"\n🎯 Цель: <i>{html.escape(t.goal_title)}</i>" if t.goal_title else ""
+                                msg_15m = (
+                                    f"⏰ <b>Напоминание: через 15 минут (в {html.escape(t.scheduled_time)})</b>\n\n"
+                                    f"⚡️ <b>{html.escape(t.title)}</b>{prog}{goal_str}"
+                                )
+                                try:
+                                    await bot.send_message(
+                                        chat_id=user.telegram_id,
+                                        text=msg_15m,
+                                        reply_markup=get_webapp_inline_keyboard(),
+                                    )
+                                    await record_stage_sent(session, user.telegram_id, t.scheduled_date, stage_15m)
+                                    logger.info(f"15m task reminder sent to {user.telegram_id} for task {t.id}")
+                                except Exception as te:
+                                    logger.warning(f"Failed to send 15m task reminder to {user.telegram_id}: {te}")
+
+                            elif (
+                                -10.0 <= diff_mins <= 0.5
+                                and not await is_stage_sent(session, user.telegram_id, t.scheduled_date, stage_0m)
+                            ):
+                                unit_str = f" {html.escape(t.unit)}" if t.unit else ""
+                                prog = f" [{t.current_value:g}/{t.target_value:g}{unit_str}]" if t.target_value else ""
+                                goal_str = f"\n🎯 Цель: <i>{html.escape(t.goal_title)}</i>" if t.goal_title else ""
+                                msg_0m = (
+                                    f"🔔 <b>Время задачи ({html.escape(t.scheduled_time)})!</b>\n\n"
+                                    f"⚡️ <b>{html.escape(t.title)}</b>{prog}{goal_str}"
+                                )
+                                try:
+                                    await bot.send_message(
+                                        chat_id=user.telegram_id,
+                                        text=msg_0m,
+                                        reply_markup=get_webapp_inline_keyboard(),
+                                    )
+                                    await record_stage_sent(session, user.telegram_id, t.scheduled_date, stage_0m)
+                                    await record_stage_sent(session, user.telegram_id, t.scheduled_date, stage_15m)
+                                    logger.info(f"Exact-time task reminder sent to {user.telegram_id} for task {t.id}")
+                                except Exception as te:
+                                    logger.warning(f"Failed to send exact-time task reminder to {user.telegram_id}: {te}")
+                        except Exception as task_rem_err:
+                            logger.debug(f"Task reminder check error for task {t.id}: {task_rem_err}")
 
                     has_unfinished = bool(uncompleted_routines or uncompleted_tasks)
 

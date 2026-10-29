@@ -253,6 +253,16 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* Safari overscroll & dynamic bar color sampling guard */
+html::before {
+  content: '';
+  position: fixed;
+  inset: -120px;
+  background-color: var(--bg-app);
+  z-index: -9999;
+  pointer-events: none;
+}
+
 body {
   background-color: var(--bg-app);
   color: var(--text-primary);
@@ -365,19 +375,18 @@ h4,
 .app-header::before {
   content: '';
   position: absolute;
-  top: 0;
+  top: -80px;
   left: 0;
   right: 0;
   bottom: -8px;
   background: linear-gradient(to bottom,
       var(--bg-app) 0%,
-      color-mix(in srgb, var(--bg-app) 92%, transparent) 15%,
-      color-mix(in srgb, var(--bg-app) 82%, transparent) 30%,
-      color-mix(in srgb, var(--bg-app) 68%, transparent) 45%,
-      color-mix(in srgb, var(--bg-app) 50%, transparent) 60%,
-      color-mix(in srgb, var(--bg-app) 32%, transparent) 75%,
-      color-mix(in srgb, var(--bg-app) 16%, transparent) 88%,
-      color-mix(in srgb, var(--bg-app) 5%, transparent) 96%,
+      var(--bg-app) 45%,
+      color-mix(in srgb, var(--bg-app) 92%, transparent) 55%,
+      color-mix(in srgb, var(--bg-app) 82%, transparent) 65%,
+      color-mix(in srgb, var(--bg-app) 68%, transparent) 75%,
+      color-mix(in srgb, var(--bg-app) 50%, transparent) 83%,
+      color-mix(in srgb, var(--bg-app) 28%, transparent) 92%,
       transparent 100%);
   pointer-events: none;
   z-index: -1;
@@ -904,13 +913,16 @@ body.is-tg-fullscreen .header-actions {
 .bottom-dock::before {
   content: '';
   position: absolute;
-  inset: auto 0 0 0;
-  height: calc(110px + var(--safe-bottom));
+  left: 0;
+  right: 0;
+  bottom: -80px;
+  height: calc(190px + var(--safe-bottom));
   background: linear-gradient(to top,
       var(--bg-app) 0%,
-      var(--dock-scrim-stop1) 35%,
-      var(--dock-scrim-stop2) 65%,
-      var(--dock-scrim-stop3) 88%,
+      var(--bg-app) 42%,
+      var(--dock-scrim-stop1) 62%,
+      var(--dock-scrim-stop2) 78%,
+      var(--dock-scrim-stop3) 92%,
       transparent 100%);
   pointer-events: none;
   z-index: -1;
@@ -1137,6 +1149,36 @@ body.is-tg-fullscreen .header-actions {
   background: var(--accent-primary-dim);
   color: var(--text-primary);
   border-color: var(--border-subtle);
+}
+
+/* Upcoming tasks grouped subheaders ("Завтра", "На этой неделе", "Позже") */
+.upcoming-groups-wrap {
+  padding-top: 4px;
+}
+
+.upcoming-group-block + .upcoming-group-block {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.upcoming-group-subheader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px 2px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.upcoming-group-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  opacity: 0.85;
 }
 
 /* UI-Kit Compliant Attention & Warning Styles */
@@ -3731,10 +3773,10 @@ body,
 .login-screen-wrapper {
   position: fixed;
   inset: 0;
-  width: 100vw;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3742,6 +3784,15 @@ body,
   z-index: 1000;
   overflow: hidden;
   box-sizing: border-box;
+}
+
+.login-screen-wrapper::before {
+  content: '';
+  position: fixed;
+  inset: -120px;
+  background-color: var(--bg-app);
+  z-index: -2;
+  pointer-events: none;
 }
 
 .login-screen-glow {
@@ -3775,7 +3826,6 @@ body,
 .login-screen-onboarding {
   width: 100%;
   height: 100%;
-  height: 100dvh;
   max-width: 100%;
   border-radius: 0;
   border: none;

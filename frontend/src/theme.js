@@ -164,6 +164,10 @@ export function applyTheme(config = null, timezone = null) {
 
     // Sync Telegram WebApp native colors and meta theme-color
     const themeColor = effectiveTheme === 'light' ? '#f4f4f6' : '#0d0d0d';
+    root.style.backgroundColor = themeColor;
+    if (document.body) {
+      document.body.style.backgroundColor = themeColor;
+    }
     const metaThemeColors = document.querySelectorAll('meta[name="theme-color"]');
     if (metaThemeColors.length > 0) {
       metaThemeColors.forEach((m) => m.setAttribute('content', themeColor));

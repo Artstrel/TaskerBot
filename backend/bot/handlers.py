@@ -157,12 +157,25 @@ async def handle_today(message: Message):
         text_parts.append("📝 <b>РАЗОВЫЕ ЗАДАЧИ НА СЕГОДНЯ:</b>")
         for t in summary.today_tasks:
             icon = "✅" if t.is_completed else "▫️"
+            time_badge = f" 🕒 <b>{t.scheduled_time}</b>" if getattr(t, "scheduled_time", None) else ""
             prog_text = f" [{t.current_value:g}/{t.target_value:g} {t.unit}]" if t.target_value else ""
             goal_badge = f" [🎯 {t.goal_title}]" if t.goal_title else ""
-            text_parts.append(f"{icon} <b>{t.title}</b>{prog_text}{goal_badge}")
+            text_parts.append(f"{icon} <b>{t.title}</b>{time_badge}{prog_text}{goal_badge}")
         text_parts.append("")
 
-    if not summary.overdue_tasks and not summary.routine_tasks and not summary.today_tasks:
+    # 4. Upcoming tasks
+    upcoming_active = [t for t in (summary.upcoming_tasks or []) if not t.is_completed]
+    if upcoming_active:
+        text_parts.append("🗓 <b>ПРЕДСТОЯЩИЕ ЗАДАЧИ:</b>")
+        for t in upcoming_active[:10]:
+            date_label = t.scheduled_date.strftime("%d.%m")
+            time_badge = f" в {t.scheduled_time}" if getattr(t, "scheduled_time", None) else ""
+            prog_text = f" [{t.current_value:g}/{t.target_value:g} {t.unit}]" if t.target_value else ""
+            goal_badge = f" [🎯 {t.goal_title}]" if t.goal_title else ""
+            text_parts.append(f"▫️ <b>{t.title}</b> <i>({date_label}{time_badge})</i>{prog_text}{goal_badge}")
+        text_parts.append("")
+
+    if not summary.overdue_tasks and not summary.routine_tasks and not summary.today_tasks and not upcoming_active:
         text_parts.append("🎉 <i>На сегодня пока нет задач! Надиктуй голосом или напиши, чтобы добавить.</i>")
 
     await message.answer("\n".join(text_parts))
@@ -466,7 +479,11 @@ async def handle_voice_message(message: Message):
         audio_bytes = file_bytes_io.getvalue()
 
         extracted = await ai_service.parse_audio_voice(
-            audio_bytes, effective_date, provider=user_provider, existing_goals=goal_titles
+            audio_bytes,
+            effective_date,
+            provider=user_provider,
+            existing_goals=goal_titles,
+            current_time=now.strftime("%H:%M"),
         )
         await status_msg.delete()
 
@@ -550,7 +567,11 @@ async def handle_text_message(message: Message):
             goal_titles = [g.title for g in goals if not g.is_completed]
 
         extracted = await ai_service.parse_text_tasks(
-            text, effective_date, provider=user_provider, existing_goals=goal_titles
+            text,
+            effective_date,
+            provider=user_provider,
+            existing_goals=goal_titles,
+            current_time=now.strftime("%H:%M"),
         )
         await status_msg.delete()
 
@@ -587,8 +608,9 @@ async def present_parsed_tasks(message: Message, extracted: ExtractedTaskList, e
     for idx, t in enumerate(extracted.tasks, 1):
         cat_badge = category_labels.get(t.category, "📝 Задача")
         date_str = f" (на {t.scheduled_date})" if t.scheduled_date else ""
+        time_str = f" 🕒 {t.scheduled_time}" if getattr(t, "scheduled_time", None) else ""
         goal_str = f" [к цели: {t.goal_title}]" if t.goal_title else ""
-        msg_lines.append(f"{idx}. <b>{t.title}</b>\n   ↳ <i>{cat_badge}{date_str}{goal_str}</i>")
+        msg_lines.append(f"{idx}. <b>{t.title}</b>\n   ↳ <i>{cat_badge}{date_str}{time_str}{goal_str}</i>")
 
     msg_lines.append("\nСохранить эти задачи? Вы можете удалить лишние пункты кнопками ниже.")
 
@@ -634,8 +656,9 @@ async def cb_del_parsed_item(query: CallbackQuery):
     for idx, t in enumerate(tasks, 1):
         cat_badge = category_labels.get(t.category, "📝 Задача")
         date_str = f" (на {t.scheduled_date})" if t.scheduled_date else ""
+        time_str = f" 🕒 {t.scheduled_time}" if getattr(t, "scheduled_time", None) else ""
         goal_str = f" [к цели: {t.goal_title}]" if t.goal_title else ""
-        msg_lines.append(f"{idx}. <b>{t.title}</b>\n   ↳ <i>{cat_badge}{date_str}{goal_str}</i>")
+        msg_lines.append(f"{idx}. <b>{t.title}</b>\n   ↳ <i>{cat_badge}{date_str}{time_str}{goal_str}</i>")
 
     msg_lines.append("\nСохранить оставшиеся задачи?")
 
@@ -719,6 +742,7 @@ async def cb_save_tasks(query: CallbackQuery):
                     user_id=user_id,
                     title=t.title,
                     scheduled_date=sched_date,
+                    scheduled_time=getattr(t, "scheduled_time", None),
                     goal_id=goal_id,
                     target_value=t.target_value,
                     step=t.step,
@@ -747,6 +771,7 @@ async def cb_save_tasks(query: CallbackQuery):
                     user_id=user_id,
                     title=t.title,
                     scheduled_date=sched_date,
+                    scheduled_time=getattr(t, "scheduled_time", None),
                     target_value=t.target_value,
                     step=t.step,
                     unit=t.unit,

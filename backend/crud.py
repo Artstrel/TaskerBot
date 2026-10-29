@@ -16,6 +16,7 @@ from backend.schemas import (
     GroceryItemRead,
     GroceryListResponse,
     capitalize_first,
+    normalize_scheduled_time,
 )
 from backend.database import engine
 
@@ -29,6 +30,7 @@ def _task_to_read(t: OneTimeTask, goal_title: Optional[str] = None) -> OneTimeTa
         goal_title=gt,
         title=t.title,
         scheduled_date=t.scheduled_date,
+        scheduled_time=getattr(t, "scheduled_time", None),
         is_completed=t.is_completed,
         completed_at=t.completed_at,
         is_overdue=t.is_overdue,
@@ -522,11 +524,13 @@ async def create_one_time_task(
     current_value: Optional[float] = 0.0,
     step: Optional[float] = 1.0,
     unit: Optional[str] = None,
+    scheduled_time: Optional[str] = None,
 ) -> OneTimeTaskRead:
     task = OneTimeTask(
         user_id=user_id,
         title=capitalize_first(title),
         scheduled_date=scheduled_date,
+        scheduled_time=normalize_scheduled_time(scheduled_time),
         goal_id=goal_id,
         priority=priority,
         target_value=target_value,
@@ -551,13 +555,14 @@ async def create_one_time_task(
     return _task_to_read(task)
 
 
-async def get_day_tasks(
+async def get_day_and_upcoming_tasks(
     session: AsyncSession, user_id: int, current_date: date
-) -> Tuple[List[OneTimeTaskRead], List[OneTimeTaskRead]]:
+) -> Tuple[List[OneTimeTaskRead], List[OneTimeTaskRead], List[OneTimeTaskRead]]:
     """
-    Returns (overdue_tasks, today_tasks).
+    Returns (overdue_tasks, today_tasks, upcoming_tasks).
     Overdue tasks: is_overdue == True OR (scheduled_date < current_date and not is_completed)
-    Today tasks: scheduled_date == current_date and not is_overdue
+    Today tasks: scheduled_date == current_date
+    Upcoming tasks: scheduled_date > current_date (uncompleted, plus recently completed for current session visibility)
     """
     # First, handle tasks from past dates that weren't marked overdue yet
     is_sqlite = engine.dialect.name == "sqlite"
@@ -602,6 +607,7 @@ async def get_day_tasks(
 
     overdue: List[OneTimeTaskRead] = []
     today: List[OneTimeTaskRead] = []
+    upcoming: List[OneTimeTaskRead] = []
 
     for t in all_tasks:
         task_dto = _task_to_read(t)
@@ -610,11 +616,30 @@ async def get_day_tasks(
             overdue.append(task_dto)
         elif t.scheduled_date == current_date:
             today.append(task_dto)
+        elif t.scheduled_date > current_date:
+            if not t.is_completed or (
+                t.completed_at and t.completed_at.date() >= current_date - timedelta(days=1)
+            ):
+                upcoming.append(task_dto)
 
-    # Sort overdue by overdue_days desc
-    overdue.sort(key=lambda x: (x.is_completed, -x.overdue_days, -x.priority, x.id))
-    today.sort(key=lambda x: (x.is_completed, -x.priority, x.id))
+    # Sort overdue by overdue_days desc, priority desc, time asc
+    overdue.sort(
+        key=lambda x: (x.is_completed, -x.overdue_days, -x.priority, x.scheduled_time or "99:99", x.id)
+    )
+    today.sort(
+        key=lambda x: (x.is_completed, -x.priority, x.scheduled_time or "99:99", x.id)
+    )
+    upcoming.sort(
+        key=lambda x: (x.is_completed, x.scheduled_date, x.scheduled_time or "99:99", -x.priority, x.id)
+    )
 
+    return overdue, today, upcoming
+
+
+async def get_day_tasks(
+    session: AsyncSession, user_id: int, current_date: date
+) -> Tuple[List[OneTimeTaskRead], List[OneTimeTaskRead]]:
+    overdue, today, _ = await get_day_and_upcoming_tasks(session, user_id, current_date)
     return overdue, today
 
 
@@ -750,6 +775,7 @@ async def update_one_time_task(
     user_id: int,
     title: Optional[str] = None,
     scheduled_date: Optional[date] = None,
+    scheduled_time: Optional[str] = None,
     is_completed: Optional[bool] = None,
     goal_id: Optional[int] = None,
     priority: Optional[int] = None,
@@ -776,6 +802,8 @@ async def update_one_time_task(
             task.scheduled_date = scheduled_date
             task.is_overdue = False
             task.overdue_days = 0
+        if "scheduled_time" in fields_set:
+            task.scheduled_time = normalize_scheduled_time(scheduled_time)
         if "is_completed" in fields_set and is_completed is not None:
             task.is_completed = is_completed
             task.completed_at = datetime.utcnow() if is_completed else None
@@ -798,6 +826,8 @@ async def update_one_time_task(
             task.scheduled_date = scheduled_date
             task.is_overdue = False
             task.overdue_days = 0
+        if scheduled_time is not None:
+            task.scheduled_time = normalize_scheduled_time(scheduled_time)
         if is_completed is not None:
             task.is_completed = is_completed
             task.completed_at = datetime.utcnow() if is_completed else None
@@ -921,6 +951,7 @@ async def add_subtask_to_goal(
     user_id: int,
     title: str,
     scheduled_date: Optional[date] = None,
+    scheduled_time: Optional[str] = None,
 ) -> Optional[OneTimeTaskRead]:
     # Check goal ownership
     stmt = select(Goal).where(and_(Goal.id == goal_id, Goal.user_id == user_id))
@@ -942,6 +973,7 @@ async def add_subtask_to_goal(
         goal_id=goal_id,
         title=title.strip(),
         scheduled_date=scheduled_date,
+        scheduled_time=normalize_scheduled_time(scheduled_time),
     )
     session.add(task)
     await session.commit()
@@ -1021,7 +1053,9 @@ async def get_day_summary(
     )
 
     routines = await get_user_routines_with_status(session, user.telegram_id, effective_date)
-    overdue_tasks, today_tasks = await get_day_tasks(session, user.telegram_id, effective_date)
+    overdue_tasks, today_tasks, upcoming_tasks = await get_day_and_upcoming_tasks(
+        session, user.telegram_id, effective_date
+    )
 
     total = len(routines) + len(overdue_tasks) + len(today_tasks)
     completed = (
@@ -1038,6 +1072,7 @@ async def get_day_summary(
         overdue_tasks=overdue_tasks,
         routine_tasks=routines,
         today_tasks=today_tasks,
+        upcoming_tasks=upcoming_tasks,
         completed_count=completed,
         total_count=total,
     )

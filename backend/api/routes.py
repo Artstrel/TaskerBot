@@ -567,6 +567,7 @@ async def add_task(
         current_value=task_in.current_value,
         step=task_in.step,
         unit=task_in.unit,
+        scheduled_time=task_in.scheduled_time,
     )
     return task
 
@@ -629,6 +630,7 @@ async def update_task_endpoint(
         user.telegram_id,
         title=task_in.title,
         scheduled_date=task_in.scheduled_date,
+        scheduled_time=task_in.scheduled_time,
         is_completed=task_in.is_completed,
         goal_id=task_in.goal_id,
         priority=task_in.priority,
@@ -696,11 +698,12 @@ async def add_goal_subtask(
     goal_id: int,
     title: str = Query(...),
     scheduled_date: Optional[date] = Query(None),
+    scheduled_time: Optional[str] = Query(None),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
     subtask = await add_subtask_to_goal(
-        session, goal_id, user.telegram_id, title, scheduled_date
+        session, goal_id, user.telegram_id, title, scheduled_date, scheduled_time=scheduled_time
     )
     if not subtask:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -753,7 +756,11 @@ async def ai_parse_text(
     user_goals = await get_user_goals(session, user.telegram_id)
     goal_titles = [g.title for g in user_goals if not g.is_completed]
     return await ai_service.parse_text_tasks(
-        text, effective_date, provider=chosen_provider, existing_goals=goal_titles
+        text,
+        effective_date,
+        provider=chosen_provider,
+        existing_goals=goal_titles,
+        current_time=now.strftime("%H:%M"),
     )
 
 
@@ -776,6 +783,7 @@ async def ai_parse_audio(
         provider=chosen_provider,
         filename=audio.filename or "audio.ogg",
         existing_goals=goal_titles,
+        current_time=now.strftime("%H:%M"),
     )
 
 

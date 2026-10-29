@@ -8,7 +8,14 @@ from typing import Optional, List, Dict, Any
 
 import httpx
 from backend.config import settings
-from backend.schemas import ExtractedTaskList, ExtractedTask, AIProviderInfo, AIProvidersResponse, capitalize_first
+from backend.schemas import (
+    ExtractedTaskList,
+    ExtractedTask,
+    AIProviderInfo,
+    AIProvidersResponse,
+    capitalize_first,
+    normalize_scheduled_time,
+)
 from backend.whisper_service import (
     whisper_service,
     detect_hallucination_or_noise,
@@ -55,6 +62,251 @@ def clean_grocery_title(text: Optional[str]) -> str:
     return capitalize_first(cleaned or text)
 
 
+_RU_HOUR_WORDS = {
+    "час": 1,
+    "один": 1,
+    "два": 2,
+    "три": 3,
+    "четыре": 4,
+    "пять": 5,
+    "шесть": 6,
+    "семь": 7,
+    "восемь": 8,
+    "девять": 9,
+    "десять": 10,
+    "одиннадцать": 11,
+    "двенадцать": 12,
+}
+
+
+def _adjust_hour_by_period(hour: int, period: Optional[str]) -> int:
+    if not period:
+        return hour
+    p = period.lower()
+    if p.startswith("вечер") or p.startswith("дн"):
+        if 1 <= hour <= 11:
+            return hour + 12
+    elif p.startswith("ноч"):
+        if hour == 12:
+            return 0
+        if 1 <= hour <= 5:
+            return hour
+        if 6 <= hour <= 11:
+            return hour + 12
+    elif p.startswith("утр"):
+        if hour == 12:
+            return 0
+    return hour
+
+
+def extract_and_clean_datetime_markers(
+    text: str,
+    current_date: Optional[date] = None,
+    current_time: Optional[str] = None,
+    existing_date: Optional[str] = None,
+    existing_time: Optional[str] = None,
+) -> tuple[str, Optional[str], Optional[str]]:
+    """
+    Extracts scheduled_date (YYYY-MM-DD) and scheduled_time (HH:MM) from Russian natural language text,
+    strips reminder prefixes ("напомни мне") and date/time markers from the title,
+    and advances scheduled_date to tomorrow if no explicit date was given and the time has already passed today.
+    """
+    if not text or not isinstance(text, str):
+        return "", existing_date, normalize_scheduled_time(existing_time)
+
+    if isinstance(current_date, str):
+        try:
+            current_date = date.fromisoformat(current_date[:10])
+        except Exception:
+            current_date = None
+
+    working = text.strip()
+    lower_orig = working.lower()
+
+    # 1. Detect explicit date markers in original text
+    date_explicit = False
+    extracted_date: Optional[str] = existing_date
+    if current_date:
+        if re.search(r"\bпослезавтра\b", lower_orig):
+            extracted_date = (current_date + timedelta(days=2)).isoformat()
+            date_explicit = True
+        elif re.search(r"\bзавтра\b", lower_orig):
+            extracted_date = (current_date + timedelta(days=1)).isoformat()
+            date_explicit = True
+        elif re.search(r"\bсегодня\b", lower_orig):
+            extracted_date = current_date.isoformat()
+            date_explicit = True
+        elif existing_date and existing_date != current_date.isoformat():
+            date_explicit = True
+
+    extracted_time: Optional[str] = normalize_scheduled_time(existing_time)
+
+    # 2. Extract time markers and strip them from working title
+    # 2a. "в полдень" / "в полночь"
+    m_noon = re.search(r"\b(?:в\s+)?(полдень|полночь)\b", working, flags=re.IGNORECASE)
+    if m_noon:
+        if not extracted_time:
+            extracted_time = "12:00" if m_noon.group(1).lower() == "полдень" else "00:00"
+        working = working[: m_noon.start()] + " " + working[m_noon.end() :]
+
+    # 2b. Relative time: "через N часов/минут", "через час", "через полчаса"
+    if current_time:
+        try:
+            ch, cm = [int(x) for x in current_time.split(":")[:2]]
+            base_mins = ch * 60 + cm
+        except Exception:
+            base_mins = None
+    else:
+        base_mins = None
+
+    m_rel = re.search(
+        r"\bчерез\s+(?:(\d+)\s*(час(?:а|ов)?|мин(?:ут[аы]?)?)|(полчаса|час))\b",
+        working,
+        flags=re.IGNORECASE,
+    )
+    if m_rel:
+        if base_mins is not None and not extracted_time:
+            delta_m = 0
+            if m_rel.group(3):
+                w = m_rel.group(3).lower()
+                delta_m = 30 if w == "полчаса" else 60
+            else:
+                num = int(m_rel.group(1))
+                unit = m_rel.group(2).lower()
+                delta_m = num * 60 if unit.startswith("час") else num
+            total_m = base_mins + delta_m
+            days_offset = total_m // (24 * 60)
+            rem_m = total_m % (24 * 60)
+            extracted_time = f"{rem_m // 60:02d}:{rem_m % 60:02d}"
+            if days_offset > 0 and current_date and not date_explicit:
+                extracted_date = (current_date + timedelta(days=days_offset)).isoformat()
+                date_explicit = True
+        working = working[: m_rel.start()] + " " + working[m_rel.end() :]
+
+    # 2c. Explicit HH:MM or H.MM with optional period of day:
+    # e.g. "в 19:00", "в 7:30 вечера", "вечером в 19:00", "к 14:30"
+    m_hhmm = re.search(
+        r"(?:\b(?:утром|днем|днём|вечером|ночью)\s+)?\b(?:в|к|на|около)\s*(\d{1,2})[:.](\d{2})(?:\s*(?:час(?:а|ов)?))?(?:\s*(утра|дня|вечера|ночи|утром|днем|днём|вечером|ночью))?(?=[^\wа-яА-ЯёЁ]|$)",
+        working,
+        flags=re.IGNORECASE,
+    )
+    if m_hhmm:
+        h = int(m_hhmm.group(1))
+        m = int(m_hhmm.group(2))
+        period = m_hhmm.group(3)
+        if not period:
+            prefix_match = re.match(r"^\s*(утром|днем|днём|вечером|ночью)", m_hhmm.group(0), flags=re.IGNORECASE)
+            if prefix_match:
+                period = prefix_match.group(1)
+        h = _adjust_hour_by_period(h, period)
+        if 0 <= h <= 23 and 0 <= m <= 59 and not extracted_time:
+            extracted_time = f"{h:02d}:{m:02d}"
+        working = working[: m_hhmm.start()] + " " + working[m_hhmm.end() :]
+
+    # 2d. Numeric hour + period of day or "часов":
+    # e.g. "в 7 вечера", "в 7 часов вечера", "вечером в 7", "утром в 9", "в 19 часов", "к 18 часам"
+    m_hour_num = re.search(
+        r"(?:(?:\b(утром|днем|днём|вечером|ночью)\s+)?\b(?:в|к|на|около)\s*(\d{1,2})(?:\s*час(?:а|ов|ам)?)?\s*(утра|дня|вечера|ночи|утром|днем|днём|вечером|ночью)\b"
+        r"|\b(утром|днем|днём|вечером|ночью)\s+(?:в|к|на|около)\s*(\d{1,2})(?:\s*час(?:а|ов|ам)?)?(?=[^\wа-яА-ЯёЁ]|$)"
+        r"|\b(?:в|к|на|около)\s*(\d{1,2})\s*час(?:а|ов|ам)(?=[^\wа-яА-ЯёЁ]|$))",
+        working,
+        flags=re.IGNORECASE,
+    )
+    if m_hour_num:
+        if m_hour_num.group(2):
+            h = int(m_hour_num.group(2))
+            period = m_hour_num.group(3) or m_hour_num.group(1)
+        elif m_hour_num.group(5):
+            h = int(m_hour_num.group(5))
+            period = m_hour_num.group(4)
+        else:
+            h = int(m_hour_num.group(6))
+            period = None
+        h = _adjust_hour_by_period(h, period)
+        if 0 <= h <= 23 and not extracted_time:
+            extracted_time = f"{h:02d}:00"
+        working = working[: m_hour_num.start()] + " " + working[m_hour_num.end() :]
+
+    # 2e. Word hour + period of day or "часов":
+    # e.g. "в семь вечера", "в семь часов вечера", "в час дня"
+    hour_words_pattern = "|".join(_RU_HOUR_WORDS.keys())
+    m_hour_word = re.search(
+        rf"(?:\b(утром|днем|днём|вечером|ночью)\s+)?\b(?:в|к|на|около)\s*({hour_words_pattern})(?:\s*час(?:а|ов|ам)?)?\s*(утра|дня|вечера|ночи|утром|днем|днём|вечером|ночью|час(?:а|ов|ам))(?=[^\wа-яА-ЯёЁ]|$)",
+        working,
+        flags=re.IGNORECASE,
+    )
+    if m_hour_word:
+        w_hour = m_hour_word.group(2).lower()
+        h = _RU_HOUR_WORDS.get(w_hour, 0)
+        period = m_hour_word.group(3)
+        if period and period.lower().startswith("час"):
+            period = m_hour_word.group(1)
+        h = _adjust_hour_by_period(h, period)
+        if 0 <= h <= 23 and not extracted_time:
+            extracted_time = f"{h:02d}:00"
+        working = working[: m_hour_word.start()] + " " + working[m_hour_word.end() :]
+
+    # 2f. Standalone "в HH" when clearly a time (e.g. "в 19", "в 21")
+    m_hour_24 = re.search(
+        r"\b(?:в|к)\s*(1[3-9]|2[0-3]|0[0-9])(?=[^\wа-яА-ЯёЁ:.\d]|$)",
+        working,
+        flags=re.IGNORECASE,
+    )
+    if m_hour_24:
+        h = int(m_hour_24.group(1))
+        if 0 <= h <= 23 and not extracted_time:
+            extracted_time = f"{h:02d}:00"
+        working = working[: m_hour_24.start()] + " " + working[m_hour_24.end() :]
+
+    # 2g. Vague time-of-day words ("сегодня вечером", "завтра утром") when no exact time was given
+    m_vague = re.search(r"\b(утром|вечером|днем|днём|ночью)\b", working, flags=re.IGNORECASE)
+    if m_vague:
+        vw = m_vague.group(1).lower()
+        if not extracted_time:
+            if vw == "утром":
+                extracted_time = "09:00"
+            elif vw in ("днем", "днём"):
+                extracted_time = "14:00"
+            elif vw == "вечером":
+                extracted_time = "19:00"
+            elif vw == "ночью":
+                extracted_time = "23:00"
+        working = working[: m_vague.start()] + " " + working[m_vague.end() :]
+
+    # 3. Strip introductory reminder phrases and date words from working title
+    working = re.sub(
+        r"^\s*(?:пожалуйста[,\s]+)?(?:напомни(?:те)?|напомнить)(?:\s+мне)?(?:\s*,?\s*пожалуйста)?\s*",
+        "",
+        working,
+        flags=re.IGNORECASE,
+    )
+    working = re.sub(
+        r"\b(?:напомни(?:те)?\s+мне|напомни(?:те)?|не\s+забудь(?:те)?|не\s+забыть|сегодня|завтра|послезавтра)\b",
+        " ",
+        working,
+        flags=re.IGNORECASE,
+    )
+    working = re.sub(
+        r"^\s*(?:мне\s+)?(?:нужно|надо|необходимо|задача)\s*[:\-]?\s*",
+        "",
+        working,
+        flags=re.IGNORECASE,
+    )
+    # Clean stray prepositions/punctuation left at the very beginning or end
+    working = re.sub(r"\s{2,}", " ", working).strip(" \t\n\r,.:;-–—")
+
+    # 4. If time is present, no explicit date was specified, and the time has already passed today -> schedule for tomorrow
+    if extracted_time and current_date and not date_explicit:
+        norm_curr = normalize_scheduled_time(current_time) if current_time else None
+        if norm_curr and extracted_time <= norm_curr:
+            extracted_date = (current_date + timedelta(days=1)).isoformat()
+        elif not extracted_date:
+            extracted_date = current_date.isoformat()
+
+    final_title = capitalize_first(working) if working else capitalize_first(text.strip())
+    return final_title, extracted_date, extracted_time
+
+
 SYSTEM_PROMPT = """Ты — интеллектуальный ассистент по планированию задач TaskerBot.
 Твоя задача — внимательно проанализировать текст или аудиосообщение пользователя и извлечь ВСЕ упомянутые задачи.
 
@@ -89,16 +341,21 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
   - "step": шаг инкремента/декремента. Если в тексте указан шаг (например, "по 250 мл", "по 5 отжиманий"), используй его. Если не указан: для жидкостей и веса ("л", "кг") используй 0.25; для штук, повторений, страниц, километров ("раз", "шт", "стр", "км") используй 1.0.
 - Если задача обычная и не содержит числовой счётчик, поля target_value, step, unit должны быть null.
 
-Текущая дата пользователя: {current_date}.
-Если указано "завтра", рассчитай точную дату YYYY-MM-DD. Если дата не указана для разовой задачи, установи null (что означает "сегодня").
+Текущая дата пользователя: {current_date}. Текущее местное время пользователя: {current_time}.
+Правила распознавания дат и времени (scheduled_date и scheduled_time):
+- Если указано время выполнения разовой задачи или подзадачи (например: "в 7 вечера", "в 19:00", "в 9 утра", "в 14:30", "в полдень", "через 2 часа", "сегодня вечером"), ОБЯЗАТЕЛЬНО извлеки время в формате 24ч "HH:MM" в поле "scheduled_time" (например: "19:00", "09:00", "14:30", "12:00").
+- ОБЯЗАТЕЛЬНО очищай "title" от вводных фраз ("напомни мне", "напомни", "не забудь", "нужно", "надо") и маркеров даты/времени ("в 7 вечера", "в 19:00", "завтра", "сегодня"). Пример: "напомни мне в 7 вечера сходить полить цветы" -> title: "Сходить полить цветы", scheduled_time: "19:00".
+- Если указано "завтра", рассчитай точную дату YYYY-MM-DD (текущая дата + 1 день). Если указано "послезавтра" — текущая дата + 2 дня.
+- Если конкретная дата НЕ указана, но указано время (scheduled_time), которое сегодня УЖЕ ПРОШЛО относительно текущего времени пользователя ({current_time}), автоматически поставь "scheduled_date" на ЗАВТРА (текущая дата + 1 день). Иначе установи null (что означает "сегодня").
 Если в сообщении несколько задач (например: "Каждый день пить 2 литра воды и завтра купить 5 помидоров"), ОБЯЗАТЕЛЬНО разбей их на отдельные элементы списка.
 
 Формат ответа: строго JSON с полем "tasks".
 Каждый элемент в "tasks" должен содержать:
 - "category": "routine" | "one_time" | "goal" | "subtask" | "grocery"
-- "title": краткое и четкое название задачи или продукта (ОБЯЗАТЕЛЬНО начинай с заглавной буквы, например: "Позвонить врачу", "Сделать зарядку"). Для продуктов из категории "grocery" пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Сыр", "Хлеб").
+- "title": краткое и четкое название задачи или продукта без вводных "напомни мне" и без тайм-маркеров (ОБЯЗАТЕЛЬНО начинай с заглавной буквы, например: "Сходить полить цветы", "Позвонить врачу", "Сделать зарядку"). Для продуктов из категории "grocery" пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Сыр", "Хлеб").
 - "description": подробности или null
 - "scheduled_date": "YYYY-MM-DD" или null
+- "scheduled_time": "HH:MM" (в 24-часовом формате, например "19:00") или null
 - "goal_title": точное название цели из списка или новой цели (всегда с заглавной буквы) или null
 - "target_date": дедлайн цели "YYYY-MM-DD" (если это goal) или null
 - "target_value": число (float) или null
@@ -110,21 +367,64 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 """
 
 
-def _format_system_prompt(current_date: date, existing_goals: Optional[List[str]] = None) -> str:
+def _format_system_prompt(
+    current_date: date,
+    existing_goals: Optional[List[str]] = None,
+    current_time: Optional[str] = None,
+) -> str:
     goals_info = "Список существующих целей пуст."
     if existing_goals:
         cleaned_goals = [g.strip() for g in existing_goals if g and g.strip()]
         if cleaned_goals:
             goals_info = "\n".join(f"- {g}" for g in cleaned_goals)
     date_str = current_date.isoformat() if hasattr(current_date, "isoformat") else str(current_date)
+    time_str = normalize_scheduled_time(current_time) or "12:00"
     return SYSTEM_PROMPT.format(
         current_date=date_str,
+        current_time=time_str,
         existing_goals_info=goals_info,
     )
 
 
+def _postprocess_extracted_list(
+    extracted: ExtractedTaskList,
+    source_text: Optional[str] = None,
+    current_date: Optional[date] = None,
+    current_time: Optional[str] = None,
+) -> ExtractedTaskList:
+    if not extracted or not extracted.tasks:
+        return extracted
+    single_task = len(extracted.tasks) == 1
+    for t in extracted.tasks:
+        if t.category in ("one_time", "subtask"):
+            cleaned_title, new_date, new_time = extract_and_clean_datetime_markers(
+                t.title,
+                current_date=current_date,
+                current_time=current_time,
+                existing_date=t.scheduled_date,
+                existing_time=t.scheduled_time,
+            )
+            if single_task and source_text:
+                _, src_date, src_time = extract_and_clean_datetime_markers(
+                    source_text,
+                    current_date=current_date,
+                    current_time=current_time,
+                    existing_date=new_date,
+                    existing_time=new_time,
+                )
+                new_date = src_date or new_date
+                new_time = src_time or new_time
+            t.title = cleaned_title
+            t.scheduled_date = new_date
+            t.scheduled_time = new_time
+    return extracted
 
-def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
+
+def _normalize_extracted_tasks(
+    raw_tasks: list,
+    current_date: Optional[date] = None,
+    current_time: Optional[str] = None,
+) -> List[ExtractedTask]:
     normalized_tasks = []
     for t in raw_tasks:
         if isinstance(t, str):
@@ -140,8 +440,17 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                     )
                 )
             else:
-                title = capitalize_first(raw_title)
-                normalized_tasks.append(ExtractedTask(category="one_time", title=title))
+                title, sched_date, sched_time = extract_and_clean_datetime_markers(
+                    raw_title, current_date=current_date, current_time=current_time
+                )
+                normalized_tasks.append(
+                    ExtractedTask(
+                        category="one_time",
+                        title=title,
+                        scheduled_date=sched_date,
+                        scheduled_time=sched_time,
+                    )
+                )
         elif isinstance(t, dict):
             raw_title = strip_whisper_hallucinations(str(t.get("title") or t.get("name") or "").strip())
             if not raw_title or detect_hallucination_or_noise(raw_title):
@@ -154,9 +463,19 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                 cat = "grocery"
                 title = clean_grocery_title(raw_title)
                 sched_date = None
+                sched_time = None
+            elif cat in ("one_time", "subtask"):
+                title, sched_date, sched_time = extract_and_clean_datetime_markers(
+                    raw_title,
+                    current_date=current_date,
+                    current_time=current_time,
+                    existing_date=t.get("scheduled_date"),
+                    existing_time=t.get("scheduled_time") or t.get("time"),
+                )
             else:
                 title = capitalize_first(raw_title)
                 sched_date = t.get("scheduled_date")
+                sched_time = None
 
             goal_title = capitalize_first(t.get("goal_title")) if t.get("goal_title") else None
 
@@ -197,6 +516,7 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
                     category=cat,
                     title=title,
                     scheduled_date=sched_date,
+                    scheduled_time=sched_time,
                     description=t.get("description"),
                     goal_title=goal_title,
                     target_date=t.get("target_date"),
@@ -211,7 +531,11 @@ def _normalize_extracted_tasks(raw_tasks: list) -> List[ExtractedTask]:
     return normalized_tasks
 
 
-def _parse_json_tasks(raw: str) -> Optional[ExtractedTaskList]:
+def _parse_json_tasks(
+    raw: str,
+    current_date: Optional[date] = None,
+    current_time: Optional[str] = None,
+) -> Optional[ExtractedTaskList]:
     """Extract and validate tasks from JSON response, handling markdown blocks if present."""
     if not raw or not raw.strip():
         return None
@@ -242,14 +566,19 @@ def _parse_json_tasks(raw: str) -> Optional[ExtractedTaskList]:
     elif isinstance(parsed, dict) and "title" in parsed:
         raw_tasks = [parsed]
 
-    normalized = _normalize_extracted_tasks(raw_tasks)
+    normalized = _normalize_extracted_tasks(
+        raw_tasks, current_date=current_date, current_time=current_time
+    )
     if normalized:
         return ExtractedTaskList(tasks=normalized)
     return None
 
 
 def _fallback_parse(
-    text: str, current_date: date, existing_goals: Optional[List[str]] = None
+    text: str,
+    current_date: date,
+    existing_goals: Optional[List[str]] = None,
+    current_time: Optional[str] = None,
 ) -> ExtractedTaskList:
     if detect_hallucination_or_noise(text):
         return ExtractedTaskList(tasks=[])
@@ -345,13 +674,16 @@ def _fallback_parse(
                 freq_type = "weekly"
                 d_of_w = sorted(list(set(matched_days)))
 
-        if not is_routine_match and any(w in lower for w in ["каждый день", "ежедневно", "утром", "вечером", "привычк"]):
+        if not is_routine_match and any(
+            w in lower
+            for w in ["каждый день", "ежедневно", "по утрам", "по вечерам", "каждое утро", "каждый вечер", "привычк"]
+        ):
             is_routine_match = True
             freq_type = "daily"
 
         if is_routine_match:
             title = re.sub(
-                r"\b(каждый день|ежедневно|утром|вечером|надо|нужно|привычка|через день|по выходным|по будням|раз в \d+ дня|раз в \d+ дней|раз в \d+ день|каждые \d+ дня|каждые \d+ дней)\b",
+                r"\b(каждый день|ежедневно|по утрам|по вечерам|каждое утро|каждый вечер|утром|вечером|надо|нужно|привычка|через день|по выходным|по будням|раз в \d+ дня|раз в \d+ дней|раз в \d+ день|каждые \d+ дня|каждые \d+ дней)\b",
                 "",
                 line,
                 flags=re.IGNORECASE,
@@ -417,35 +749,31 @@ def _fallback_parse(
                 clean_subtask = re.sub(r"\b(шаг|подзадача|пункт)\s*\d*[:\s]*", "", line, flags=re.IGNORECASE).strip()
 
             if matched_goal:
+                sub_title, sub_date, sub_time = extract_and_clean_datetime_markers(
+                    clean_subtask or line, current_date=current_date, current_time=current_time
+                )
                 tasks.append(
                     ExtractedTask(
                         category="subtask",
-                        title=capitalize_first(clean_subtask or line),
+                        title=capitalize_first(sub_title or clean_subtask or line),
                         goal_title=capitalize_first(matched_goal),
+                        scheduled_date=sub_date,
+                        scheduled_time=sub_time,
                         target_value=target_val,
                         step=step_val,
                         unit=unit_val,
                     )
                 )
             else:
-                sched_date = None
-                if "послезавтра" in lower:
-                    sched_date = (current_date + timedelta(days=2)).isoformat()
-                elif "завтра" in lower:
-                    sched_date = (current_date + timedelta(days=1)).isoformat()
-
-                clean_title = re.sub(
-                    r"\b(завтра|послезавтра|сегодня|надо|нужно|задача)\b",
-                    "",
-                    line,
-                    flags=re.IGNORECASE,
-                ).strip()
-
+                clean_title, sched_date, sched_time = extract_and_clean_datetime_markers(
+                    line, current_date=current_date, current_time=current_time
+                )
                 tasks.append(
                     ExtractedTask(
                         category="one_time",
                         title=capitalize_first(clean_title or line),
                         scheduled_date=sched_date,
+                        scheduled_time=sched_time,
                         target_value=target_val,
                         step=step_val,
                         unit=unit_val,
@@ -462,7 +790,17 @@ def _fallback_parse(
                 )
             )
         else:
-            tasks.append(ExtractedTask(category="one_time", title=capitalize_first(text.strip())))
+            clean_title, sched_date, sched_time = extract_and_clean_datetime_markers(
+                text.strip(), current_date=current_date, current_time=current_time
+            )
+            tasks.append(
+                ExtractedTask(
+                    category="one_time",
+                    title=capitalize_first(clean_title or text.strip()),
+                    scheduled_date=sched_date,
+                    scheduled_time=sched_time,
+                )
+            )
 
     return ExtractedTaskList(tasks=tasks)
 
@@ -565,6 +903,7 @@ class AIService:
         current_date: date,
         provider: Optional[str] = None,
         existing_goals: Optional[List[str]] = None,
+        current_time: Optional[str] = None,
     ) -> ExtractedTaskList:
         chosen = self.resolve_provider(provider)
         clean_chars = re.sub(r"[^\wа-яА-ЯёЁ\d]+", "", text or "")
@@ -575,62 +914,66 @@ class AIService:
 
         if chosen == "auto":
             # Auto-Fast cascade: Groq -> OpenRouter Free -> Gemini -> Fallback
-            res = await self._parse_text_groq(text, current_date, existing_goals)
+            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
             if res is not None:
                 logger.info("Successfully parsed tasks via Groq (Fast)")
-                return res
+                return _postprocess_extracted_list(res, text, current_date, current_time)
 
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date, existing_goals)
+                res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
                 if res is not None:
                     logger.info("Successfully parsed tasks via OpenRouter Free")
-                    return res
+                    return _postprocess_extracted_list(res, text, current_date, current_time)
 
-            res = await self._parse_text_gemini(text, current_date, existing_goals)
+            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
             if res is not None:
                 logger.info("Successfully parsed tasks via Gemini Flash fallback")
-                return res
+                return _postprocess_extracted_list(res, text, current_date, current_time)
 
         elif chosen == "groq":
-            res = await self._parse_text_groq(text, current_date, existing_goals)
+            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
             if res is not None:
-                return res
+                return _postprocess_extracted_list(res, text, current_date, current_time)
             # Cascade fallbacks
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date, existing_goals)
+                res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
                 if res is not None:
-                    return res
-            res = await self._parse_text_gemini(text, current_date, existing_goals)
+                    return _postprocess_extracted_list(res, text, current_date, current_time)
+            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
             if res is not None:
-                return res
+                return _postprocess_extracted_list(res, text, current_date, current_time)
 
         elif chosen == "openrouter":
-            res = await self._parse_text_openrouter(text, current_date, existing_goals)
+            res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
             if res is not None:
-                return res
-            res = await self._parse_text_groq(text, current_date, existing_goals)
+                return _postprocess_extracted_list(res, text, current_date, current_time)
+            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
             if res is not None:
-                return res
-            res = await self._parse_text_gemini(text, current_date, existing_goals)
+                return _postprocess_extracted_list(res, text, current_date, current_time)
+            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
             if res is not None:
-                return res
+                return _postprocess_extracted_list(res, text, current_date, current_time)
 
         elif chosen == "gemini":
-            res = await self._parse_text_gemini(text, current_date, existing_goals)
+            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
             if res is not None:
-                return res
-            res = await self._parse_text_groq(text, current_date, existing_goals)
+                return _postprocess_extracted_list(res, text, current_date, current_time)
+            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
             if res is not None:
-                return res
+                return _postprocess_extracted_list(res, text, current_date, current_time)
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date, existing_goals)
+                res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
                 if res is not None:
-                    return res
+                    return _postprocess_extracted_list(res, text, current_date, current_time)
 
-        return _fallback_parse(text, current_date, existing_goals)
+        return _fallback_parse(text, current_date, existing_goals, current_time)
 
     async def _parse_text_groq(
-        self, text: str, current_date: date, existing_goals: Optional[List[str]] = None
+        self,
+        text: str,
+        current_date: date,
+        existing_goals: Optional[List[str]] = None,
+        current_time: Optional[str] = None,
     ) -> Optional[ExtractedTaskList]:
         client = self._get_groq_client()
         if not client:
@@ -650,9 +993,9 @@ class AIService:
                         {
                             "role": "system",
                             "content": (
-                                _format_system_prompt(current_date, existing_goals)
+                                _format_system_prompt(current_date, existing_goals, current_time)
                                 + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
-                                + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы (например: 'Позвонить врачу', 'Сделать зарядку')! Все продукты питания, еду и напитки классифицируй как 'grocery' со scheduled_date: null, а в поле title указывай только название продукта без слова 'Купить' (например: 'Молоко 2 л', 'Хлеб')!"
+                                + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы и очищай от вводных 'напомни мне' и маркеров времени (например: 'Сходить полить цветы', 'Позвонить врачу')! Время указывай в 'scheduled_time' в формате HH:MM. Все продукты питания, еду и напитки классифицируй как 'grocery' со scheduled_date: null, а в поле title указывай только название продукта без слова 'Купить' (например: 'Молоко 2 л', 'Хлеб')!"
                             ),
                         },
                         {"role": "user", "content": f"Текст сообщения пользователя:\n{text}"},
@@ -665,7 +1008,7 @@ class AIService:
                 raw = msg.content
                 if not raw or not raw.strip():
                     raw = getattr(msg, "reasoning", "") or ""
-                parsed = _parse_json_tasks(raw)
+                parsed = _parse_json_tasks(raw, current_date=current_date, current_time=current_time)
                 if parsed:
                     return parsed
             except Exception as e:
@@ -674,7 +1017,11 @@ class AIService:
         return None
 
     async def _parse_text_openrouter(
-        self, text: str, current_date: date, existing_goals: Optional[List[str]] = None
+        self,
+        text: str,
+        current_date: date,
+        existing_goals: Optional[List[str]] = None,
+        current_time: Optional[str] = None,
     ) -> Optional[ExtractedTaskList]:
         api_key = settings.OPENROUTER_API_KEY.strip() if settings.OPENROUTER_API_KEY else ""
         if not api_key:
@@ -697,9 +1044,9 @@ class AIService:
         ]
 
         system_msg = (
-            _format_system_prompt(current_date, existing_goals)
+            _format_system_prompt(current_date, existing_goals, current_time)
             + "\nОтвет должен быть строго в формате JSON с ключом 'tasks'."
-            + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы (например: 'Позвонить врачу', 'Сделать зарядку')! Все продукты питания, еду и напитки классифицируй как 'grocery' со scheduled_date: null, а в поле title указывай только название продукта без слова 'Купить' (например: 'Молоко 2 л', 'Хлеб')!"
+            + "\nВАЖНО: Все названия задач в поле 'title' и целей в 'goal_title' ОБЯЗАТЕЛЬНО начинай с заглавной (большой) буквы и очищай от вводных 'напомни мне' и маркеров времени (например: 'Сходить полить цветы', 'Позвонить врачу')! Время указывай в 'scheduled_time' в формате HH:MM. Все продукты питания, еду и напитки классифицируй как 'grocery' со scheduled_date: null, а в поле title указывай только название продукта без слова 'Купить' (например: 'Молоко 2 л', 'Хлеб')!"
         )
 
         for model_name in free_models:
@@ -724,7 +1071,9 @@ class AIService:
                     if choices and "message" in choices[0]:
                         msg = choices[0]["message"]
                         content = msg.get("content") or msg.get("reasoning") or ""
-                        parsed = _parse_json_tasks(content)
+                        parsed = _parse_json_tasks(
+                            content, current_date=current_date, current_time=current_time
+                        )
                         if parsed is not None:
                             if parsed.tasks:
                                 return parsed
@@ -740,14 +1089,18 @@ class AIService:
         return None
 
     async def _parse_text_gemini(
-        self, text: str, current_date: date, existing_goals: Optional[List[str]] = None
+        self,
+        text: str,
+        current_date: date,
+        existing_goals: Optional[List[str]] = None,
+        current_time: Optional[str] = None,
     ) -> Optional[ExtractedTaskList]:
         client = self._get_gemini_client()
         if not client:
             return None
 
         prompt = (
-            _format_system_prompt(current_date, existing_goals)
+            _format_system_prompt(current_date, existing_goals, current_time)
             + f"\n\nТекст сообщения пользователя:\n{text}"
         )
 
@@ -795,6 +1148,7 @@ class AIService:
         provider: Optional[str] = None,
         filename: Optional[str] = None,
         existing_goals: Optional[List[str]] = None,
+        current_time: Optional[str] = None,
     ) -> ExtractedTaskList:
         chosen = self.resolve_provider(provider)
         logger.info(f"Parsing audio voice with provider setting: {chosen}")
@@ -815,13 +1169,17 @@ class AIService:
                     if not detect_hallucination_or_noise(raw_text):
                         logger.info(f"Audio transcribed successfully via local whisper.cpp: {raw_text[:100]}")
                         res = await self.parse_text_tasks(
-                            raw_text, current_date, provider=chosen, existing_goals=existing_goals
+                            raw_text,
+                            current_date,
+                            provider=chosen,
+                            existing_goals=existing_goals,
+                            current_time=current_time,
                         )
                         if res and res.tasks:
                             valid_tasks = [t for t in res.tasks if not detect_hallucination_or_noise(t.title)]
                             if valid_tasks:
                                 return ExtractedTaskList(tasks=valid_tasks)
-                        fallback_res = _fallback_parse(raw_text, current_date, existing_goals)
+                        fallback_res = _fallback_parse(raw_text, current_date, existing_goals, current_time)
                         valid_fallback = [t for t in fallback_res.tasks if not detect_hallucination_or_noise(t.title)]
                         if valid_fallback:
                             return ExtractedTaskList(tasks=valid_fallback)
@@ -863,13 +1221,17 @@ class AIService:
                         logger.info(f"Audio transcribed successfully via Groq Whisper: {raw_text[:100]}")
                         # Parse through Auto-Fast cascade (Groq -> OpenRouter -> Gemini)
                         res = await self.parse_text_tasks(
-                            raw_text, current_date, provider=chosen, existing_goals=existing_goals
+                            raw_text,
+                            current_date,
+                            provider=chosen,
+                            existing_goals=existing_goals,
+                            current_time=current_time,
                         )
                         if res and res.tasks:
                             valid_tasks = [t for t in res.tasks if not detect_hallucination_or_noise(t.title)]
                             if valid_tasks:
                                 return ExtractedTaskList(tasks=valid_tasks)
-                        fallback_res = _fallback_parse(raw_text, current_date, existing_goals)
+                        fallback_res = _fallback_parse(raw_text, current_date, existing_goals, current_time)
                         valid_fallback = [t for t in fallback_res.tasks if not detect_hallucination_or_noise(t.title)]
                         if valid_fallback:
                             return ExtractedTaskList(tasks=valid_fallback)
@@ -881,10 +1243,14 @@ class AIService:
             gemini_payload = clean_audio_bytes if (clean_audio_bytes and len(clean_audio_bytes) > 44) else audio_bytes
             gemini_mime = "audio/wav" if (clean_audio_bytes and len(clean_audio_bytes) > 44) else mime_type
             res = await self._parse_audio_gemini(
-                gemini_payload, current_date, gemini_mime, existing_goals=existing_goals
+                gemini_payload,
+                current_date,
+                gemini_mime,
+                existing_goals=existing_goals,
+                current_time=current_time,
             )
             if res and res.tasks:
-                return res
+                return _postprocess_extracted_list(res, None, current_date, current_time)
 
         logger.warning("Audio transcription/parsing produced no valid speech tasks")
         return ExtractedTaskList(tasks=[])
@@ -895,13 +1261,14 @@ class AIService:
         current_date: date,
         mime_type: str,
         existing_goals: Optional[List[str]] = None,
+        current_time: Optional[str] = None,
     ) -> Optional[ExtractedTaskList]:
         client = self._get_gemini_client()
         if not client:
             return None
 
         prompt = (
-            _format_system_prompt(current_date, existing_goals)
+            _format_system_prompt(current_date, existing_goals, current_time)
             + "\n\nРасшифруй это аудиосообщение и извлеки задачи строго в формате JSON."
         )
 
@@ -941,7 +1308,7 @@ class AIService:
                             return parsed_res
                     except Exception:
                         pass
-                    fb = _fallback_parse(cleaned, current_date)
+                    fb = _fallback_parse(cleaned, current_date, current_time=current_time)
                     if fb and fb.tasks:
                         return fb
             except Exception as e:

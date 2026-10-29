@@ -856,6 +856,13 @@ export default function GoalsTab({
 
                                     <div className="item-content-col">
                                       <span className="item-title">{st.title}</span>
+                                      {st.scheduled_time && (
+                                        <div className="item-meta-row">
+                                          <span className="item-tag tag-due">
+                                            <Clock size={10} /> {st.scheduled_time}
+                                          </span>
+                                        </div>
+                                      )}
                                     </div>
 
                                     {!st.is_completed && (

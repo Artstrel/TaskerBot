@@ -7,6 +7,7 @@ import {
   Flame,
   Check,
   Clock,
+  Calendar,
   ArrowRight,
   Trash2,
   ChevronDown,
@@ -39,6 +40,7 @@ import {
   addPendingMutation,
   removePendingMutation,
   recordUserAction,
+  extractAndCleanDateTimeClient,
 } from '../api';
 import Mascot from './Mascot';
 import ViewHeader from './ViewHeader';
@@ -63,6 +65,7 @@ export default function TodayTab({
   const [isRoutinesOpenUserOverridden, setIsRoutinesOpenUserOverridden] = useState(false);
   const [isRoutinesOpen, setIsRoutinesOpen] = useState(true);
   const [isTodayOpen, setIsTodayOpen] = useState(true);
+  const [isUpcomingOpen, setIsUpcomingOpen] = useState(true);
   const [isCompletedOpen, setIsCompletedOpen] = useState(false);
 
   // Inline task title editing state
@@ -147,6 +150,7 @@ export default function TodayTab({
           ...prev,
           today_tasks: updateList(prev.today_tasks),
           overdue_tasks: updateList(prev.overdue_tasks),
+          upcoming_tasks: updateList(prev.upcoming_tasks),
         };
         setCachedDashboard(updated);
         return updated;
@@ -171,6 +175,7 @@ export default function TodayTab({
               ...prev,
               today_tasks: updateList(prev.today_tasks),
               overdue_tasks: updateList(prev.overdue_tasks),
+              upcoming_tasks: updateList(prev.upcoming_tasks),
             };
             setCachedDashboard(rolledBack);
             return rolledBack;
@@ -257,12 +262,56 @@ export default function TodayTab({
     overdue_tasks = [],
     routine_tasks = [],
     today_tasks = [],
+    upcoming_tasks = [],
     completed_count = 0,
     total_count = 0,
   } = dashboardData;
 
   const activeTodayTasks = today_tasks.filter((t) => !t.is_completed);
-  const completedTodayTasks = today_tasks.filter((t) => t.is_completed);
+  const activeUpcomingTasks = upcoming_tasks.filter((t) => !t.is_completed);
+  const completedTodayTasks = [
+    ...today_tasks.filter((t) => t.is_completed),
+    ...upcoming_tasks.filter((t) => t.is_completed),
+  ];
+
+  const todayIso = dashboardData?.date || new Date().toISOString().split('T')[0];
+  const baseDateObj = new Date(`${todayIso}T12:00:00`);
+  const tomorrowObj = new Date(baseDateObj);
+  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const tomorrowStr = tomorrowObj.toISOString().split('T')[0];
+  const weekEndObj = new Date(baseDateObj);
+  weekEndObj.setDate(weekEndObj.getDate() + 7);
+  const weekEndStr = weekEndObj.toISOString().split('T')[0];
+
+  const formatUpcomingDateLabel = (dateStr) => {
+    if (!dateStr) return '';
+    if (dateStr === tomorrowStr) return 'Завтра';
+    const d = new Date(`${dateStr}T12:00:00`);
+    if (isNaN(d.getTime())) return dateStr;
+    const wd = new Intl.DateTimeFormat('ru-RU', { weekday: 'short' }).format(d);
+    const dm = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(d).replace(/\.$/, '');
+    return `${wd.charAt(0).toUpperCase() + wd.slice(1)}, ${dm}`;
+  };
+
+  const upcomingGroups = [
+    {
+      key: 'tomorrow',
+      label: 'Завтра',
+      tasks: activeUpcomingTasks.filter((t) => t.scheduled_date === tomorrowStr),
+    },
+    {
+      key: 'this_week',
+      label: 'На этой неделе',
+      tasks: activeUpcomingTasks.filter(
+        (t) => t.scheduled_date > tomorrowStr && t.scheduled_date <= weekEndStr
+      ),
+    },
+    {
+      key: 'later',
+      label: 'Позже',
+      tasks: activeUpcomingTasks.filter((t) => t.scheduled_date > weekEndStr),
+    },
+  ].filter((g) => g.tasks.length > 0);
 
   const allRoutinesDone = routine_tasks.length > 0 && routine_tasks.every((r) => r.is_completed_today);
   const hasUnfinishedRoutines = routine_tasks.some((r) => !r.is_completed_today);
@@ -272,9 +321,14 @@ export default function TodayTab({
   const isRoutinesSectionOpen = isRoutinesOpenUserOverridden ? isRoutinesOpen : !allRoutinesDone;
 
   const progressPct = total_count > 0 ? Math.round((completed_count / total_count) * 100) : 0;
-  // Day is all done strictly when there are items and NONE are unfinished
+  // Day is all done strictly when there are today/routine/overdue items and NONE are unfinished
   const isDayAllDone = totalEntityCount > 0 && !hasUnfinishedRoutines && !hasUnfinishedTasks;
-  const isDayCompletelyEmpty = totalEntityCount === 0;
+  const isDayCompletelyEmpty = totalEntityCount === 0 && upcoming_tasks.length === 0;
+  const hasVisibleRightColSections =
+    overdue_tasks.length > 0 ||
+    activeTodayTasks.length > 0 ||
+    activeUpcomingTasks.length > 0 ||
+    completedTodayTasks.length > 0;
 
   const handleToggleTask = (taskId, currentStatus) => {
     const nextStatus = !currentStatus;
@@ -290,12 +344,14 @@ export default function TodayTab({
     const targetTask = [
       ...(dashboardData?.today_tasks || []),
       ...(dashboardData?.overdue_tasks || []),
+      ...(dashboardData?.upcoming_tasks || []),
     ].find((t) => t.id === taskId);
     const goalId = targetTask?.goal_id;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
+        const isUpcoming = (prev.upcoming_tasks || []).some((t) => t.id === taskId);
         const updateList = (list) =>
           (list || []).map((t) => {
             if (t.id === taskId) {
@@ -307,12 +363,14 @@ export default function TodayTab({
           });
         const newToday = updateList(prev.today_tasks);
         const newOverdue = updateList(prev.overdue_tasks);
-        const delta = nextStatus ? 1 : -1;
+        const newUpcoming = updateList(prev.upcoming_tasks);
+        const delta = isUpcoming ? 0 : nextStatus ? 1 : -1;
         const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + delta));
         const updated = {
           ...prev,
           today_tasks: newToday,
           overdue_tasks: newOverdue,
+          upcoming_tasks: newUpcoming,
           completed_count: newCompletedCount,
         };
         setCachedDashboard(updated);
@@ -362,16 +420,19 @@ export default function TodayTab({
         if (setDashboardData) {
           setDashboardData((prev) => {
             if (!prev) return prev;
+            const isUpcoming = (prev.upcoming_tasks || []).some((t) => t.id === taskId);
             const updateList = (list) =>
               (list || []).map((t) => (t.id === taskId ? { ...t, is_completed: currentStatus } : t));
             const newToday = updateList(prev.today_tasks);
             const newOverdue = updateList(prev.overdue_tasks);
-            const delta = currentStatus ? 1 : -1;
+            const newUpcoming = updateList(prev.upcoming_tasks);
+            const delta = isUpcoming ? 0 : currentStatus ? 1 : -1;
             const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + delta));
             const rolledBack = {
               ...prev,
               today_tasks: newToday,
               overdue_tasks: newOverdue,
+              upcoming_tasks: newUpcoming,
               completed_count: newCompletedCount,
             };
             setCachedDashboard(rolledBack);
@@ -609,6 +670,14 @@ export default function TodayTab({
     return num.toFixed(2).replace(/\.?0+$/, '');
   };
 
+  const sortUpcomingList = (list) =>
+    [...(list || [])].sort(
+      (a, b) =>
+        (a.scheduled_date || '').localeCompare(b.scheduled_date || '') ||
+        (b.priority || 0) - (a.priority || 0) ||
+        (a.scheduled_time || '99:99').localeCompare(b.scheduled_time || '99:99')
+    );
+
   const handleTaskProgress = (taskId, delta) => {
     hapticFeedback('light');
     recordUserAction();
@@ -619,6 +688,7 @@ export default function TodayTab({
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
+        const isUpcoming = (prev.upcoming_tasks || []).some((t) => t.id === taskId);
         let deltaCompleted = 0;
         const updateList = (list) =>
           (list || []).map((t) => {
@@ -631,9 +701,9 @@ export default function TodayTab({
               const nextCompleted = nextVal >= target;
               if (!t.is_completed && nextCompleted) {
                 willComplete = true;
-                deltaCompleted = 1;
+                if (!isUpcoming) deltaCompleted = 1;
               } else if (t.is_completed && !nextCompleted) {
-                deltaCompleted = -1;
+                if (!isUpcoming) deltaCompleted = -1;
               }
               return { ...t, current_value: nextVal, is_completed: nextCompleted };
             }
@@ -641,11 +711,13 @@ export default function TodayTab({
           });
         const newToday = updateList(prev.today_tasks);
         const newOverdue = updateList(prev.overdue_tasks);
+        const newUpcoming = updateList(prev.upcoming_tasks);
         const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + deltaCompleted));
         const updated = {
           ...prev,
           today_tasks: newToday,
           overdue_tasks: newOverdue,
+          upcoming_tasks: newUpcoming,
           completed_count: newCompletedCount,
         };
         setCachedDashboard(updated);
@@ -707,6 +779,7 @@ export default function TodayTab({
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
+        const isUpcoming = (prev.upcoming_tasks || []).some((t) => t.id === taskId);
         let deltaCompleted = 0;
         const updateList = (list) =>
           (list || []).map((t) => {
@@ -716,9 +789,9 @@ export default function TodayTab({
               const nextCompleted = val >= target;
               if (!t.is_completed && nextCompleted) {
                 willComplete = true;
-                deltaCompleted = 1;
+                if (!isUpcoming) deltaCompleted = 1;
               } else if (t.is_completed && !nextCompleted) {
-                deltaCompleted = -1;
+                if (!isUpcoming) deltaCompleted = -1;
               }
               return { ...t, current_value: val, is_completed: nextCompleted };
             }
@@ -726,11 +799,13 @@ export default function TodayTab({
           });
         const newToday = updateList(prev.today_tasks);
         const newOverdue = updateList(prev.overdue_tasks);
+        const newUpcoming = updateList(prev.upcoming_tasks);
         const newCompletedCount = Math.max(0, Math.min(prev.total_count, (prev.completed_count || 0) + deltaCompleted));
         const updated = {
           ...prev,
           today_tasks: newToday,
           overdue_tasks: newOverdue,
+          upcoming_tasks: newUpcoming,
           completed_count: newCompletedCount,
         };
         setCachedDashboard(updated);
@@ -898,29 +973,41 @@ export default function TodayTab({
   };
 
   const handlePostponeTomorrow = (taskId) => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateStr = tomorrow.toISOString().split('T')[0];
+    const dateStr = tomorrowStr;
     const mutationId = `postpone_task_${taskId}_${Date.now()}`;
     hapticFeedback('medium');
 
     let postponedTask = null;
+    let wasInUpcoming = false;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
-        postponedTask =
-          (prev.today_tasks || []).find((t) => t.id === taskId) ||
-          (prev.overdue_tasks || []).find((t) => t.id === taskId);
+        const fromToday = (prev.today_tasks || []).find((t) => t.id === taskId);
+        const fromOverdue = (prev.overdue_tasks || []).find((t) => t.id === taskId);
+        const fromUpcoming = (prev.upcoming_tasks || []).find((t) => t.id === taskId);
+        postponedTask = fromToday || fromOverdue || fromUpcoming;
+        wasInUpcoming = !!fromUpcoming && !fromToday && !fromOverdue;
         const wasCompleted = postponedTask?.is_completed || false;
+        const movedTask = postponedTask
+          ? { ...postponedTask, scheduled_date: dateStr, overdue_days: 0 }
+          : null;
+        const nextUpcoming = movedTask
+          ? sortUpcomingList([
+              ...(prev.upcoming_tasks || []).filter((t) => t.id !== taskId),
+              movedTask,
+            ])
+          : (prev.upcoming_tasks || []);
         const updated = {
           ...prev,
           today_tasks: (prev.today_tasks || []).filter((t) => t.id !== taskId),
           overdue_tasks: (prev.overdue_tasks || []).filter((t) => t.id !== taskId),
-          total_count: Math.max(0, (prev.total_count || 0) - 1),
-          completed_count: wasCompleted
-            ? Math.max(0, (prev.completed_count || 0) - 1)
-            : prev.completed_count,
+          upcoming_tasks: nextUpcoming,
+          total_count: wasInUpcoming ? prev.total_count : Math.max(0, (prev.total_count || 0) - 1),
+          completed_count:
+            !wasInUpcoming && wasCompleted
+              ? Math.max(0, (prev.completed_count || 0) - 1)
+              : prev.completed_count,
         };
         setCachedDashboard(updated);
         return updated;
@@ -941,8 +1028,11 @@ export default function TodayTab({
             if (!prev) return prev;
             const updated = {
               ...prev,
-              today_tasks: [postponedTask, ...(prev.today_tasks || [])],
-              total_count: (prev.total_count || 0) + 1,
+              today_tasks: wasInUpcoming ? prev.today_tasks : [postponedTask, ...(prev.today_tasks || [])],
+              upcoming_tasks: wasInUpcoming
+                ? sortUpcomingList([postponedTask, ...(prev.upcoming_tasks || []).filter((t) => t.id !== taskId)])
+                : (prev.upcoming_tasks || []).filter((t) => t.id !== taskId),
+              total_count: wasInUpcoming ? prev.total_count : (prev.total_count || 0) + 1,
             };
             setCachedDashboard(updated);
             return updated;
@@ -957,22 +1047,27 @@ export default function TodayTab({
     hapticFeedback('warning');
 
     let deletedTask = null;
+    let wasInUpcoming = false;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
-        deletedTask =
-          (prev.today_tasks || []).find((t) => t.id === taskId) ||
-          (prev.overdue_tasks || []).find((t) => t.id === taskId);
+        const fromToday = (prev.today_tasks || []).find((t) => t.id === taskId);
+        const fromOverdue = (prev.overdue_tasks || []).find((t) => t.id === taskId);
+        const fromUpcoming = (prev.upcoming_tasks || []).find((t) => t.id === taskId);
+        deletedTask = fromToday || fromOverdue || fromUpcoming;
+        wasInUpcoming = !!fromUpcoming && !fromToday && !fromOverdue;
         const wasCompleted = deletedTask?.is_completed || false;
         const updated = {
           ...prev,
           today_tasks: (prev.today_tasks || []).filter((t) => t.id !== taskId),
           overdue_tasks: (prev.overdue_tasks || []).filter((t) => t.id !== taskId),
-          total_count: Math.max(0, (prev.total_count || 0) - 1),
-          completed_count: wasCompleted
-            ? Math.max(0, (prev.completed_count || 0) - 1)
-            : prev.completed_count,
+          upcoming_tasks: (prev.upcoming_tasks || []).filter((t) => t.id !== taskId),
+          total_count: wasInUpcoming ? prev.total_count : Math.max(0, (prev.total_count || 0) - 1),
+          completed_count:
+            !wasInUpcoming && wasCompleted
+              ? Math.max(0, (prev.completed_count || 0) - 1)
+              : prev.completed_count,
         };
         setCachedDashboard(updated);
         return updated;
@@ -994,9 +1089,13 @@ export default function TodayTab({
             const wasCompleted = deletedTask.is_completed;
             const updated = {
               ...prev,
-              today_tasks: [deletedTask, ...(prev.today_tasks || [])],
-              total_count: (prev.total_count || 0) + 1,
-              completed_count: wasCompleted ? (prev.completed_count || 0) + 1 : prev.completed_count,
+              today_tasks: wasInUpcoming ? prev.today_tasks : [deletedTask, ...(prev.today_tasks || [])],
+              upcoming_tasks: wasInUpcoming
+                ? sortUpcomingList([deletedTask, ...(prev.upcoming_tasks || [])])
+                : prev.upcoming_tasks,
+              total_count: wasInUpcoming ? prev.total_count : (prev.total_count || 0) + 1,
+              completed_count:
+                !wasInUpcoming && wasCompleted ? (prev.completed_count || 0) + 1 : prev.completed_count,
             };
             setCachedDashboard(updated);
             return updated;
@@ -1007,12 +1106,17 @@ export default function TodayTab({
 
   const handleQuickSubmit = (e) => {
     e.preventDefault();
-    const title = quickTitle.trim();
-    if (!title || isSubmittingQuick) return;
+    const rawInput = quickTitle.trim();
+    if (!rawInput || isSubmittingQuick) return;
 
     const tempId = `temp_task_${Date.now()}`;
     const mutationId = `create_task_${tempId}`;
     const todayStr = dashboardData?.date || new Date().toISOString().split('T')[0];
+    const dtInfo = extractAndCleanDateTimeClient(rawInput, null, null);
+    const title = dtInfo.title || rawInput;
+    const schedDate = dtInfo.scheduled_date || todayStr;
+    const schedTime = dtInfo.scheduled_time || null;
+    const isFuture = schedDate > todayStr;
 
     const optimisticTask = {
       id: tempId,
@@ -1020,7 +1124,8 @@ export default function TodayTab({
       category: 'one_time',
       priority: 0,
       is_completed: false,
-      scheduled_date: todayStr,
+      scheduled_date: schedDate,
+      scheduled_time: schedTime,
       created_at: new Date().toISOString(),
       is_optimistic: true,
     };
@@ -1031,11 +1136,16 @@ export default function TodayTab({
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
-        const updated = {
-          ...prev,
-          today_tasks: [optimisticTask, ...(prev.today_tasks || [])],
-          total_count: (prev.total_count || 0) + 1,
-        };
+        const updated = isFuture
+          ? {
+              ...prev,
+              upcoming_tasks: sortUpcomingList([...(prev.upcoming_tasks || []), optimisticTask]),
+            }
+          : {
+              ...prev,
+              today_tasks: [optimisticTask, ...(prev.today_tasks || [])],
+              total_count: (prev.total_count || 0) + 1,
+            };
         setCachedDashboard(updated);
         return updated;
       });
@@ -1043,17 +1153,18 @@ export default function TodayTab({
 
     addPendingMutation({ id: mutationId, type: 'create_task', tempId, title, timestamp: Date.now() });
 
-    createTask({ title, scheduled_date: todayStr })
+    createTask({ title, scheduled_date: schedDate, scheduled_time: schedTime })
       .then((realTask) => {
         removePendingMutation(mutationId);
         if (setDashboardData && realTask && realTask.id) {
           setDashboardData((prev) => {
             if (!prev) return prev;
+            const replaceTemp = (list) =>
+              (list || []).map((t) => (t.id === tempId ? { ...realTask, is_optimistic: false } : t));
             const updated = {
               ...prev,
-              today_tasks: (prev.today_tasks || []).map((t) =>
-                t.id === tempId ? { ...realTask, is_optimistic: false } : t
-              ),
+              today_tasks: replaceTemp(prev.today_tasks),
+              upcoming_tasks: sortUpcomingList(replaceTemp(prev.upcoming_tasks)),
             };
             setCachedDashboard(updated);
             return updated;
@@ -1069,7 +1180,8 @@ export default function TodayTab({
             const updated = {
               ...prev,
               today_tasks: (prev.today_tasks || []).filter((t) => t.id !== tempId),
-              total_count: Math.max(0, (prev.total_count || 0) - 1),
+              upcoming_tasks: (prev.upcoming_tasks || []).filter((t) => t.id !== tempId),
+              total_count: isFuture ? prev.total_count : Math.max(0, (prev.total_count || 0) - 1),
             };
             setCachedDashboard(updated);
             return updated;
@@ -1298,8 +1410,8 @@ export default function TodayTab({
         </section>
       )}
 
-      {/* All Done Celebration State when no habits exist */}
-      {isDayAllDone && routine_tasks.length === 0 && (
+      {/* All Done Celebration State when no habits exist and no right-column sections */}
+      {isDayAllDone && routine_tasks.length === 0 && !hasVisibleRightColSections && (
         <div className="empty-state-mascot-card">
           <Mascot state="done" size={96} interactive={true} />
           <div className="empty-mascot-title">День закрыт!</div>
@@ -1309,7 +1421,7 @@ export default function TodayTab({
         </div>
       )}
 
-      {!isDayCompletelyEmpty && !(isDayAllDone && routine_tasks.length === 0) && (
+      {!isDayCompletelyEmpty && (routine_tasks.length > 0 || hasVisibleRightColSections) && (
         <div className="today-desktop-grid">
         {/* LEFT COLUMN: Habits */}
         <div className="today-col-left">
@@ -1444,11 +1556,11 @@ export default function TodayTab({
           )}
         </div>
 
-        {/* RIGHT COLUMN: Overdue & Today Tasks */}
+        {/* RIGHT COLUMN: Overdue, Today & Upcoming Tasks */}
         <div className="today-col-right">
 
-          {/* All Done Celebration State with Mascot (when habits exist in left col) */}
-          {isDayAllDone && routine_tasks.length > 0 && (
+          {/* All Done Celebration State with Mascot */}
+          {isDayAllDone && (
             <div className="empty-state-mascot-card">
               <Mascot state="done" size={96} interactive={true} />
               <div className="empty-mascot-title">День закрыт!</div>
@@ -1528,6 +1640,12 @@ export default function TodayTab({
                               <span className="item-tag tag-overdue">
                                 {task.overdue_days > 0 ? `+${task.overdue_days} дн.` : 'со вчера'}
                               </span>
+                              {task.scheduled_time && (
+                                <span className="item-tag tag-due">
+                                  <Clock size={10} />
+                                  {task.scheduled_time}
+                                </span>
+                              )}
                               {task.goal_title && (
                                 <span className="item-tag">
                                   <Target size={10} />
@@ -1688,6 +1806,134 @@ export default function TodayTab({
             </section>
           )}
 
+          {/* SECTION 3.5: Upcoming Tasks (Предстоящие) */}
+          {activeUpcomingTasks.length > 0 && (
+            <section className="linear-section today-upcoming-section">
+              <div
+                className="linear-section-header"
+                onClick={() => setIsUpcomingOpen((prev) => !prev)}
+                style={{ cursor: 'pointer' }}
+              >
+                <div className="linear-section-title">
+                  <span>Предстоящие</span>
+                  <span className="linear-count-badge">
+                    {activeUpcomingTasks.length}
+                  </span>
+                </div>
+                <AnimatedChevron isOpen={isUpcomingOpen} size={16} />
+              </div>
+
+              <AnimatedAccordion isOpen={isUpcomingOpen}>
+                <div className="upcoming-groups-wrap">
+                  {upcomingGroups.map((group) => (
+                    <div key={group.key} className="upcoming-group-block">
+                      <div className="upcoming-group-subheader">
+                        <span>{group.label}</span>
+                        <span className="upcoming-group-count">{group.tasks.length}</span>
+                      </div>
+                      <div className="linear-list">
+                        {group.tasks.map((task) => (
+                          <div
+                            key={task.id}
+                            className={`linear-list-item ${task.is_completed ? 'completed' : ''}`}
+                            style={{ alignItems: 'flex-start' }}
+                          >
+                            <AnimatedCheckbox
+                              checked={!!task.is_completed}
+                              onChange={() => handleToggleTask(task.id, task.is_completed)}
+                              ariaLabel="Выполнить предстоящую задачу"
+                              style={{ marginTop: '3px' }}
+                            />
+
+                            {editingTaskId === task.id ? (
+                              <div className="task-inline-edit-box">
+                                <input
+                                  type="text"
+                                  className="task-inline-input"
+                                  value={editTaskTitle}
+                                  onChange={(e) => setEditTaskTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveEdit(task.id);
+                                    if (e.key === 'Escape') setEditingTaskId(null);
+                                  }}
+                                  autoFocus
+                                />
+                                <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                                  <button
+                                    type="button"
+                                    className="item-mini-btn"
+                                    title="Отмена"
+                                    onClick={() => setEditingTaskId(null)}
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="item-mini-btn btn-success"
+                                    title="Сохранить"
+                                    onClick={() => handleSaveEdit(task.id)}
+                                  >
+                                    <Check size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="item-content-col">
+                                  <div className="item-title">
+                                    {task.title}
+                                  </div>
+                                  <div className="item-meta-row">
+                                    {task.scheduled_date && (
+                                      <span className="item-tag">
+                                        <Calendar size={10} />
+                                        {formatUpcomingDateLabel(task.scheduled_date)}
+                                      </span>
+                                    )}
+                                    {task.scheduled_time && (
+                                      <span className="item-tag tag-due">
+                                        <Clock size={10} />
+                                        {task.scheduled_time}
+                                      </span>
+                                    )}
+                                    {task.goal_title && (
+                                      <span className="item-tag">
+                                        <Target size={10} />
+                                        {task.goal_title}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {renderNumericStepper(task, 'task')}
+                                </div>
+
+                                <div className="item-action-btns">
+                                  <button
+                                    className="item-mini-btn"
+                                    title="Редактировать"
+                                    onClick={() => handleStartEdit(task)}
+                                  >
+                                    <Pencil size={13} />
+                                  </button>
+                                  <button
+                                    className="item-mini-btn btn-danger"
+                                    title="Удалить"
+                                    onClick={() => handleDeleteTask(task.id)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AnimatedAccordion>
+            </section>
+          )}
+
           {/* SECTION 4: Completed Tasks Accordion (Выполненные) */}
           {completedTodayTasks.length > 0 && (
             <section className="linear-section today-completed-section">
@@ -1759,6 +2005,12 @@ export default function TodayTab({
                               {task.title}
                             </div>
                             <div className="item-meta-row">
+                              {task.scheduled_date && task.scheduled_date > todayIso && (
+                                <span className="item-tag">
+                                  <Calendar size={10} />
+                                  {formatUpcomingDateLabel(task.scheduled_date)}
+                                </span>
+                              )}
                               {task.scheduled_time && (
                                 <span className="item-tag tag-due">
                                   <Clock size={10} />

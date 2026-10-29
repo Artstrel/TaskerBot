@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0d0d0d" id="meta-theme-color" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Chihiro Tasker" />
     <title>Chihiro Tasker — Трекер задач, привычек и целей</title>
     <meta name="description" content="Персональный трекер задач, привычек и списков покупок с поддержкой Telegram WebApp" />
@@ -55,6 +55,7 @@
               var m = String(d.getMinutes()).padStart(2, '0');
               var cur = h + ':' + m;
               var isDay = start <= end ? (cur >= start && cur < end) : (cur >= start || cur < end);
+              theme = isDay ? 'light' : 'dark';
             } else {
               var tg = window.Telegram && window.Telegram.WebApp;
               var isTg = tg && ((tg.initData && tg.initData.length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user) || (tg.platform && tg.platform !== 'unknown') || (window.location.hash && window.location.hash.indexOf('tgWebAppData')) !== -1);
@@ -70,6 +71,7 @@
           document.documentElement.setAttribute('data-theme', theme);
           document.documentElement.style.colorScheme = theme;
           var themeColor = theme === 'light' ? '#f4f4f6' : '#0d0d0d';
+          document.documentElement.style.backgroundColor = themeColor;
           var metaTheme = document.getElementById('meta-theme-color');
           if (metaTheme) {
             metaTheme.setAttribute('content', themeColor);

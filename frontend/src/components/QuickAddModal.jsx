@@ -44,6 +44,7 @@ import {
   cleanGroceryTitle,
   stripWhisperHallucinations,
   isHallucinationOrNoise,
+  extractAndCleanDateTimeClient,
 } from '../api';
 import BarVisualizer from './BarVisualizer';
 
@@ -108,6 +109,9 @@ export default function QuickAddModal({
   const [customDueDate, setCustomDueDate] = useState(
     editingItem && editingItem.scheduled_date ? editingItem.scheduled_date : ''
   );
+  const [selectedTime, setSelectedTime] = useState(
+    editingItem && editingItem.scheduled_time ? editingItem.scheduled_time : ''
+  );
 
   // Frequency and routine state
   const computeDaysOfWeek = () => {
@@ -142,6 +146,8 @@ export default function QuickAddModal({
   const [editingTargetVal, setEditingTargetVal] = useState('');
   const [editingUnit, setEditingUnit] = useState('');
   const [editingStep, setEditingStep] = useState('');
+  const [editingTaskDate, setEditingTaskDate] = useState('');
+  const [editingTaskTime, setEditingTaskTime] = useState('');
 
   // Quantitative / numeric state
   const [isNumeric, setIsNumeric] = useState(
@@ -670,11 +676,21 @@ export default function QuickAddModal({
     } else {
       // One-time task / subtask
       const selectedDate = getSelectedDate();
+      const cleanTime = selectedTime && dueDateOption !== 'none' ? selectedTime.trim() : null;
       const gId = category === 'subtask' || selectedGoalId ? selectedGoalId : null;
       const goalObj = (goalsData || []).find((g) => g.id === gId);
       const goalTitle = goalObj ? goalObj.title : (selectedGoalTitle || null);
       const todayStr = getEffectiveTodayDate();
       const isDueToday = selectedDate === todayStr;
+      const isFuture = Boolean(selectedDate && selectedDate > todayStr);
+
+      const sortUpcomingList = (list) =>
+        [...(list || [])].sort(
+          (a, b) =>
+            (a.scheduled_date || '').localeCompare(b.scheduled_date || '') ||
+            (b.priority || 0) - (a.priority || 0) ||
+            (a.scheduled_time || '99:99').localeCompare(b.scheduled_time || '99:99')
+        );
 
       if (setDashboardData) {
         setDashboardData((prev) => {
@@ -687,6 +703,7 @@ export default function QuickAddModal({
             ...editingItem,
             title,
             scheduled_date: selectedDate,
+            scheduled_time: cleanTime,
             goal_id: gId,
             goal_title: goalTitle,
             target_value: parsedTarget,
@@ -696,6 +713,7 @@ export default function QuickAddModal({
 
           let newToday = prev.today_tasks || [];
           let newOverdue = prev.overdue_tasks || [];
+          let newUpcoming = (prev.upcoming_tasks || []).filter((t) => t.id !== editingItem.id);
 
           if (isDueToday) {
             if (foundInToday) {
@@ -710,6 +728,9 @@ export default function QuickAddModal({
             // Task is scheduled for another date or null (без срока) -> Remove from today/overdue
             newToday = newToday.filter((t) => t.id !== editingItem.id);
             newOverdue = newOverdue.filter((t) => t.id !== editingItem.id);
+            if (isFuture) {
+              newUpcoming = sortUpcomingList([...newUpcoming, { ...updatedTask, overdue_days: 0 }]);
+            }
           }
 
           const countDiff = (foundInToday || foundInOverdue) && !isDueToday ? -1 : (!foundInToday && !foundInOverdue && isDueToday ? 1 : 0);
@@ -718,6 +739,7 @@ export default function QuickAddModal({
             ...prev,
             today_tasks: newToday,
             overdue_tasks: newOverdue,
+            upcoming_tasks: newUpcoming,
             total_count: Math.max(0, (prev.total_count || 0) + countDiff),
           };
           setCachedDashboard(updated);
@@ -736,6 +758,7 @@ export default function QuickAddModal({
                       ...s,
                       title,
                       scheduled_date: selectedDate,
+                      scheduled_time: cleanTime,
                       target_value: parsedTarget,
                       step: parsedStep,
                       unit: cleanUnit,
@@ -754,6 +777,7 @@ export default function QuickAddModal({
       updateTask(editingItem.id, {
         title,
         scheduled_date: selectedDate,
+        scheduled_time: cleanTime,
         goal_id: typeof gId === 'number' ? gId : null,
         target_value: parsedTarget,
         step: parsedStep,
@@ -798,13 +822,20 @@ export default function QuickAddModal({
       if (setDashboardData) {
         setDashboardData((prev) => {
           if (!prev) return prev;
+          const wasInTodayOrOverdue =
+            (prev.today_tasks || []).some((t) => t.id === editingItem.id) ||
+            (prev.overdue_tasks || []).some((t) => t.id === editingItem.id);
           const wasCompleted = editingItem.is_completed;
           const updated = {
             ...prev,
             today_tasks: (prev.today_tasks || []).filter((t) => t.id !== editingItem.id),
             overdue_tasks: (prev.overdue_tasks || []).filter((t) => t.id !== editingItem.id),
-            total_count: Math.max(0, (prev.total_count || 0) - 1),
-            completed_count: wasCompleted ? Math.max(0, (prev.completed_count || 0) - 1) : prev.completed_count,
+            upcoming_tasks: (prev.upcoming_tasks || []).filter((t) => t.id !== editingItem.id),
+            total_count: wasInTodayOrOverdue ? Math.max(0, (prev.total_count || 0) - 1) : prev.total_count,
+            completed_count:
+              wasInTodayOrOverdue && wasCompleted
+                ? Math.max(0, (prev.completed_count || 0) - 1)
+                : prev.completed_count,
           };
           setCachedDashboard(updated);
           return updated;
@@ -845,14 +876,40 @@ export default function QuickAddModal({
   // Direct Create (Zero AI latency)
   const handleDirectCreate = (e) => {
     if (e) e.preventDefault();
-    const title = capitalizeFirst(inputText.trim());
-    if (!title) return;
+    const rawInput = inputText.trim();
+    const baseTitle = capitalizeFirst(rawInput);
+    if (!baseTitle) return;
 
     const tempId = `temp_${Date.now()}`;
     const selectedDate = getSelectedDate();
     const todayStr = getEffectiveTodayDate();
     const prioInt = 0;
     const mutationId = `create_${category}_${tempId}`;
+
+    const sortUpcomingList = (list) =>
+      [...(list || [])].sort(
+        (a, b) =>
+          (a.scheduled_date || '').localeCompare(b.scheduled_date || '') ||
+          (b.priority || 0) - (a.priority || 0) ||
+          (a.scheduled_time || '99:99').localeCompare(b.scheduled_time || '99:99')
+      );
+
+    let title = baseTitle;
+    let effectiveDate = selectedDate;
+    let effectiveTime = selectedTime && dueDateOption !== 'none' ? selectedTime.trim() : null;
+
+    if (category === 'one_time' || category === 'subtask' || selectedGoalId) {
+      const explicitChipDate = dueDateOption === 'today' ? null : selectedDate;
+      const dtInfo = extractAndCleanDateTimeClient(rawInput, explicitChipDate, effectiveTime);
+      if (dtInfo.title) title = dtInfo.title;
+      if (dueDateOption === 'none') {
+        effectiveDate = null;
+        effectiveTime = null;
+      } else {
+        effectiveDate = dtInfo.scheduled_date || selectedDate || todayStr;
+        effectiveTime = dtInfo.scheduled_time || effectiveTime || null;
+      }
+    }
 
     const parsedTarget = isNumeric && targetValue ? parseFloat(targetValue.replace(',', '.')) : null;
     const parsedStep = isNumeric && step ? parseFloat(step.replace(',', '.')) : 1.0;
@@ -969,8 +1026,9 @@ export default function QuickAddModal({
       const gId = selectedGoalId;
       const goalObj = (goalsData || []).find((g) => g.id === gId);
       const goalTitle = goalObj ? goalObj.title : (selectedGoalTitle || null);
-      const sched = selectedDate || todayStr;
+      const sched = effectiveDate;
       const isDueToday = sched === todayStr;
+      const isFuture = Boolean(sched && sched > todayStr);
 
       if (setGoalsData && gId) {
         setGoalsData((prev) => {
@@ -979,6 +1037,7 @@ export default function QuickAddModal({
             title,
             is_completed: false,
             scheduled_date: sched,
+            scheduled_time: effectiveTime,
             goal_id: gId,
             goal_title: goalTitle,
             is_optimistic: true,
@@ -1004,7 +1063,7 @@ export default function QuickAddModal({
         });
       }
 
-      if (setDashboardData && isDueToday) {
+      if (setDashboardData && (isDueToday || isFuture)) {
         setDashboardData((prev) => {
           if (!prev) return prev;
           const optTask = {
@@ -1020,14 +1079,20 @@ export default function QuickAddModal({
             step: parsedStep,
             unit: cleanUnit,
             scheduled_date: sched,
+            scheduled_time: effectiveTime,
             created_at: new Date().toISOString(),
             is_optimistic: true,
           };
-          const updated = {
-            ...prev,
-            today_tasks: [optTask, ...(prev.today_tasks || [])],
-            total_count: (prev.total_count || 0) + 1,
-          };
+          const updated = isDueToday
+            ? {
+                ...prev,
+                today_tasks: [optTask, ...(prev.today_tasks || [])],
+                total_count: (prev.total_count || 0) + 1,
+              }
+            : {
+                ...prev,
+                upcoming_tasks: sortUpcomingList([...(prev.upcoming_tasks || []), optTask]),
+              };
           setCachedDashboard(updated);
           return updated;
         });
@@ -1038,6 +1103,7 @@ export default function QuickAddModal({
       createTask({
         title,
         scheduled_date: sched,
+        scheduled_time: effectiveTime,
         goal_id: typeof gId === 'number' ? gId : null,
         priority: prioInt,
         target_value: parsedTarget,
@@ -1046,14 +1112,19 @@ export default function QuickAddModal({
       })
         .then((realTask) => {
           removePendingMutation(mutationId);
-          if (setDashboardData && realTask && isDueToday) {
+          if (setDashboardData && realTask && (isDueToday || isFuture)) {
             setDashboardData((prev) => {
               if (!prev) return prev;
+              const replaceTemp = (list) =>
+                (list || []).map((t) =>
+                  t.id === tempId
+                    ? { ...realTask, goal_title: realTask.goal_title || goalTitle || t.goal_title, is_optimistic: false }
+                    : t
+                );
               const updated = {
                 ...prev,
-                today_tasks: (prev.today_tasks || []).map((t) =>
-                  t.id === tempId ? { ...realTask, goal_title: realTask.goal_title || goalTitle || t.goal_title, is_optimistic: false } : t
-                ),
+                today_tasks: replaceTemp(prev.today_tasks),
+                upcoming_tasks: sortUpcomingList(replaceTemp(prev.upcoming_tasks)),
               };
               setCachedDashboard(updated);
               return updated;
@@ -1139,8 +1210,9 @@ export default function QuickAddModal({
           onTaskCreated?.();
         });
     } else {
-      const isDueToday = !selectedDate || selectedDate === todayStr;
-      if (setDashboardData && isDueToday) {
+      const isDueToday = effectiveDate === todayStr;
+      const isFuture = Boolean(effectiveDate && effectiveDate > todayStr);
+      if (setDashboardData && (isDueToday || isFuture)) {
         setDashboardData((prev) => {
           if (!prev) return prev;
           const optTask = {
@@ -1153,15 +1225,21 @@ export default function QuickAddModal({
             current_value: 0.0,
             step: parsedStep,
             unit: cleanUnit,
-            scheduled_date: selectedDate,
+            scheduled_date: effectiveDate,
+            scheduled_time: effectiveTime,
             created_at: new Date().toISOString(),
             is_optimistic: true,
           };
-          const updated = {
-            ...prev,
-            today_tasks: [optTask, ...(prev.today_tasks || [])],
-            total_count: (prev.total_count || 0) + 1,
-          };
+          const updated = isDueToday
+            ? {
+                ...prev,
+                today_tasks: [optTask, ...(prev.today_tasks || [])],
+                total_count: (prev.total_count || 0) + 1,
+              }
+            : {
+                ...prev,
+                upcoming_tasks: sortUpcomingList([...(prev.upcoming_tasks || []), optTask]),
+              };
           setCachedDashboard(updated);
           return updated;
         });
@@ -1171,7 +1249,8 @@ export default function QuickAddModal({
 
       createTask({
         title,
-        scheduled_date: selectedDate,
+        scheduled_date: effectiveDate,
+        scheduled_time: effectiveTime,
         priority: prioInt,
         target_value: parsedTarget,
         step: parsedStep,
@@ -1179,14 +1258,15 @@ export default function QuickAddModal({
       })
         .then((realTask) => {
           removePendingMutation(mutationId);
-          if (setDashboardData && realTask && isDueToday) {
+          if (setDashboardData && realTask && (isDueToday || isFuture)) {
             setDashboardData((prev) => {
               if (!prev) return prev;
+              const replaceTemp = (list) =>
+                (list || []).map((t) => (t.id === tempId ? { ...realTask, is_optimistic: false } : t));
               const updated = {
                 ...prev,
-                today_tasks: (prev.today_tasks || []).map((t) =>
-                  t.id === tempId ? { ...realTask, is_optimistic: false } : t
-                ),
+                today_tasks: replaceTemp(prev.today_tasks),
+                upcoming_tasks: sortUpcomingList(replaceTemp(prev.upcoming_tasks)),
               };
               setCachedDashboard(updated);
               return updated;
@@ -1197,13 +1277,14 @@ export default function QuickAddModal({
         .catch((err) => {
           console.error('Failed to create task on server:', err);
           removePendingMutation(mutationId);
-          if (setDashboardData && isDueToday) {
+          if (setDashboardData && (isDueToday || isFuture)) {
             setDashboardData((prev) => {
               if (!prev) return prev;
               const updated = {
                 ...prev,
                 today_tasks: (prev.today_tasks || []).filter((t) => t.id !== tempId),
-                total_count: Math.max(0, (prev.total_count || 0) - 1),
+                upcoming_tasks: (prev.upcoming_tasks || []).filter((t) => t.id !== tempId),
+                total_count: isDueToday ? Math.max(0, (prev.total_count || 0) - 1) : prev.total_count,
               };
               setCachedDashboard(updated);
               return updated;
@@ -1222,6 +1303,8 @@ export default function QuickAddModal({
     setEditingTargetVal(task.target_value ? String(task.target_value) : '');
     setEditingUnit(task.unit || '');
     setEditingStep(task.step ? String(task.step) : '');
+    setEditingTaskDate(task.scheduled_date || '');
+    setEditingTaskTime(task.scheduled_time || '');
   };
 
   const handleSaveTaskEdit = (taskId) => {
@@ -1235,12 +1318,20 @@ export default function QuickAddModal({
         prev.map((t) =>
           t.id === taskId
             ? {
-              ...t,
-              title: capitalizeFirst(editingTitle.trim()),
-              target_value: parsedTarget && parsedTarget > 0 ? parsedTarget : null,
-              unit: cleanUnit,
-              step: parsedStep && parsedStep > 0 ? parsedStep : 1.0,
-            }
+                ...t,
+                title: capitalizeFirst(editingTitle.trim()),
+                target_value: parsedTarget && parsedTarget > 0 ? parsedTarget : null,
+                unit: cleanUnit,
+                step: parsedStep && parsedStep > 0 ? parsedStep : 1.0,
+                scheduled_date:
+                  t.category === 'one_time' || t.category === 'subtask'
+                    ? (editingTaskDate || null)
+                    : null,
+                scheduled_time:
+                  t.category === 'one_time' || t.category === 'subtask'
+                    ? (editingTaskTime || null)
+                    : null,
+              }
             : t
         )
       );
@@ -1268,7 +1359,6 @@ export default function QuickAddModal({
   };
 
   // Review Screen: Save selected extracted tasks
-  // Review Screen: Save selected extracted tasks
   const handleSaveExtracted = async () => {
     const selected = (extractedTasks || []).filter((t) => t.selected);
     if (selected.length === 0) {
@@ -1280,7 +1370,14 @@ export default function QuickAddModal({
     hapticFeedback('success');
     onClose();
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getEffectiveTodayDate();
+    const sortUpcomingList = (list) =>
+      [...(list || [])].sort(
+        (a, b) =>
+          (a.scheduled_date || '').localeCompare(b.scheduled_date || '') ||
+          (b.priority || 0) - (a.priority || 0) ||
+          (a.scheduled_time || '99:99').localeCompare(b.scheduled_time || '99:99')
+      );
     const createdGoalsMap = {};
     const goalPromises = [];
 
@@ -1437,6 +1534,9 @@ export default function QuickAddModal({
 
         const prioInt = 0;
         const sched = t.scheduled_date || todayStr;
+        const schedTime = t.scheduled_time || null;
+        const isDueToday = sched === todayStr;
+        const isFuture = Boolean(sched && sched > todayStr);
 
         if (targetGoalId && setGoalsData) {
           const optSubtask = {
@@ -1444,6 +1544,7 @@ export default function QuickAddModal({
             title: cleanTitle,
             is_completed: false,
             scheduled_date: sched,
+            scheduled_time: schedTime,
             goal_id: targetGoalId,
             goal_title: targetGoalTitle,
             is_optimistic: true,
@@ -1470,7 +1571,7 @@ export default function QuickAddModal({
           });
         }
 
-        if (sched === todayStr && setDashboardData) {
+        if ((isDueToday || isFuture) && setDashboardData) {
           setDashboardData((prev) => {
             if (!prev) return prev;
             const optTask = {
@@ -1486,14 +1587,20 @@ export default function QuickAddModal({
               step: t.step || 1.0,
               unit: t.unit || null,
               scheduled_date: sched,
+              scheduled_time: schedTime,
               created_at: new Date().toISOString(),
               is_optimistic: true,
             };
-            const updated = {
-              ...prev,
-              today_tasks: [optTask, ...(prev.today_tasks || [])],
-              total_count: (prev.total_count || 0) + 1,
-            };
+            const updated = isDueToday
+              ? {
+                  ...prev,
+                  today_tasks: [optTask, ...(prev.today_tasks || [])],
+                  total_count: (prev.total_count || 0) + 1,
+                }
+              : {
+                  ...prev,
+                  upcoming_tasks: sortUpcomingList([...(prev.upcoming_tasks || []), optTask]),
+                };
             setCachedDashboard(updated);
             return updated;
           });
@@ -1504,6 +1611,7 @@ export default function QuickAddModal({
         createTask({
           title: cleanTitle,
           scheduled_date: sched,
+          scheduled_time: schedTime,
           goal_id: typeof targetGoalId === 'number' ? targetGoalId : null,
           priority: prioInt,
           target_value: t.target_value || null,
@@ -1515,16 +1623,21 @@ export default function QuickAddModal({
             if (setDashboardData && real) {
               setDashboardData((prev) => {
                 if (!prev) return prev;
+                const replaceTemp = (list) =>
+                  (list || []).map((tk) =>
+                    tk.id === tempId
+                      ? {
+                          ...real,
+                          goal_id: real.goal_id || (typeof targetGoalId === 'number' ? targetGoalId : tk.goal_id),
+                          goal_title: real.goal_title || targetGoalTitle || tk.goal_title,
+                          is_optimistic: false,
+                        }
+                      : tk
+                  );
                 const updated = {
                   ...prev,
-                  today_tasks: (prev.today_tasks || []).map((tk) =>
-                    tk.id === tempId ? {
-                      ...real,
-                      goal_id: real.goal_id || (typeof targetGoalId === 'number' ? targetGoalId : tk.goal_id),
-                      goal_title: real.goal_title || targetGoalTitle || tk.goal_title,
-                      is_optimistic: false,
-                    } : tk
-                  ),
+                  today_tasks: replaceTemp(prev.today_tasks),
+                  upcoming_tasks: sortUpcomingList(replaceTemp(prev.upcoming_tasks)),
                 };
                 setCachedDashboard(updated);
                 return updated;
@@ -1606,7 +1719,10 @@ export default function QuickAddModal({
       } else {
         const prioInt = 0;
         const sched = t.scheduled_date || todayStr;
-        if (setDashboardData) {
+        const schedTime = t.scheduled_time || null;
+        const isDueToday = sched === todayStr;
+        const isFuture = Boolean(sched && sched > todayStr);
+        if (setDashboardData && (isDueToday || isFuture)) {
           setDashboardData((prev) => {
             if (!prev) return prev;
             const optTask = {
@@ -1620,14 +1736,20 @@ export default function QuickAddModal({
               step: t.step || 1.0,
               unit: t.unit || null,
               scheduled_date: sched,
+              scheduled_time: schedTime,
               created_at: new Date().toISOString(),
               is_optimistic: true,
             };
-            const updated = {
-              ...prev,
-              today_tasks: [optTask, ...(prev.today_tasks || [])],
-              total_count: (prev.total_count || 0) + 1,
-            };
+            const updated = isDueToday
+              ? {
+                  ...prev,
+                  today_tasks: [optTask, ...(prev.today_tasks || [])],
+                  total_count: (prev.total_count || 0) + 1,
+                }
+              : {
+                  ...prev,
+                  upcoming_tasks: sortUpcomingList([...(prev.upcoming_tasks || []), optTask]),
+                };
             setCachedDashboard(updated);
             return updated;
           });
@@ -1636,6 +1758,7 @@ export default function QuickAddModal({
         createTask({
           title: cleanTitle,
           scheduled_date: sched,
+          scheduled_time: schedTime,
           priority: prioInt,
           target_value: t.target_value || null,
           step: t.step || 1.0,
@@ -1646,11 +1769,12 @@ export default function QuickAddModal({
             if (setDashboardData && real) {
               setDashboardData((prev) => {
                 if (!prev) return prev;
+                const replaceTemp = (list) =>
+                  (list || []).map((tk) => (tk.id === tempId ? { ...real, is_optimistic: false } : tk));
                 const updated = {
                   ...prev,
-                  today_tasks: (prev.today_tasks || []).map((tk) =>
-                    tk.id === tempId ? { ...real, is_optimistic: false } : tk
-                  ),
+                  today_tasks: replaceTemp(prev.today_tasks),
+                  upcoming_tasks: sortUpcomingList(replaceTemp(prev.upcoming_tasks)),
                 };
                 setCachedDashboard(updated);
                 return updated;
@@ -1852,6 +1976,36 @@ export default function QuickAddModal({
                           </div>
                         </div>
 
+                        {(task.category === 'one_time' || task.category === 'subtask') && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Дата и время:</span>
+                            <input
+                              type="date"
+                              className="quickadd-num-input"
+                              style={{ width: '130px' }}
+                              value={editingTaskDate}
+                              onChange={(e) => setEditingTaskDate(e.target.value)}
+                            />
+                            <input
+                              type="time"
+                              className="quickadd-num-input"
+                              style={{ width: '96px' }}
+                              value={editingTaskTime}
+                              onChange={(e) => setEditingTaskTime(e.target.value)}
+                            />
+                            {editingTaskTime && (
+                              <button
+                                type="button"
+                                className="item-mini-btn"
+                                title="Сбросить время"
+                                onClick={() => setEditingTaskTime('')}
+                              >
+                                <X size={11} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+
                         {task.category !== 'goal' && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Цель:</span>
@@ -1955,7 +2109,12 @@ export default function QuickAddModal({
                             )}
                             {task.scheduled_date && (
                               <span className="item-tag">
-                                <Clock size={10} /> {task.scheduled_date}
+                                <Calendar size={10} /> {task.scheduled_date}
+                              </span>
+                            )}
+                            {task.scheduled_time && (
+                              <span className="item-tag tag-due">
+                                <Clock size={10} /> {task.scheduled_time}
                               </span>
                             )}
                             {task.category === 'routine' && task.frequency_type === 'interval' && task.interval_days > 1 && (
@@ -2256,7 +2415,7 @@ export default function QuickAddModal({
                 </div>
               )}
 
-              {/* Chips: Due Date (for one_time and subtask tasks) */}
+              {/* Chips: Due Date & Time (for one_time and subtask tasks) */}
               {(category === 'one_time' || category === 'subtask') && (
                 <div style={{ marginTop: '10px' }}>
                   <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
@@ -2305,6 +2464,7 @@ export default function QuickAddModal({
                       onClick={() => {
                         hapticFeedback('selection');
                         setDueDateOption('none');
+                        setSelectedTime('');
                       }}
                     >
                       Без срока
@@ -2333,6 +2493,71 @@ export default function QuickAddModal({
                           setDueDateOption('custom');
                         }}
                       />
+                    </div>
+                  )}
+
+                  {dueDateOption !== 'none' && (
+                    <div style={{ marginTop: '10px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginBottom: '5px' }}>
+                        ВРЕМЯ НАПОМИНАНИЯ (НЕОБЯЗАТЕЛЬНО)
+                      </div>
+                      <div className="chips-row" style={{ flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                        {[
+                          { label: '09:00', value: '09:00' },
+                          { label: '14:00', value: '14:00' },
+                          { label: '19:00', value: '19:00' },
+                        ].map((preset) => (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            className={`filter-chip ${selectedTime === preset.value ? 'active' : ''}`}
+                            onClick={() => {
+                              hapticFeedback('selection');
+                              setSelectedTime((prev) => (prev === preset.value ? '' : preset.value));
+                            }}
+                          >
+                            <Clock size={12} />
+                            <span>{preset.label}</span>
+                          </button>
+                        ))}
+                        <input
+                          type="time"
+                          className="quick-add-input"
+                          style={{
+                            padding: '5px 12px',
+                            fontSize: '12px',
+                            background: 'var(--bg-input)',
+                            border: selectedTime && !['09:00', '14:00', '19:00'].includes(selectedTime)
+                              ? '1px solid var(--text-primary)'
+                              : '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-full)',
+                            color: 'var(--text-primary)',
+                            outline: 'none',
+                            width: 'auto',
+                            minWidth: '94px',
+                          }}
+                          value={selectedTime}
+                          onChange={(e) => {
+                            hapticFeedback('selection');
+                            setSelectedTime(e.target.value);
+                          }}
+                          title="Точное время напоминания (ЧЧ:ММ)"
+                        />
+                        {selectedTime && (
+                          <button
+                            type="button"
+                            className="filter-chip"
+                            onClick={() => {
+                              hapticFeedback('light');
+                              setSelectedTime('');
+                            }}
+                            title="Сбросить время"
+                          >
+                            <X size={12} />
+                            <span>Без времени</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

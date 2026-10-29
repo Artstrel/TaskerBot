@@ -20,6 +20,25 @@ def capitalize_first(text: Optional[str]) -> Optional[str]:
     return s
 
 
+def normalize_scheduled_time(v: Any) -> Optional[str]:
+    """Normalize a time string (H:MM or HH:MM) to HH:MM, or None if empty/invalid."""
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s or s.lower() == "null":
+        return None
+    parts = s.split(":")
+    if len(parts) >= 2:
+        try:
+            h = int(parts[0])
+            m = int(parts[1])
+            if 0 <= h <= 23 and 0 <= m <= 59:
+                return f"{h:02d}:{m:02d}"
+        except (ValueError, TypeError):
+            pass
+    return None
+
+
 # --- Gemini / AI Parsing Schemas ---
 class ExtractedTask(BaseModel):
     category: Literal["routine", "one_time", "goal", "subtask", "grocery"] = Field(
@@ -30,6 +49,9 @@ class ExtractedTask(BaseModel):
     description: Optional[str] = Field(None, description="Additional details, notes or steps")
     scheduled_date: Optional[str] = Field(
         None, description="ISO format YYYY-MM-DD for one_time task, or null if today"
+    )
+    scheduled_time: Optional[str] = Field(
+        None, description="24-hour format HH:MM for one_time task or subtask if specific time is mentioned (e.g. '19:00'), or null"
     )
     goal_title: Optional[str] = Field(
         None, description="If this is a subtask, which existing or new goal it belongs to"
@@ -69,6 +91,11 @@ class ExtractedTask(BaseModel):
         if isinstance(v, str):
             return capitalize_first(v)
         return v
+
+    @field_validator("scheduled_time", mode="before")
+    @classmethod
+    def validate_scheduled_time(cls, v: Any) -> Optional[str]:
+        return normalize_scheduled_time(v)
 
 
 class ExtractedTaskList(BaseModel):
@@ -340,6 +367,7 @@ class OneTimeTaskRead(BaseModel):
     goal_title: Optional[str] = None
     title: str
     scheduled_date: date
+    scheduled_time: Optional[str] = None
     is_completed: bool
     completed_at: Optional[datetime] = None
     is_overdue: bool
@@ -375,6 +403,7 @@ class GoalWithProgress(BaseModel):
 class OneTimeTaskCreate(BaseModel):
     title: str
     scheduled_date: Optional[date] = None  # None = today
+    scheduled_time: Optional[str] = None
     goal_id: Optional[int] = None
     priority: int = 0
     target_value: Optional[float] = None
@@ -396,6 +425,11 @@ class OneTimeTaskCreate(BaseModel):
             return None
         return v
 
+    @field_validator("scheduled_time", mode="before")
+    @classmethod
+    def parse_scheduled_time(cls, v: Any) -> Optional[str]:
+        return normalize_scheduled_time(v)
+
     @field_validator("priority", mode="before")
     @classmethod
     def parse_priority(cls, v: Any):
@@ -414,6 +448,7 @@ class OneTimeTaskCreate(BaseModel):
 class OneTimeTaskUpdate(BaseModel):
     title: Optional[str] = None
     scheduled_date: Optional[date] = None
+    scheduled_time: Optional[str] = None
     is_completed: Optional[bool] = None
     goal_id: Optional[int] = None
     priority: Optional[int] = None
@@ -435,6 +470,11 @@ class OneTimeTaskUpdate(BaseModel):
         if not v or v == "null" or v == "":
             return None
         return v
+
+    @field_validator("scheduled_time", mode="before")
+    @classmethod
+    def parse_scheduled_time(cls, v: Any) -> Optional[str]:
+        return normalize_scheduled_time(v)
 
     @field_validator("priority", mode="before")
     @classmethod
@@ -460,6 +500,7 @@ class DaySummary(BaseModel):
     overdue_tasks: List[OneTimeTaskRead]
     routine_tasks: List[RoutineWithStatus]
     today_tasks: List[OneTimeTaskRead]
+    upcoming_tasks: List[OneTimeTaskRead] = Field(default_factory=list)
     completed_count: int
     total_count: int
 

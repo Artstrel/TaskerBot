@@ -137,6 +137,7 @@ class OneTimeTask(Base):
     )
     title: Mapped[str] = mapped_column(String(500))
     scheduled_date: Mapped[dt_date] = mapped_column(Date, index=True)
+    scheduled_time: Mapped[Optional[str]] = mapped_column(String(5), nullable=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     completed_at: Mapped[Optional[dt_datetime]] = mapped_column(DateTime, nullable=True)
     is_overdue: Mapped[bool] = mapped_column(Boolean, default=False, index=True)

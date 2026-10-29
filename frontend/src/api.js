@@ -793,6 +793,7 @@ export const reconcileDashboardWithPending = (dash) => {
 
   let todayTasks = dash.today_tasks ? [...dash.today_tasks] : [];
   let overdueTasks = dash.overdue_tasks ? [...dash.overdue_tasks] : [];
+  let upcomingTasks = dash.upcoming_tasks ? [...dash.upcoming_tasks] : [];
   let routineTasks = dash.routine_tasks ? [...dash.routine_tasks] : [];
 
   for (const m of mutations) {
@@ -837,12 +838,16 @@ export const reconcileDashboardWithPending = (dash) => {
       };
       todayTasks = todayTasks.map(applyToggle);
       overdueTasks = overdueTasks.map(applyToggle);
+      upcomingTasks = upcomingTasks.map(applyToggle);
     } else if (m.type === 'edit_task') {
-      todayTasks = todayTasks.map((t) => (t.id === m.taskId ? { ...t, title: m.title } : t));
-      overdueTasks = overdueTasks.map((t) => (t.id === m.taskId ? { ...t, title: m.title } : t));
+      const applyEdit = (t) => (t.id === m.taskId ? { ...t, title: m.title, ...(m.updates || {}) } : t);
+      todayTasks = todayTasks.map(applyEdit);
+      overdueTasks = overdueTasks.map(applyEdit);
+      upcomingTasks = upcomingTasks.map(applyEdit);
     } else if (m.type === 'delete_task') {
       todayTasks = todayTasks.filter((t) => t.id !== m.taskId);
       overdueTasks = overdueTasks.filter((t) => t.id !== m.taskId);
+      upcomingTasks = upcomingTasks.filter((t) => t.id !== m.taskId);
     } else if (m.type === 'progress_task') {
       const applyProgress = (t) => {
         if (t.id === m.taskId) {
@@ -859,6 +864,7 @@ export const reconcileDashboardWithPending = (dash) => {
       };
       todayTasks = todayTasks.map(applyProgress);
       overdueTasks = overdueTasks.map(applyProgress);
+      upcomingTasks = upcomingTasks.map(applyProgress);
     } else if (m.type === 'progress_routine') {
       routineTasks = routineTasks.map((r) => {
         if (r.id === m.routineId) {
@@ -874,20 +880,32 @@ export const reconcileDashboardWithPending = (dash) => {
         return r;
       });
     } else if (m.type === 'postpone_task') {
+      const moved =
+        todayTasks.find((t) => t.id === m.taskId) || overdueTasks.find((t) => t.id === m.taskId);
       todayTasks = todayTasks.filter((t) => t.id !== m.taskId);
       overdueTasks = overdueTasks.filter((t) => t.id !== m.taskId);
+      if (moved && m.newDate && !upcomingTasks.some((t) => t.id === m.taskId)) {
+        upcomingTasks.push({
+          ...moved,
+          scheduled_date: m.newDate,
+          is_overdue: false,
+          overdue_days: 0,
+        });
+      }
     }
   }
 
   const completedToday =
+    overdueTasks.filter((t) => t.is_completed).length +
     todayTasks.filter((t) => t.is_completed).length +
     routineTasks.filter((r) => r.is_completed_today).length;
-  const totalToday = todayTasks.length + routineTasks.length;
+  const totalToday = overdueTasks.length + todayTasks.length + routineTasks.length;
 
   return {
     ...dash,
     today_tasks: todayTasks,
     overdue_tasks: overdueTasks,
+    upcoming_tasks: upcomingTasks,
     routine_tasks: routineTasks,
     completed_count: completedToday,
     total_count: totalToday,
@@ -1224,6 +1242,7 @@ export const fetchDashboard = async () => {
 
   const overdue = db.tasks.filter((t) => !t.is_completed && t.scheduled_date && t.scheduled_date < todayStr);
   const today = db.tasks.filter((t) => t.scheduled_date === todayStr || (!t.scheduled_date && !t.is_completed));
+  const upcoming = db.tasks.filter((t) => !t.is_completed && t.scheduled_date && t.scheduled_date > todayStr);
   const completedToday =
     today.filter((t) => t.is_completed).length + db.routines.filter((r) => r.is_completed_today).length;
   const totalToday = today.length + db.routines.length;
@@ -1246,6 +1265,7 @@ export const fetchDashboard = async () => {
     overdue_tasks: overdue,
     routine_tasks: db.routines,
     today_tasks: today,
+    upcoming_tasks: upcoming,
     completed_count: completedToday,
     total_count: totalToday,
     current_streak: 5,
@@ -1577,6 +1597,7 @@ export const createTask = async (taskData) => {
     goal_title: taskData.goal_title || null,
     priority: taskData.priority || 0,
     scheduled_date: taskData.scheduled_date || new Date().toISOString().split('T')[0],
+    scheduled_time: taskData.scheduled_time || null,
     target_value: taskData.target_value || null,
     current_value: 0.0,
     step: taskData.step || 1.0,
@@ -1817,7 +1838,7 @@ export const createGoal = async (goalData) => {
   return newGoal;
 };
 
-export const addGoalSubtask = async (goalId, title, scheduledDate = null) => {
+export const addGoalSubtask = async (goalId, title, scheduledDate = null, scheduledTime = null) => {
   hapticFeedback('light');
   try {
     let url = `${API_BASE}/goals/${goalId}/subtasks?telegram_id=${currentUser.id}&title=${encodeURIComponent(
@@ -1825,6 +1846,9 @@ export const addGoalSubtask = async (goalId, title, scheduledDate = null) => {
     )}`;
     if (scheduledDate) {
       url += `&scheduled_date=${scheduledDate}`;
+    }
+    if (scheduledTime) {
+      url += `&scheduled_time=${encodeURIComponent(scheduledTime)}`;
     }
     const res = await fetch(url, { method: 'POST' });
     if (res.ok) return await res.json();
@@ -1839,6 +1863,7 @@ export const addGoalSubtask = async (goalId, title, scheduledDate = null) => {
       title,
       is_completed: false,
       scheduled_date: scheduledDate,
+      scheduled_time: scheduledTime,
     });
     saveLocalDb(db);
     return goal;
@@ -2143,6 +2168,215 @@ export const isHallucinationOrNoise = (text) => {
   return false;
 };
 
+const RU_HOUR_WORDS = {
+  час: 1,
+  один: 1,
+  два: 2,
+  три: 3,
+  четыре: 4,
+  пять: 5,
+  шесть: 6,
+  семь: 7,
+  восемь: 8,
+  девять: 9,
+  десять: 10,
+  одиннадцать: 11,
+  двенадцать: 12,
+};
+
+const adjustHourByPeriod = (hour, period) => {
+  if (!period) return hour;
+  const p = period.toLowerCase();
+  if (p.startsWith('вечер') || p.startsWith('дн')) {
+    if (hour >= 1 && hour <= 11) return hour + 12;
+  } else if (p.startsWith('ноч')) {
+    if (hour === 12) return 0;
+    if (hour >= 6 && hour <= 11) return hour + 12;
+  } else if (p.startsWith('утр')) {
+    if (hour === 12) return 0;
+  }
+  return hour;
+};
+
+export const normalizeTimeString = (val) => {
+  if (!val) return null;
+  const s = String(val).trim();
+  if (!s || s.toLowerCase() === 'null') return null;
+  const parts = s.split(':');
+  if (parts.length >= 2) {
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    if (!isNaN(h) && !isNaN(m) && h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+  }
+  return null;
+};
+
+export const extractAndCleanDateTimeClient = (text, existingDate = null, existingTime = null) => {
+  if (!text || typeof text !== 'string') {
+    return { title: '', scheduled_date: existingDate, scheduled_time: normalizeTimeString(existingTime) };
+  }
+
+  let working = text.trim();
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const dayAfter = new Date(now);
+  dayAfter.setDate(dayAfter.getDate() + 2);
+  const dayAfterStr = dayAfter.toISOString().split('T')[0];
+  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+  let dateExplicit = false;
+  let extractedDate = existingDate || null;
+  if (/(?:^|[^\p{L}])послезавтра(?=[^\p{L}]|$)/iu.test(working)) {
+    extractedDate = dayAfterStr;
+    dateExplicit = true;
+  } else if (/(?:^|[^\p{L}])завтра(?=[^\p{L}]|$)/iu.test(working)) {
+    extractedDate = tomorrowStr;
+    dateExplicit = true;
+  } else if (/(?:^|[^\p{L}])сегодня(?=[^\p{L}]|$)/iu.test(working)) {
+    extractedDate = todayStr;
+    dateExplicit = true;
+  } else if (existingDate && existingDate !== todayStr) {
+    dateExplicit = true;
+  }
+
+  let extractedTime = normalizeTimeString(existingTime);
+
+  // 1. "в полдень" / "в полночь"
+  const noonMatch = working.match(/(?:^|[^\p{L}])(?:в\s+)?(полдень|полночь)(?=[^\p{L}]|$)/iu);
+  if (noonMatch) {
+    if (!extractedTime) {
+      extractedTime = noonMatch[1].toLowerCase() === 'полдень' ? '12:00' : '00:00';
+    }
+    working = working.replace(noonMatch[0], ' ');
+  }
+
+  // 2. Relative: "через N часов/минут", "через полчаса", "через час"
+  const relMatch = working.match(
+    /(?:^|[^\p{L}])через\s+(?:(\d+)\s*(час(?:а|ов)?|мин(?:ут[аы]?)?)|(полчаса|час))(?=[^\p{L}]|$)/iu
+  );
+  if (relMatch) {
+    if (!extractedTime) {
+      let deltaMins = 0;
+      if (relMatch[3]) {
+        deltaMins = relMatch[3].toLowerCase() === 'полчаса' ? 30 : 60;
+      } else {
+        const num = parseInt(relMatch[1], 10);
+        const u = relMatch[2].toLowerCase();
+        deltaMins = u.startsWith('час') ? num * 60 : num;
+      }
+      const targetDt = new Date(now.getTime() + deltaMins * 60000);
+      extractedTime = `${String(targetDt.getHours()).padStart(2, '0')}:${String(targetDt.getMinutes()).padStart(2, '0')}`;
+      const targetDateStr = targetDt.toISOString().split('T')[0];
+      if (!dateExplicit && targetDateStr > todayStr) {
+        extractedDate = targetDateStr;
+        dateExplicit = true;
+      }
+    }
+    working = working.replace(relMatch[0], ' ');
+  }
+
+  // 3. Explicit HH:MM or H.MM with optional period of day
+  const hhmmMatch = working.match(
+    /(?:(?:^|[^\p{L}])(утром|днем|днём|вечером|ночью)\s+)?(?:^|[^\p{L}])(?:в|к|на|около)\s*(\d{1,2})[:.](\d{2})(?:\s*(?:час(?:а|ов)?))?(?:\s*(утра|дня|вечера|ночи|утром|днем|днём|вечером|ночью))?(?=[^\p{L}\d]|$)/iu
+  );
+  if (hhmmMatch) {
+    let h = parseInt(hhmmMatch[2], 10);
+    const m = parseInt(hhmmMatch[3], 10);
+    const period = hhmmMatch[4] || hhmmMatch[1];
+    h = adjustHourByPeriod(h, period);
+    if (h >= 0 && h <= 23 && m >= 0 && m <= 59 && !extractedTime) {
+      extractedTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+    working = working.replace(hhmmMatch[0], ' ');
+  }
+
+  // 4. Numeric hour + period of day ("в 7 вечера", "вечером в 7", "в 19 часов")
+  const hourNumMatch = working.match(
+    /(?:(?:^|[^\p{L}])(утром|днем|днём|вечером|ночью)\s+)?(?:^|[^\p{L}])(?:в|к|на|около)\s*(\d{1,2})(?:\s*час(?:а|ов|ам)?)?\s*(утра|дня|вечера|ночи|утром|днем|днём|вечером|ночью)(?=[^\p{L}]|$)|(?:^|[^\p{L}])(утром|днем|днём|вечером|ночью)\s+(?:в|к|на|около)\s*(\d{1,2})(?:\s*час(?:а|ов|ам)?)?(?=[^\p{L}\d]|$)|(?:^|[^\p{L}])(?:в|к|на|около)\s*(\d{1,2})\s*час(?:а|ов|ам)(?=[^\p{L}]|$)/iu
+  );
+  if (hourNumMatch) {
+    let h = 0;
+    let period = null;
+    if (hourNumMatch[2]) {
+      h = parseInt(hourNumMatch[2], 10);
+      period = hourNumMatch[3] || hourNumMatch[1];
+    } else if (hourNumMatch[5]) {
+      h = parseInt(hourNumMatch[5], 10);
+      period = hourNumMatch[4];
+    } else if (hourNumMatch[6]) {
+      h = parseInt(hourNumMatch[6], 10);
+    }
+    h = adjustHourByPeriod(h, period);
+    if (h >= 0 && h <= 23 && !extractedTime) {
+      extractedTime = `${String(h).padStart(2, '0')}:00`;
+    }
+    working = working.replace(hourNumMatch[0], ' ');
+  }
+
+  // 5. Word hour + period of day ("в семь вечера", "в час дня")
+  const hourWordsPat = Object.keys(RU_HOUR_WORDS).join('|');
+  const hourWordRe = new RegExp(
+    `(?:(?:^|[^\\p{L}])(утром|днем|днём|вечером|ночью)\\s+)?(?:^|[^\\p{L}])(?:в|к|на|около)\\s*(${hourWordsPat})(?:\\s*час(?:а|ов|ам)?)?\\s*(утра|дня|вечера|ночи|утром|днем|днём|вечером|ночью|час(?:а|ов|ам))(?=[^\\p{L}]|$)`,
+    'iu'
+  );
+  const hourWordMatch = working.match(hourWordRe);
+  if (hourWordMatch) {
+    let h = RU_HOUR_WORDS[hourWordMatch[2].toLowerCase()] || 0;
+    let period = hourWordMatch[3];
+    if (period && period.toLowerCase().startsWith('час')) {
+      period = hourWordMatch[1];
+    }
+    h = adjustHourByPeriod(h, period);
+    if (h >= 0 && h <= 23 && !extractedTime) {
+      extractedTime = `${String(h).padStart(2, '0')}:00`;
+    }
+    working = working.replace(hourWordMatch[0], ' ');
+  }
+
+  // 6. Vague period ("утром", "вечером", "днем")
+  const vagueMatch = working.match(/(?:^|[^\p{L}])(утром|вечером|днем|днём|ночью)(?=[^\p{L}]|$)/iu);
+  if (vagueMatch) {
+    const vw = vagueMatch[1].toLowerCase();
+    if (!extractedTime) {
+      if (vw === 'утром') extractedTime = '09:00';
+      else if (vw === 'днем' || vw === 'днём') extractedTime = '14:00';
+      else if (vw === 'вечером') extractedTime = '19:00';
+      else if (vw === 'ночью') extractedTime = '23:00';
+    }
+    working = working.replace(vagueMatch[0], ' ');
+  }
+
+  // 7. Strip introductory reminder phrases and date words
+  working = working.replace(
+    /^\s*(?:пожалуйста[,\s]+)?(?:напомни(?:те)?|напомнить)(?:\s+мне)?(?:\s*,?\s*пожалуйста)?\s*/iu,
+    ''
+  );
+  working = working.replace(
+    /(?:^|[^\p{L}])(?:напомни(?:те)?\s+мне|напомни(?:те)?|не\s+забудь(?:те)?|не\s+забыть|сегодня|завтра|послезавтра)(?=[^\p{L}]|$)/giu,
+    ' '
+  );
+  working = working.replace(/^\s*(?:мне\s+)?(?:нужно|надо|необходимо|задача)\s*[:\-]?\s*/iu, '');
+  working = working.replace(/\s{2,}/g, ' ').replace(/^[,\s.:;\-–—]+|[,\s.:;\-–—]+$/g, '');
+
+  // 8. If time is present, no explicit date was specified, and time has already passed today -> tomorrow
+  if (extractedTime && !dateExplicit && extractedTime <= currentHHMM) {
+    extractedDate = tomorrowStr;
+  } else if (!extractedDate) {
+    extractedDate = todayStr;
+  }
+
+  return {
+    title: capitalizeFirst(working || text.trim()),
+    scheduled_date: extractedDate,
+    scheduled_time: extractedTime,
+  };
+};
+
 export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
   if (!parsed) return null;
   let rawList = null;
@@ -2160,11 +2394,6 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
     return null;
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
   const tasks = rawList
     .map((item, idx) => {
       if (!item) return null;
@@ -2173,22 +2402,30 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
         if (!rawTitle || isHallucinationOrNoise(rawTitle)) return null;
         if (/не удалось расшифровать|голосовая заметка \(не удалось/i.test(rawTitle)) return null;
 
-        const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|привычк/i.test(rawTitle);
+        const isRoutine = /каждый день|ежедневно|по утрам|по вечерам|каждое утро|каждый вечер|привычк/i.test(rawTitle);
         const isGoal = /цель|проект|хочу/i.test(rawTitle);
         const isGroc = isGroceryText(rawTitle);
-
-        let sched = todayStr;
-        if (/завтра/i.test(rawTitle)) sched = tomorrowStr;
-        if (isGroc || isRoutine) sched = null;
-
-        const title = isGroc ? cleanGroceryTitle(rawTitle) : capitalizeFirst(rawTitle);
         const cat = isGroc ? 'grocery' : isRoutine ? 'routine' : isGoal ? 'goal' : defaultCategory;
 
+        if (isGroc || isRoutine || isGoal) {
+          const title = isGroc ? cleanGroceryTitle(rawTitle) : capitalizeFirst(rawTitle);
+          return {
+            id: `task_${Date.now()}_${idx}`,
+            title,
+            category: cat,
+            scheduled_date: null,
+            scheduled_time: null,
+            selected: true,
+          };
+        }
+
+        const dtInfo = extractAndCleanDateTimeClient(rawTitle);
         return {
           id: `task_${Date.now()}_${idx}`,
-          title,
+          title: dtInfo.title,
           category: cat,
-          scheduled_date: sched,
+          scheduled_date: dtInfo.scheduled_date,
+          scheduled_time: dtInfo.scheduled_time,
           selected: true,
         };
       }
@@ -2205,12 +2442,17 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
         const isGroc = cat === 'grocery' || isGroceryText(rawTitle);
         let title = isGroc ? cleanGroceryTitle(rawTitle) : capitalizeFirst(rawTitle);
         let sched = item.scheduled_date || null;
+        let schedTime = normalizeTimeString(item.scheduled_time || item.time || null);
 
         if (isGroc) {
           cat = 'grocery';
           sched = null;
-        } else if (cat === 'one_time' && !sched) {
-          sched = todayStr;
+          schedTime = null;
+        } else if (cat === 'one_time' || cat === 'subtask') {
+          const dtInfo = extractAndCleanDateTimeClient(rawTitle, sched, schedTime);
+          title = dtInfo.title;
+          sched = dtInfo.scheduled_date;
+          schedTime = dtInfo.scheduled_time;
         }
 
         const goalTitle = item.goal_title ? capitalizeFirst(String(item.goal_title)) : null;
@@ -2219,6 +2461,7 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
           title,
           category: cat,
           scheduled_date: sched,
+          scheduled_time: schedTime,
           description: item.description || null,
           goal_title: goalTitle,
           goal_id: item.goal_id || null,
@@ -2226,6 +2469,9 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
           target_value: item.target_value !== undefined && item.target_value !== null ? Number(item.target_value) : null,
           step: item.step !== undefined && item.step !== null ? Number(item.step) : (item.target_value ? 1.0 : null),
           unit: item.unit ? String(item.unit) : null,
+          frequency_type: item.frequency_type || null,
+          interval_days: item.interval_days || null,
+          days_of_week: item.days_of_week || null,
           selected: item.selected !== false,
         };
       }
@@ -2240,37 +2486,44 @@ export const normalizeTasks = (parsed, defaultCategory = 'one_time') => {
 export const parseTextWithDirectGemini = async (text) => {
   const key = getGeminiKey();
   if (!key) return null;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const prompt = `Ты — интеллектуальный ассистент по планированию задач TaskerBot.
 Твоя задача — внимательно проанализировать текст пользователя и извлечь ВСЕ упомянутые задачи.
 Если в тексте несколько действий/задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
 Категории:
-1. "routine": регулярные привычки ("каждый день", "ежедневно", "утром")
-2. "one_time": разовые задачи ("завтра", "сегодня", "позвонить", "сделать", "купить ноутбук")
+1. "routine": регулярные привычки ("каждый день", "ежедневно", "по утрам")
+2. "one_time": разовые задачи ("завтра", "сегодня", "позвонить", "сделать", "купить ноутбук", "напомни мне в 7 вечера сходить полить цветы")
 3. "goal": глобальные цели ("цель", "проект")
 4. "grocery": продукты питания, напитки, еда, бытовая химия ("молоко", "хлеб", "сыр", "яйца", "в список продуктов", "купить в магазине")
 
 ВАЖНО:
-- Все продукты питания, еду, напитки и бытовую химию ВСЕГДА классифицируй как "grocery" со "scheduled_date": null!
+- Все продукты питания, еду, напитки и бытовую химию ВСЕГДА классифицируй как "grocery" со "scheduled_date": null и "scheduled_time": null!
 - Для категории "grocery" в поле "title" пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Сыр", "Хлеб")!
 - Разовые дела, услуги и покупку крупной техники ("купить ноутбук", "купить билеты") классифицируй как "one_time".
-- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Позвонить врачу", "Молоко 2 л")!
+- Если указано время ("в 7 вечера", "в 19:00", "утром в 9", "в полдень", "через 2 часа"), заполни "scheduled_time" в формате "HH:MM" (24ч, например "19:00", "09:00", "12:00"). Если время не указано — null.
+- Если дата явно не указана, но указано время ("scheduled_time"), которое уже прошло относительно текущего времени (${nowTimeStr}), ставь "scheduled_date" на завтра!
+- Очищай "title" от вводных фраз ("напомни мне", "нужно", "надо") и маркеров даты/времени ("в 7 вечера", "завтра"). Например: "напомни мне в 7 вечера сходить полить цветы" -> "title": "Сходить полить цветы", "scheduled_time": "19:00".
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы!
 
-Текущая дата: ${todayStr}.
+Текущая дата: ${todayStr}, текущее время: ${nowTimeStr}.
 Формат ответа строго валидный JSON с ключом "tasks".
-Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null}
+Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null, "scheduled_time": "HH:MM"|null}
 Пример структуры:
 {
   "tasks": [
     {
       "title": "Молоко 2 л",
       "category": "grocery",
-      "scheduled_date": null
+      "scheduled_date": null,
+      "scheduled_time": null
     },
     {
-      "title": "Позвонить врачу",
+      "title": "Сходить полить цветы",
       "category": "one_time",
-      "scheduled_date": "${todayStr}"
+      "scheduled_date": "${todayStr}",
+      "scheduled_time": "19:00"
     }
   ]
 }
@@ -2321,21 +2574,25 @@ ${text}`;
 export const parseTextWithDirectGroq = async (text) => {
   const key = getGroqKey();
   if (!key) return null;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const prompt = `Ты — интеллектуальный ассистент по планированию задач TaskerBot.
 Твоя задача — внимательно проанализировать текст пользователя и извлечь ВСЕ упомянутые задачи.
 Если в сообщении несколько задач, ОБЯЗАТЕЛЬНО разбей их на отдельные элементы массива "tasks"!
 Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели), "grocery" (продукты, напитки, еда, бытовая химия).
 
 ВАЖНО:
-- Все продукты питания, еду, напитки и бытовые товары ВСЕГДА относи к "grocery" со "scheduled_date": null!
+- Все продукты питания, еду, напитки и бытовые товары ВСЕГДА относи к "grocery" со "scheduled_date": null и "scheduled_time": null!
 - В поле "title" для продуктов пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Хлеб")!
-- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Позвонить врачу", "Молоко 2 л")!
+- Если указано время ("в 7 вечера", "в 19:00", "утром в 9", "через 2 часа"), укажи "scheduled_time": "HH:MM" (24ч, например "19:00"). Иначе null.
+- Очищай "title" от вводных слов ("напомни мне", "нужно") и маркеров даты/времени ("в 7 вечера", "завтра").
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы!
 
-Текущая дата: ${todayStr}.
+Текущая дата: ${todayStr}, текущее время: ${nowTimeStr}.
 Формат ответа: строгий JSON с ключом "tasks".
-Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null}
-Пример: {"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null}, {"category": "one_time", "title": "Позвонить врачу", "scheduled_date": "${todayStr}"}]}`;
+Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null, "scheduled_time": "HH:MM"|null}
+Пример: {"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null, "scheduled_time": null}, {"category": "one_time", "title": "Сходить полить цветы", "scheduled_date": "${todayStr}", "scheduled_time": "19:00"}]}`;
 
   for (const model of GROQ_CHAT_MODELS) {
     try {
@@ -2396,7 +2653,9 @@ export const parseTextWithDirectGroq = async (text) => {
 export const parseAudioWithDirectGemini = async (audioBlob) => {
   const key = getGeminiKey();
   if (!key) return null;
-  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
   const base64Audio = await new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -2416,9 +2675,10 @@ export const parseAudioWithDirectGemini = async (audioBlob) => {
 Внимательно прослушай аудиозапись пользователя, транскрибируй её и извлеки ВСЕ задачи.
 Если сказано несколько действий, разбей их на отдельные задачи в массиве "tasks".
 Категории: "routine" (привычки), "one_time" (разовые задачи), "goal" (цели), "grocery" (продукты, напитки, еда, бытовая химия).
-Текущая дата: ${todayStr}.
+Если указано время ("в 7 вечера", "в 19:00"), заполни "scheduled_time": "HH:MM" (24ч) и очисти "title" от вводных фраз ("напомни мне") и маркеров даты/времени.
+Текущая дата: ${todayStr}, текущее время: ${nowTimeStr}.
 Формат ответа: строгий валидный JSON с ключом "tasks".
-Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "название задачи", "scheduled_date": "YYYY-MM-DD"|null}`;
+Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "название задачи", "scheduled_date": "YYYY-MM-DD"|null, "scheduled_time": "HH:MM"|null}`;
 
   for (const model of GEMINI_MODELS) {
     try {
@@ -2523,10 +2783,12 @@ export const parseTextWithDirectOpenRouter = async (text) => {
   const openRouterKey = getOpenRouterKey();
   if (!openRouterKey) return null;
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const systemPrompt = `Ты — интеллектуальный ассистент по планированию задач TaskerBot.
 Твоя задача — извлечь ВСЕ упомянутые задачи из текста пользователя.
-Текущая дата: ${todayStr}.
+Текущая дата: ${todayStr}, текущее время: ${nowTimeStr}.
 Категории:
 - routine: регулярные ежедневные дела (каждый день, по утрам)
 - one_time: разовые дела (сегодня, завтра, в пятницу, купить ноутбук)
@@ -2535,12 +2797,13 @@ export const parseTextWithDirectOpenRouter = async (text) => {
 - grocery: продукты питания, напитки, еда, бытовая химия (молоко, хлеб, яйца)
 
 ВАЖНО:
-- Все продукты питания, еду, напитки и бытовую химию ВСЕГДА классифицируй как "grocery" со "scheduled_date": null!
+- Все продукты питания, еду, напитки и бытовую химию ВСЕГДА классифицируй как "grocery" со "scheduled_date": null и "scheduled_time": null!
 - В названии "title" для продуктов пиши только сам продукт без слова "Купить" (например: "Молоко 2 л", "Хлеб")!
-- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы (например: "Позвонить врачу", "Молоко 2 л", "Сделать зарядку")!
+- Если указано время ("в 7 вечера", "в 19:00", "утром в 9"), укажи "scheduled_time": "HH:MM" (24ч) и очисти "title" от вводных фраз ("напомни мне") и маркеров даты/времени.
+- Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы!
 
 Верни ответ СТРОГО в формате JSON с ключом "tasks":
-{"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null}, {"category": "one_time", "title": "Позвонить врачу", "scheduled_date": "YYYY-MM-DD"}]}`;
+{"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null, "scheduled_time": null}, {"category": "one_time", "title": "Сходить полить цветы", "scheduled_date": "YYYY-MM-DD", "scheduled_time": "19:00"}]}`;
 
   for (const model of OPENROUTER_FREE_MODELS) {
     try {
@@ -2683,9 +2946,6 @@ export const parseSmartText = async (text, provider = null) => {
 
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
   const tasks = rawChunks.map((chunk, idx) => {
     const lower = chunk.toLowerCase();
@@ -2693,37 +2953,52 @@ export const parseSmartText = async (text, provider = null) => {
     const isGoal = /цель|проект|хочу/i.test(lower);
     const isGroc = isGroceryText(chunk);
 
-    let schedDate = todayStr;
-    if (/завтра/i.test(lower)) schedDate = tomorrowStr;
-    if (isGroc || isRoutine) schedDate = null;
-
-    let cleanTitle;
     if (isGroc) {
-      cleanTitle = cleanGroceryTitle(chunk);
-    } else {
-      cleanTitle = capitalizeFirst(
-        chunk
-          .replace(/^(?:завтра|сегодня|послезавтра|надо|нужно|каждый день|ежедневно|цель:?|проект:?)\s*/i, '')
-          .replace(/\b(?:завтра|послезавтра)\b/gi, '')
-          .trim()
-      );
+      return {
+        id: `task_${Date.now()}_${idx}`,
+        title: cleanGroceryTitle(chunk),
+        category: 'grocery',
+        scheduled_date: null,
+        scheduled_time: null,
+        selected: true,
+      };
     }
 
+    if (isRoutine || isGoal) {
+      const cleanTitle = capitalizeFirst(
+        chunk
+          .replace(/^(?:завтра|сегодня|послезавтра|надо|нужно|каждый день|ежедневно|цель:?|проект:?)\s*/i, '')
+          .trim()
+      );
+      return {
+        id: `task_${Date.now()}_${idx}`,
+        title: cleanTitle || capitalizeFirst(chunk),
+        category: isRoutine ? 'routine' : 'goal',
+        scheduled_date: null,
+        scheduled_time: null,
+        selected: true,
+      };
+    }
+
+    const dtInfo = extractAndCleanDateTimeClient(chunk, null, null);
     return {
       id: `task_${Date.now()}_${idx}`,
-      title: cleanTitle || capitalizeFirst(chunk),
-      category: isGroc ? 'grocery' : isRoutine ? 'routine' : isGoal ? 'goal' : 'one_time',
-      scheduled_date: schedDate,
+      title: dtInfo.title || capitalizeFirst(chunk),
+      category: 'one_time',
+      scheduled_date: dtInfo.scheduled_date || todayStr,
+      scheduled_time: dtInfo.scheduled_time || null,
       selected: true,
     };
   });
 
   const isWholeTextGroc = isGroceryText(text);
+  const wholeDt = isWholeTextGroc ? null : extractAndCleanDateTimeClient(text, null, null);
   const defaultTask = {
     id: `task_${Date.now()}_0`,
-    title: isWholeTextGroc ? cleanGroceryTitle(text) : capitalizeFirst(text),
+    title: isWholeTextGroc ? cleanGroceryTitle(text) : (wholeDt?.title || capitalizeFirst(text)),
     category: isWholeTextGroc ? 'grocery' : 'one_time',
-    scheduled_date: isWholeTextGroc ? null : todayStr,
+    scheduled_date: isWholeTextGroc ? null : (wholeDt?.scheduled_date || todayStr),
+    scheduled_time: isWholeTextGroc ? null : (wholeDt?.scheduled_time || null),
     selected: true,
   };
 
