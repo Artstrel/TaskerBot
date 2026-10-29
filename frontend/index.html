@@ -29,6 +29,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://taskerbot-plp5.onrender.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Critical first-paint background: guarantees solid root color in safe-area zones before the CSS bundle loads -->
+    <style>
+      html, body { background-color: #0d0d0d; }
+      html[data-theme="light"], html[data-theme="light"] body { background-color: #f4f4f6; }
+      html[data-theme="dark"], html[data-theme="dark"] body { background-color: #0d0d0d; }
+    </style>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
       (function() {

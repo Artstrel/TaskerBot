@@ -130,6 +130,24 @@ export function resolveEffectiveTheme(config = currentConfig, timezone = current
 }
 
 /**
+ * Push the current theme color to Telegram native chrome (header, background, bottom bar).
+ * Idempotent; re-invoked on Telegram lifecycle events because the native client may reset
+ * these colors after viewport/fullscreen/activation transitions.
+ */
+function syncTelegramChromeColors(color = null) {
+  if (typeof window === 'undefined' || !window.Telegram?.WebApp) return;
+  const themeColor =
+    color ||
+    (document.documentElement.getAttribute('data-theme') === 'light' ? '#f4f4f6' : '#0d0d0d');
+  const tg = window.Telegram.WebApp;
+  try {
+    if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor(themeColor);
+    if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor(themeColor);
+    if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(themeColor);
+  } catch (_) {}
+}
+
+/**
  * Apply the theme to documentElement and sync with Telegram WebApp
  */
 export function applyTheme(config = null, timezone = null) {
@@ -173,20 +191,7 @@ export function applyTheme(config = null, timezone = null) {
       metaThemeColors.forEach((m) => m.setAttribute('content', themeColor));
     }
 
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-      const tg = window.Telegram.WebApp;
-      try {
-        if (typeof tg.setHeaderColor === 'function') {
-          tg.setHeaderColor(themeColor);
-        }
-        if (typeof tg.setBackgroundColor === 'function') {
-          tg.setBackgroundColor(themeColor);
-        }
-        if (typeof tg.setBottomBarColor === 'function') {
-          tg.setBottomBarColor(themeColor);
-        }
-      } catch (_) {}
-    }
+    syncTelegramChromeColors(themeColor);
 
     if (prevTheme !== effectiveTheme && typeof window !== 'undefined') {
       window.dispatchEvent(
@@ -229,6 +234,11 @@ export function initTheme(initialTimezone = null) {
         if (currentConfig.mode === 'auto' && !currentConfig.scheduleEnabled) {
           applyTheme();
         }
+      });
+    } catch (_) {}
+    try {
+      ['viewportChanged', 'fullscreenChanged', 'safeAreaChanged', 'activated'].forEach((evt) => {
+        window.Telegram.WebApp.onEvent(evt, () => syncTelegramChromeColors());
       });
     } catch (_) {}
   }
