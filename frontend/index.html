@@ -27,10 +27,17 @@
     <meta name="twitter:image" content="/brand-avatar.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://taskerbot-plp5.onrender.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
       (function() {
+        try {
+          // Early non-blocking Render backend warmup at HTML head parse stage when hosted on GitHub Pages CDN
+          if (window.location.hostname.indexOf('github.io') !== -1 && window.fetch) {
+            window.fetch('https://taskerbot-plp5.onrender.com/api/health', { mode: 'cors', cache: 'no-store' }).catch(function() {});
+          }
+        } catch (_) {}
         try {
           var mode = localStorage.getItem('tasker_theme_mode') || 'auto';
           var theme = 'dark';

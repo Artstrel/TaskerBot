@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     WHISPER_CPP_URL: str = "http://127.0.0.1:8080"
     WHISPER_CPP_ENABLED: bool = True
     DATABASE_URL: str = f"sqlite+aiosqlite:///{DATA_DIR}/taskerbot.db"
-    WEBAPP_URL: str = "https://taskerbot-plp5.onrender.com"  # Telegram WebApp HTTPS URL
+    WEBAPP_URL: str = "https://artstrel.github.io/TaskerBot"  # Telegram WebApp HTTPS URL (GitHub Pages CDN)
+    RENDER_BACKEND_URL: str = "https://taskerbot-plp5.onrender.com"  # Render Backend API URL for keep-alive
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
@@ -33,11 +34,13 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_webapp_url(cls, v: str) -> str:
         if v and v.strip():
-            return v.strip().rstrip("/")
-        render_url = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
-        if render_url:
-            return render_url
-        return "https://taskerbot-plp5.onrender.com"
+            cleaned = v.strip().rstrip("/")
+            # Automatically migrate legacy direct Render WebApp URL to GitHub Pages CDN
+            # to hide Render cold start screens and unify browser localStorage/JWT origin
+            if "taskerbot-plp5.onrender.com" in cleaned:
+                return "https://artstrel.github.io/TaskerBot"
+            return cleaned
+        return "https://artstrel.github.io/TaskerBot"
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

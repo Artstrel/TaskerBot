@@ -18,6 +18,8 @@ services:
       - key: DATABASE_URL
         sync: false
       - key: WEBAPP_URL
+        value: https://artstrel.github.io/TaskerBot
+      - key: RENDER_BACKEND_URL
         value: https://taskerbot-plp5.onrender.com
       - key: TELEGRAM_OIDC_CLIENT_ID
         sync: false

@@ -193,59 +193,257 @@ if (typeof window !== 'undefined' && window.fetch) {
   };
 }
 
-export const getTelegramAuthUrl = async (redirectUri) => {
-  const uri = redirectUri || `${window.location.origin}/auth/callback`;
-  const url = `${API_BASE}/auth/telegram/url?redirect_uri=${encodeURIComponent(uri)}`;
-  let res;
-  try {
-    res = await fetch(url, { credentials: 'include' });
-  } catch (netErr) {
-    throw new Error(`Не удалось связаться с сервером (${API_BASE}): ${netErr.message || 'сеть недоступна'}. Убедитесь, что бэкенд запущен.`);
-  }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    if (res.status === 404) {
-      throw new Error(`Эндпоинт ${url} не найден (HTTP 404). Проверьте URL бэкенда.`);
-    }
-    throw new Error(err.detail || `Ошибка сервера (HTTP ${res.status}): не удалось сформировать ссылку Telegram`);
-  }
-  const data = await res.json();
+export const DEFAULT_RENDER_BACKEND =
+  import.meta.env.VITE_RENDER_BACKEND_URL || 'https://taskerbot-plp5.onrender.com';
+
+export const getTelegramClientId = () => {
   if (typeof window !== 'undefined') {
-    if (data?.code_verifier) {
-      sessionStorage.setItem('tg_code_verifier', data.code_verifier);
-      localStorage.setItem('tg_code_verifier', data.code_verifier);
-      localStorage.setItem('tg_code_verifier_time', Date.now().toString());
-    }
-    if (data?.state) {
-      sessionStorage.setItem('tg_oauth_state', data.state);
-      localStorage.setItem('tg_oauth_state', data.state);
-    }
+    const cached = localStorage.getItem('tasker_tg_client_id');
+    if (cached && /^\d+$/.test(cached)) return cached;
   }
-  return data;
+  return import.meta.env.VITE_TELEGRAM_CLIENT_ID || '8987055615';
 };
 
-export const exchangeTelegramAuthCode = async (code, state, redirectUri, explicitVerifier) => {
-  const uri = redirectUri || `${window.location.origin}/auth/callback`;
+export const getAppBasePath = () => {
+  if (typeof window !== 'undefined') {
+    const base = import.meta.env.BASE_URL || '/';
+    if (base && base !== '/' && base.length > 1) {
+      return base.replace(/\/+$/, '');
+    }
+    if (window.location.pathname.startsWith('/TaskerBot')) {
+      return '/TaskerBot';
+    }
+  }
+  return '';
+};
+
+export const getAppHomeUrl = () => {
+  const base = getAppBasePath();
+  return base ? `${base}/` : '/';
+};
+
+export const getDefaultRedirectUri = () => {
+  if (typeof window === 'undefined') return '';
+  const base = getAppBasePath();
+  return `${window.location.origin}${base}/auth/callback`;
+};
+
+const toBase64Url = (bytes) => {
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+export const buildClientTelegramAuthUrl = async (redirectUri) => {
+  const uri = (redirectUri || getDefaultRedirectUri()).trim().replace(/\/+$/, '');
+  const verifierBytes = new Uint8Array(48);
+  const stateBytes = new Uint8Array(24);
+  window.crypto.getRandomValues(verifierBytes);
+  window.crypto.getRandomValues(stateBytes);
+
+  const codeVerifier = toBase64Url(verifierBytes);
+  const state = toBase64Url(stateBytes);
+
+  const digest = await window.crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(codeVerifier)
+  );
+  const codeChallenge = toBase64Url(new Uint8Array(digest));
+  const clientId = getTelegramClientId();
+
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('tg_code_verifier', codeVerifier);
+    localStorage.setItem('tg_code_verifier', codeVerifier);
+    localStorage.setItem('tg_code_verifier_time', Date.now().toString());
+    sessionStorage.setItem('tg_oauth_state', state);
+    localStorage.setItem('tg_oauth_state', state);
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: uri,
+    response_type: 'code',
+    scope: 'openid profile',
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+  });
+
+  return {
+    auth_url: `https://oauth.telegram.org/auth?${params.toString()}`,
+    state,
+    code_verifier: codeVerifier,
+    source: 'client_pkce',
+  };
+};
+
+let _wakePromise = null;
+
+export const wakeBackend = () => {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (_wakePromise) return _wakePromise;
+
+  _wakePromise = (async () => {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        const res = await fetch(`${API_BASE}/health`, {
+          method: 'GET',
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        clearTimeout(timer);
+        if (res.ok) {
+          window.__tasker_server_connected = true;
+          const data = await res.json().catch(() => null);
+          if (data?.client_id) {
+            localStorage.setItem('tasker_tg_client_id', String(data.client_id));
+          }
+          _wakePromise = null;
+          return true;
+        }
+      } catch (_) {}
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    _wakePromise = null;
+    return false;
+  })();
+
+  return _wakePromise;
+};
+
+export const waitForBackendReady = async ({ maxWaitMs = 55000, onWarmingUp } = {}) => {
+  if (typeof window === 'undefined') return true;
+  const start = Date.now();
+  let notifiedWarming = false;
+
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+      const res = await fetch(`${API_BASE}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        window.__tasker_server_connected = true;
+        const data = await res.json().catch(() => null);
+        if (data?.client_id) {
+          localStorage.setItem('tasker_tg_client_id', String(data.client_id));
+        }
+        return true;
+      }
+    } catch (_) {}
+
+    if (!notifiedWarming) {
+      notifiedWarming = true;
+      if (typeof onWarmingUp === 'function') {
+        try {
+          onWarmingUp();
+        } catch (_) {}
+      }
+    }
+    await new Promise((r) => setTimeout(r, 2200));
+  }
+  return false;
+};
+
+export const getTelegramAuthUrl = async (redirectUri) => {
+  const uri = (redirectUri || getDefaultRedirectUri()).trim().replace(/\/+$/, '');
+  const url = `${API_BASE}/auth/telegram/url?redirect_uri=${encodeURIComponent(uri)}`;
+
+  // Trigger non-blocking background wake-up immediately
+  wakeBackend().catch(() => {});
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2200);
+    const res = await fetch(url, {
+      credentials: 'include',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (typeof window !== 'undefined') {
+        if (data?.code_verifier) {
+          sessionStorage.setItem('tg_code_verifier', data.code_verifier);
+          localStorage.setItem('tg_code_verifier', data.code_verifier);
+          localStorage.setItem('tg_code_verifier_time', Date.now().toString());
+        }
+        if (data?.state) {
+          sessionStorage.setItem('tg_oauth_state', data.state);
+          localStorage.setItem('tg_oauth_state', data.state);
+        }
+      }
+      return data;
+    }
+  } catch (_) {
+    // Backend is in cold start — fall back to instant 0ms client-side RFC 7636 PKCE generation
+    // while wakeBackend() continues spinning up Render in the background
+  }
+
+  return await buildClientTelegramAuthUrl(uri);
+};
+
+export const exchangeTelegramAuthCode = async (
+  code,
+  state,
+  redirectUri,
+  explicitVerifier,
+  onStatusChange
+) => {
+  const uri = (redirectUri || getDefaultRedirectUri()).trim().replace(/\/+$/, '');
   const url = `${API_BASE}/auth/telegram/exchange`;
   let codeVerifier = explicitVerifier;
   if (!codeVerifier && typeof window !== 'undefined') {
-    codeVerifier = localStorage.getItem('tg_code_verifier') || sessionStorage.getItem('tg_code_verifier');
+    codeVerifier =
+      localStorage.getItem('tg_code_verifier') || sessionStorage.getItem('tg_code_verifier');
   }
+
+  // Gate single-use OAuth authorization code until /api/health confirms container is awake
+  await waitForBackendReady({
+    maxWaitMs: 60000,
+    onWarmingUp: () => {
+      if (typeof onStatusChange === 'function') onStatusChange('warming_up');
+    },
+  });
+
+  if (typeof onStatusChange === 'function') onStatusChange('exchanging');
+
   let res;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        code,
-        state,
-        redirect_uri: uri,
-        code_verifier: codeVerifier || undefined,
-      }),
-    });
-  } catch (netErr) {
-    throw new Error(`Не удалось связаться с сервером для обмена токенов: ${netErr.message || 'сеть недоступна'}`);
+  let lastNetErr = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          code,
+          state,
+          redirect_uri: uri,
+          code_verifier: codeVerifier || undefined,
+        }),
+      });
+      if (res.status !== 502 && res.status !== 503 && res.status !== 504) {
+        break;
+      }
+    } catch (netErr) {
+      lastNetErr = netErr;
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+
+  if (!res) {
+    throw new Error(
+      `Не удалось связаться с сервером для обмена токенов: ${lastNetErr?.message || 'сеть недоступна'}`
+    );
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -266,28 +464,36 @@ export const exchangeTelegramAuthCode = async (code, state, redirectUri, explici
 export const authenticateWithTelegramWebApp = async (initData) => {
   if (!initData) return null;
   const url = `${API_BASE}/auth/telegram/webapp`;
-  let res;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ init_data: initData }),
-    });
-  } catch (netErr) {
-    console.warn('Telegram WebApp auth network error:', netErr);
-    return null;
+
+  await waitForBackendReady({ maxWaitMs: 55000 });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ init_data: initData }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAuthSession(data.access_token, data.user);
+        return data;
+      }
+      if (res.status < 500) {
+        console.warn(`Telegram WebApp auth returned HTTP ${res.status}`);
+        return null;
+      }
+    } catch (netErr) {
+      console.warn('Telegram WebApp auth network error:', netErr);
+    }
+    await new Promise((r) => setTimeout(r, 2500));
   }
-  if (!res.ok) {
-    console.warn(`Telegram WebApp auth returned HTTP ${res.status}`);
-    return null;
-  }
-  const data = await res.json();
-  setAuthSession(data.access_token, data.user);
-  return data;
+  return null;
 };
 
 export const exchangeTelegramWidgetAuth = async (userData) => {
   const url = `${API_BASE}/auth/telegram/widget`;
+  await waitForBackendReady({ maxWaitMs: 55000 });
   let res;
   try {
     res = await fetch(url, {
@@ -309,6 +515,7 @@ export const exchangeTelegramWidgetAuth = async (userData) => {
 
 export const authenticateWithTelegramIdToken = async (idToken) => {
   const url = `${API_BASE}/auth/telegram/id-token`;
+  await waitForBackendReady({ maxWaitMs: 55000 });
   let res;
   try {
     res = await fetch(url, {
@@ -330,6 +537,7 @@ export const authenticateWithTelegramIdToken = async (idToken) => {
 
 export const devLogin = async (customId, firstName, username) => {
   const url = `${API_BASE}/auth/dev-login?telegram_id=${customId || 123456789}&first_name=${encodeURIComponent(firstName || 'Разработчик')}&username=${encodeURIComponent(username || 'dev_user')}`;
+  await waitForBackendReady({ maxWaitMs: 55000 });
   let res;
   try {
     res = await fetch(url, { method: 'POST' });
@@ -372,12 +580,15 @@ export const setCustomBackendUrl = (url) => {
 };
 export const getApiBase = () => {
   if (typeof window !== 'undefined') {
-    if (import.meta.env.VITE_API_BASE) {
-      return import.meta.env.VITE_API_BASE.replace(/\/+$/, '');
-    }
     const custom = getCustomBackendUrl();
     if (custom) {
       return custom.replace(/\/+$/, '') + '/api';
+    }
+    if (import.meta.env.VITE_API_BASE) {
+      return import.meta.env.VITE_API_BASE.replace(/\/+$/, '');
+    }
+    if (window.location.hostname.endsWith('.github.io')) {
+      return `${DEFAULT_RENDER_BACKEND.replace(/\/+$/, '')}/api`;
     }
   }
   return '/api';

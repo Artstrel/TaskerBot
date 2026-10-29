@@ -125,7 +125,7 @@ async def get_telegram_auth_url(redirect_uri: str = Query(...), response: Respon
             value=verifier,
             max_age=900,
             httponly=True,
-            samesite="lax",
+            samesite="none",
             secure=True,
             path="/",
         )
@@ -134,7 +134,7 @@ async def get_telegram_auth_url(redirect_uri: str = Query(...), response: Respon
             value=state,
             max_age=900,
             httponly=True,
-            samesite="lax",
+            samesite="none",
             secure=True,
             path="/",
         )

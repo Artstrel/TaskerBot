@@ -12,7 +12,18 @@ import {
   Clock,
 } from 'lucide-react';
 import BarVisualizer from './BarVisualizer';
-import { getTelegramAuthUrl, exchangeTelegramWidgetAuth, authenticateWithTelegramIdToken, devLogin, setDemoMode, hapticFeedback } from '../api';
+import {
+  getTelegramAuthUrl,
+  buildClientTelegramAuthUrl,
+  exchangeTelegramWidgetAuth,
+  authenticateWithTelegramIdToken,
+  devLogin,
+  setDemoMode,
+  hapticFeedback,
+  getDefaultRedirectUri,
+  getAppHomeUrl,
+  wakeBackend,
+} from '../api';
 import { LOGIN_CONTENT } from '../constants/loginContent';
 import brandAvatar from '../assets/brand-avatar.png';
 
@@ -150,6 +161,35 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
   const [errorMessage, setErrorMessage] = useState(null);
   const [showDevPanel, setShowDevPanel] = useState(false);
   const timerRef = useRef(null);
+  const preloadedAuthRef = useRef(null);
+
+  // Pre-warm Render backend and pre-generate OAuth PKCE URL on LoginScreen mount
+  // so clicking "Войти через Telegram" redirects in 0ms even during Render cold start.
+  useEffect(() => {
+    let active = true;
+    const redirectUri = getDefaultRedirectUri();
+    wakeBackend().catch(() => {});
+
+    buildClientTelegramAuthUrl(redirectUri)
+      .then((clientData) => {
+        if (active && !preloadedAuthRef.current) {
+          preloadedAuthRef.current = clientData;
+        }
+      })
+      .catch(() => {});
+
+    getTelegramAuthUrl(redirectUri)
+      .then((serverData) => {
+        if (active && serverData?.auth_url) {
+          preloadedAuthRef.current = serverData;
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const goToSlide = useCallback((index, dir = 1) => {
     setSlideDirection(dir);
@@ -202,7 +242,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             if (onLoginSuccess) {
               onLoginSuccess(data.user);
             } else {
-              window.location.replace('/');
+              window.location.replace(getAppHomeUrl());
             }
             return;
           }
@@ -212,7 +252,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             if (onLoginSuccess) {
               onLoginSuccess(data.user);
             } else {
-              window.location.replace('/');
+              window.location.replace(getAppHomeUrl());
             }
             return;
           }
@@ -221,7 +261,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             if (onLoginSuccess) {
               onLoginSuccess(msg.result.user);
             } else {
-              window.location.replace('/');
+              window.location.replace(getAppHomeUrl());
             }
             return;
           }
@@ -231,7 +271,7 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             if (onLoginSuccess) {
               onLoginSuccess(data.user);
             } else {
-              window.location.replace('/');
+              window.location.replace(getAppHomeUrl());
             }
             return;
           }
@@ -250,10 +290,23 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
     hapticFeedback('medium');
     setIsLoading(true);
     setErrorMessage(null);
+    wakeBackend().catch(() => {});
+
     try {
-      const redirectUri = `${window.location.origin}/auth/callback`;
-      const data = await getTelegramAuthUrl(redirectUri);
+      const redirectUri = getDefaultRedirectUri();
+      const data = preloadedAuthRef.current || (await getTelegramAuthUrl(redirectUri));
       if (data?.auth_url) {
+        if (typeof window !== 'undefined') {
+          if (data.code_verifier) {
+            sessionStorage.setItem('tg_code_verifier', data.code_verifier);
+            localStorage.setItem('tg_code_verifier', data.code_verifier);
+            localStorage.setItem('tg_code_verifier_time', Date.now().toString());
+          }
+          if (data.state) {
+            sessionStorage.setItem('tg_oauth_state', data.state);
+            localStorage.setItem('tg_oauth_state', data.state);
+          }
+        }
         const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
         if (isDesktop) {
           const width = 540;
@@ -266,12 +319,18 @@ export default function LoginScreen({ onLoginSuccess, onEnterDemo }) {
             `width=${width},height=${height},left=${left},top=${top},status=0,toolbar=0,location=1`
           );
           if (popup && !popup.closed) {
+            // Refresh preloaded PKCE state for any subsequent login attempts
+            buildClientTelegramAuthUrl(redirectUri)
+              .then((next) => {
+                preloadedAuthRef.current = next;
+              })
+              .catch(() => {});
             return;
           }
         }
         window.location.href = data.auth_url;
       } else {
-        throw new Error('Не получен URL авторизации от бэкенда');
+        throw new Error('Не получен URL авторизации');
       }
     } catch (err) {
       console.error('Telegram login initiation error:', err);

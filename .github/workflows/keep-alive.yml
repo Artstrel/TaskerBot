@@ -2,41 +2,45 @@ name: Render Service Keep-Alive
 
 on:
   schedule:
-    # Run every 10 minutes (Render free instances sleep after 15 minutes of inactivity)
-    - cron: '*/10 * * * *'
+    # Run every 5 minutes (minimum GitHub Actions interval to absorb runner queue jitter before Render's 15m idle cutoff)
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
   ping-service:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Ping TaskerBot Health Endpoint
+      - name: Ping TaskerBot Health Endpoint with Cold-Start Retry
         env:
-          SERVICE_URL: 'https://taskerbot-plp5.onrender.com'
+          SERVICE_URL: ${{ secrets.RENDER_SERVICE_URL || vars.RENDER_SERVICE_URL || 'https://taskerbot-plp5.onrender.com' }}
         run: |
-          if [ -z "$SERVICE_URL" ]; then
-            echo "❌ ERROR: RENDER_SERVICE_URL is not set!"
-            echo "ℹ️ Please add your Render Web Service URL to GitHub Secrets:"
-            echo "   Go to GitHub Repository -> Settings -> Secrets and variables -> Actions -> New repository secret"
-            echo "   Name: RENDER_SERVICE_URL"
-            echo "   Value: https://your-taskerbot-name.onrender.com"
-            exit 1
-          fi
-
-          # Strip trailing slash if present
           CLEAN_URL="${SERVICE_URL%/}"
-          echo "Pinging $CLEAN_URL/health to keep container active and background scheduler running..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "$CLEAN_URL/health" || true)
-          echo "Response HTTP Status: $HTTP_STATUS"
+          echo "Pinging $CLEAN_URL/health to keep Render container and background scheduler active..."
 
-          if [ "$HTTP_STATUS" = "200" ]; then
-            echo "✅ TaskerBot server is active, healthy, and awake!"
-          else
-            echo "⚠️ Server ping responded with code $HTTP_STATUS (attempting /api/health fallback)..."
-            ALT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "$CLEAN_URL/api/health" || true)
-            if [ "$ALT_STATUS" = "200" ]; then
-              echo "✅ TaskerBot API is active and awake!"
-            else
-              echo "⚠️ Server status: $ALT_STATUS (service may be waking up from sleep)"
+          for attempt in 1 2 3 4; do
+            HTTP_STATUS=$(curl -s -L -o /tmp/health_resp.json -w "%{http_code}" \
+              --connect-timeout 15 \
+              --max-time 45 \
+              -H "User-Agent: TaskerBot-GitHubActions-KeepAlive/2.0" \
+              "$CLEAN_URL/health" || echo "000")
+
+            echo "Attempt #$attempt -> HTTP Status: $HTTP_STATUS"
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ TaskerBot server and DB pool are awake: $(cat /tmp/health_resp.json 2>/dev/null || true)"
+              exit 0
             fi
+
+            echo "⏳ Container may be in cold start, waiting 8s before retry..."
+            sleep 8
+          done
+
+          echo "⚠️ Final fallback ping to $CLEAN_URL/api/health..."
+          ALT_STATUS=$(curl -s -L -o /dev/null -w "%{http_code}" --max-time 45 "$CLEAN_URL/api/health" || echo "000")
+          if [ "$ALT_STATUS" = "200" ]; then
+            echo "✅ TaskerBot API is active and awake!"
+            exit 0
           fi
+
+          echo "⚠️ Server responded with status $ALT_STATUS after retries."
+          exit 0

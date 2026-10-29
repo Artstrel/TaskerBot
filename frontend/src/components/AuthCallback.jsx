@@ -2,23 +2,31 @@ import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowLeft, RotateCw } from 'lucide-react';
 import Mascot from './Mascot';
-import { exchangeTelegramAuthCode, exchangeTelegramWidgetAuth, hapticFeedback, isAuthenticated } from '../api';
+import {
+  exchangeTelegramAuthCode,
+  exchangeTelegramWidgetAuth,
+  hapticFeedback,
+  isAuthenticated,
+  getDefaultRedirectUri,
+  getAppHomeUrl,
+} from '../api';
 
 export default function AuthCallback({ onLoginSuccess, onCancel }) {
-  const [status, setStatus] = useState('processing'); // 'processing' | 'success' | 'error'
+  const [status, setStatus] = useState('processing'); // 'processing' | 'warming_up' | 'success' | 'error'
   const [errorMessage, setErrorMessage] = useState(null);
   const hasExecutedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
+    const homeUrl = getAppHomeUrl();
 
     // If session is already established (e.g. from previous successful exchange or refresh), redirect immediately
     if (isAuthenticated()) {
-      window.history.replaceState({}, document.title, '/');
+      window.history.replaceState({}, document.title, homeUrl);
       if (onLoginSuccess) {
         onLoginSuccess();
       } else {
-        window.location.replace('/');
+        window.location.replace(homeUrl);
       }
       return;
     }
@@ -78,14 +86,27 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
         if (widgetData) {
           result = await exchangeTelegramWidgetAuth(widgetData);
         } else if (code) {
-          const redirectUri = `${window.location.origin}/auth/callback`;
+          const redirectUri = getDefaultRedirectUri();
           const savedVerifier = typeof window !== 'undefined'
             ? (localStorage.getItem('tg_code_verifier') || sessionStorage.getItem('tg_code_verifier'))
             : null;
-          result = await exchangeTelegramAuthCode(code, state, redirectUri, savedVerifier);
+          result = await exchangeTelegramAuthCode(
+            code,
+            state,
+            redirectUri,
+            savedVerifier,
+            (nextStep) => {
+              if (!isMounted) return;
+              if (nextStep === 'warming_up') {
+                setStatus('warming_up');
+              } else if (nextStep === 'exchanging') {
+                setStatus('processing');
+              }
+            }
+          );
         } else {
           // If neither widget data nor OAuth code is present
-          window.history.replaceState({}, document.title, '/');
+          window.history.replaceState({}, document.title, homeUrl);
           if (onCancel) onCancel();
           return;
         }
@@ -95,8 +116,8 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
         hapticFeedback('success');
         setStatus('success');
 
-        // Immediately clean up URL in address bar to '/'
-        window.history.replaceState({}, document.title, '/');
+        // Immediately clean up URL in address bar to homeUrl
+        window.history.replaceState({}, document.title, homeUrl);
 
         // If opened inside popup, notify opener and close
         if (window.opener && typeof window.opener.postMessage === 'function') {
@@ -113,7 +134,7 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
           if (onLoginSuccess) {
             onLoginSuccess(result.user);
           } else {
-            window.location.replace('/');
+            window.location.replace(homeUrl);
           }
         }, 400);
       } catch (err) {
@@ -130,7 +151,7 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
     return () => {
       isMounted = false;
     };
-  }, [onLoginSuccess]);
+  }, [onLoginSuccess, onCancel]);
 
   return (
     <div className="login-screen-wrapper">
@@ -151,17 +172,21 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
           />
         </div>
 
-        {status === 'processing' && (
+        {(status === 'processing' || status === 'warming_up') && (
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-              Авторизация через Telegram...
+              {status === 'warming_up' ? 'Пробуждение облачного сервера...' : 'Авторизация через Telegram...'}
             </h2>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
-              Проверяем подтверждение входа и синхронизируем ваш профиль.
+              {status === 'warming_up'
+                ? 'Сервер выходит из спящего режима. Сессия откроется автоматически через несколько секунд.'
+                : 'Проверяем подтверждение входа и синхронизируем ваш профиль.'}
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', color: 'var(--text-tertiary)' }}>
               <RotateCw size={18} className="animate-spin" />
-              <span style={{ fontSize: '12px' }}>Обмен токенами безопасности...</span>
+              <span style={{ fontSize: '12px' }}>
+                {status === 'warming_up' ? 'Подключение к API TaskerBot...' : 'Обмен токенами безопасности...'}
+              </span>
             </div>
           </div>
         )}
@@ -193,11 +218,12 @@ export default function AuthCallback({ onLoginSuccess, onCancel }) {
               className="login-btn-telegram"
               style={{ width: '100%' }}
               onClick={() => {
-                window.history.replaceState({}, document.title, '/');
+                const homeUrl = getAppHomeUrl();
+                window.history.replaceState({}, document.title, homeUrl);
                 if (onCancel) {
                   onCancel();
                 } else {
-                  window.location.href = '/';
+                  window.location.href = homeUrl;
                 }
               }}
             >

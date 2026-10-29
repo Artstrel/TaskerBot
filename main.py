@@ -4,13 +4,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from sqlalchemy import text
 
 from backend.config import settings, BASE_DIR
-from backend.database import init_db
+from backend.database import init_db, AsyncSessionLocal
+from backend.auth import get_telegram_client_id
 from backend.scheduler import start_scheduler, scheduler
 from backend.api.routes import router as api_router
 from backend.bot.bot_instance import bot, dp
@@ -116,14 +118,47 @@ app.add_middleware(
 app.include_router(api_router)
 
 
-@app.get("/health")
-@app.get("/api/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health_check():
+    db_status = "ok"
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception:
+        db_status = "warming_up"
+
     return {
         "status": "ok",
         "service": "TaskerBot",
         "db": "postgresql" if "postgresql" in settings.DATABASE_URL else "sqlite",
+        "db_status": db_status,
+        "client_id": get_telegram_client_id(),
+        "webapp_url": settings.WEBAPP_URL,
     }
+
+
+def _build_github_pages_redirect_html(target_base: str) -> str:
+    clean_base = target_base.rstrip("/")
+    return f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TaskerBot</title>
+<style>html,body{{background:#0d0d0d;color:#fff;margin:0;padding:0;height:100%;}}</style>
+<script>
+(function(){{
+  var base = "{clean_base}";
+  var path = window.location.pathname.replace(/^\\/TaskerBot\\/?/, "/");
+  if (path === "/") path = "";
+  var dest = base + path + window.location.search + window.location.hash;
+  window.location.replace(dest);
+}})();
+</script>
+</head>
+<body></body>
+</html>"""
 
 
 # Mount Frontend static files if built
@@ -132,7 +167,7 @@ if frontend_dist.exists() and (frontend_dist / "index.html").exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_dist / "assets")), name="assets")
 
     @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
+    async def serve_spa(full_path: str, request: Request):
         # Don't intercept API routes
         if full_path.startswith("api"):
             return None
@@ -143,17 +178,32 @@ if frontend_dist.exists() and (frontend_dist / "index.html").exists():
             if candidate_asset.is_file():
                 return FileResponse(candidate_asset)
         file_path = frontend_dist / full_path
-        if file_path.is_file():
+        if full_path and file_path.is_file():
             return FileResponse(file_path)
+
+        # Unify browser session domain: if accessed directly via *.onrender.com in a browser,
+        # redirect to GitHub Pages CDN while preserving pathname, search query, and #hash (tgWebAppData / tgAuthResult)
+        host = (request.headers.get("host") or "").lower()
+        no_redirect = request.query_params.get("no_redirect") == "1"
+        if "onrender.com" in host and not no_redirect and "github.io" in settings.WEBAPP_URL:
+            return HTMLResponse(content=_build_github_pages_redirect_html(settings.WEBAPP_URL))
+
         return FileResponse(frontend_dist / "index.html")
 else:
-    @app.get("/")
-    async def index_root():
+    @app.get("/{full_path:path}")
+    async def index_root(full_path: str, request: Request):
+        if full_path.startswith("api"):
+            return None
+        host = (request.headers.get("host") or "").lower()
+        no_redirect = request.query_params.get("no_redirect") == "1"
+        if "onrender.com" in host and not no_redirect and "github.io" in settings.WEBAPP_URL:
+            return HTMLResponse(content=_build_github_pages_redirect_html(settings.WEBAPP_URL))
         return {
             "status": "TaskerBot API is running",
             "docs": "/docs",
             "webapp_built": False,
-            "message": "Frontend is building or not compiled to dist yet. Access /docs for API.",
+            "webapp_url": settings.WEBAPP_URL,
+            "message": "Frontend is hosted on GitHub Pages CDN. Access /docs for API.",
         }
 
 

@@ -1,12 +1,15 @@
 import html
 import logging
+import os
 from datetime import datetime, date, timedelta
 from typing import Dict, Set, List, Optional
 
+import httpx
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select, and_, update, delete
 from sqlalchemy.orm import selectinload
 
+from backend.config import settings
 from backend.database import AsyncSessionLocal
 from backend.models import User, RoutineTask, RoutineLog, Goal, OneTimeTask, SentNotification
 from backend.crud import (
@@ -550,6 +553,26 @@ async def check_user_reminders_and_rollover():
         logger.error(f"Error in check_user_reminders_and_rollover: {e}", exc_info=True)
 
 
+async def keep_alive_self_ping():
+    """Periodic external HTTP self-ping to prevent Render container idle spin-down and keep DB pool warm."""
+    target_url = (
+        os.getenv("RENDER_EXTERNAL_URL")
+        or getattr(settings, "RENDER_BACKEND_URL", "")
+        or "https://taskerbot-plp5.onrender.com"
+    ).strip().rstrip("/")
+    if not target_url.startswith("http"):
+        return
+    try:
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            resp = await client.get(
+                f"{target_url}/health",
+                headers={"User-Agent": "TaskerBot-Internal-KeepAlive/1.0"},
+            )
+            logger.debug(f"Keep-alive self-ping to {target_url}/health status={resp.status_code}")
+    except Exception as e:
+        logger.debug(f"Keep-alive self-ping error: {e}")
+
+
 def start_scheduler():
     scheduler.add_job(
         check_user_reminders_and_rollover,
@@ -559,6 +582,13 @@ def start_scheduler():
         replace_existing=True,
         next_run_time=datetime.now(),
     )
+    scheduler.add_job(
+        keep_alive_self_ping,
+        "interval",
+        minutes=10,
+        id="keep_alive_self_ping",
+        replace_existing=True,
+    )
     if not scheduler.running:
         scheduler.start()
-        logger.info("Background scheduler successfully started with 1-minute interval.")
+        logger.info("Background scheduler successfully started with 1-minute reminder & 10-minute keep-alive jobs.")

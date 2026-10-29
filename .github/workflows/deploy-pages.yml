@@ -40,7 +40,12 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm --prefix frontend ci
 
-      - name: Build WebApp SPA
+      - name: Build WebApp SPA for GitHub Pages
+        env:
+          VITE_BASE_PATH: '/TaskerBot/'
+          VITE_API_BASE: 'https://taskerbot-plp5.onrender.com/api'
+          VITE_RENDER_BACKEND_URL: 'https://taskerbot-plp5.onrender.com'
+          VITE_TELEGRAM_CLIENT_ID: '8987055615'
         run: npm --prefix frontend run build
 
       - name: Setup GitHub Pages

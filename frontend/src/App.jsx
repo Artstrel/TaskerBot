@@ -29,6 +29,8 @@ import {
   setDemoMode,
   clearAuthSession,
   authenticateWithTelegramWebApp,
+  getAppHomeUrl,
+  wakeBackend,
 } from './api';
 import Mascot from './components/Mascot';
 import TodayTab from './components/TodayTab';
@@ -98,7 +100,7 @@ export default function App() {
       window.location.hash.includes('code=')
     );
     if (isCallback && isAuthenticated()) {
-      window.history.replaceState({}, document.title, '/');
+      window.history.replaceState({}, document.title, getAppHomeUrl());
       return false;
     }
     return isCallback;
@@ -131,7 +133,7 @@ export default function App() {
   const handleLoginSuccess = useCallback((user) => {
     setAuthed(true);
     setIsCallbackRoute(false);
-    window.history.replaceState({}, document.title, '/');
+    window.history.replaceState({}, document.title, getAppHomeUrl());
   }, []);
 
   const handleEnterDemo = useCallback(() => {
@@ -244,6 +246,9 @@ export default function App() {
 
     // Initialize Theme
     initTheme();
+
+    // Immediately trigger non-blocking Render backend warmup from GitHub Pages CDN
+    wakeBackend().catch(() => {});
 
     if (isAuthenticated()) {
       syncUserTimezone();
