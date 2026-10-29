@@ -34,6 +34,8 @@ def get_jwt_secret() -> str:
     if settings.BOT_TOKEN and settings.BOT_TOKEN.strip():
         # Derive a stable secret from BOT_TOKEN
         return hashlib.sha256(settings.BOT_TOKEN.strip().encode()).hexdigest()
+    if not settings.DEBUG:
+        raise RuntimeError("JWT_SECRET or BOT_TOKEN must be configured in production to secure tokens.")
     return "taskerbot-default-development-jwt-secret-key-32bytes!"
 
 
@@ -308,13 +310,13 @@ def validate_telegram_webapp_init_data(init_data: str) -> Dict[str, Any]:
     if not hmac.compare_digest(received_hash, expected_hash):
         raise ValueError("Invalid Telegram WebApp initData signature")
 
-    # Check auth_date expiration (allow up to 7 days for mobile webview caching)
+    # Check auth_date expiration (allow up to 24 hours per Telegram security standard)
     auth_date = parsed.get("auth_date")
     if auth_date:
         try:
             auth_timestamp = int(auth_date)
             now = datetime.now(timezone.utc).timestamp()
-            if now - auth_timestamp > 86400 * 7:
+            if now - auth_timestamp > 86400:
                 raise ValueError("Telegram WebApp initData has expired")
         except (ValueError, TypeError):
             pass

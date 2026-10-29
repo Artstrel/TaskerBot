@@ -84,6 +84,7 @@ security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
+    request: Request,
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
     telegram_id: Optional[int] = Query(None),
     username: Optional[str] = Query(None),
@@ -91,9 +92,15 @@ async def get_current_user(
     session: AsyncSession = Depends(get_db),
 ) -> User:
     effective_id: Optional[int] = None
+    token: Optional[str] = None
 
     if auth and auth.credentials:
-        payload = decode_access_token(auth.credentials)
+        token = auth.credentials
+    elif request and request.cookies.get("tasker_token"):
+        token = request.cookies.get("tasker_token")
+
+    if token:
+        payload = decode_access_token(token)
         if payload and "telegram_id" in payload:
             effective_id = payload["telegram_id"]
             if not username:
@@ -102,7 +109,8 @@ async def get_current_user(
                 first_name = payload.get("first_name")
 
     if effective_id is None:
-        if telegram_id is not None:
+        if telegram_id is not None and settings.DEBUG:
+            logger.warning("Allowing unauthenticated telegram_id query parameter because DEBUG is True")
             effective_id = telegram_id
         else:
             raise HTTPException(status_code=401, detail="Authentication credentials required")
@@ -354,6 +362,11 @@ async def dev_login(
     session: AsyncSession = Depends(get_db),
 ):
     """Quick dev login for testing in local browser without BotFather OAuth client."""
+    if not settings.DEBUG:
+        raise HTTPException(
+            status_code=403,
+            detail="Dev login endpoint is disabled in production environment."
+        )
     dev_id = telegram_id or 123456789
     user = await get_or_create_user(
         session=session,

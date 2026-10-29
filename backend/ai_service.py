@@ -367,6 +367,29 @@ SYSTEM_PROMPT = """Ты — интеллектуальный ассистент 
 """
 
 
+def filter_relevant_goals(text: str, existing_goals: Optional[List[str]]) -> List[str]:
+    """
+    Privacy filter: only include goals that are referenced in the user's text.
+    Prevents leaking the user's entire backlog of strategic goals to external LLMs.
+    """
+    if not existing_goals or not text:
+        return []
+    text_lower = text.lower()
+    relevant = []
+    for g in existing_goals:
+        if not g or not g.strip():
+            continue
+        g_clean = g.strip()
+        g_lower = g_clean.lower()
+        if g_lower in text_lower:
+            relevant.append(g_clean)
+            continue
+        words = [w for w in re.findall(r"[\wа-яА-ЯёЁ]+", g_lower) if len(w) >= 3]
+        if words and any(w in text_lower for w in words):
+            relevant.append(g_clean)
+    return relevant
+
+
 def _format_system_prompt(
     current_date: date,
     existing_goals: Optional[List[str]] = None,
@@ -843,6 +866,12 @@ class AIService:
                 is_configured=groq_ready or openrouter_ready or gemini_ready,
             ),
             AIProviderInfo(
+                id="offline",
+                name="Локальный режим (100% приватность)",
+                description="Обработка на сервере без отправки данных во внешние AI-сервисы",
+                is_configured=True,
+            ),
+            AIProviderInfo(
                 id="groq",
                 name="Groq Llama 3.1 & Whisper",
                 description="Молниеносная скорость генерации (~150-300 мс) на чипах LPU",
@@ -864,7 +893,9 @@ class AIService:
 
         active = user_active or settings.DEFAULT_AI_PROVIDER or "auto"
         # Validate active provider availability
-        if active == "auto" and not (groq_ready or openrouter_ready or gemini_ready):
+        if active in ("offline", "none", "local"):
+            active = "offline"
+        elif active == "auto" and not (groq_ready or openrouter_ready or gemini_ready):
             active = "fallback"
         elif active == "groq" and not groq_ready:
             active = "auto" if (openrouter_ready or gemini_ready) else ("gemini" if gemini_ready else "groq")
@@ -912,61 +943,68 @@ class AIService:
 
         logger.info(f"Parsing text tasks with requested provider: {chosen}")
 
+        relevant_goals = filter_relevant_goals(text, existing_goals)
+
+        if chosen in ("offline", "none", "local"):
+            logger.info("Parsing text tasks locally in offline/privacy mode")
+            fallback_res = _fallback_parse(text, current_date, relevant_goals, current_time)
+            return _postprocess_extracted_list(fallback_res, text, current_date, current_time)
+
         if chosen == "auto":
             # Auto-Fast cascade: Groq -> OpenRouter Free -> Gemini -> Fallback
-            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_groq(text, current_date, relevant_goals, current_time)
             if res is not None:
                 logger.info("Successfully parsed tasks via Groq (Fast)")
                 return _postprocess_extracted_list(res, text, current_date, current_time)
 
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
+                res = await self._parse_text_openrouter(text, current_date, relevant_goals, current_time)
                 if res is not None:
                     logger.info("Successfully parsed tasks via OpenRouter Free")
                     return _postprocess_extracted_list(res, text, current_date, current_time)
 
-            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_gemini(text, current_date, relevant_goals, current_time)
             if res is not None:
                 logger.info("Successfully parsed tasks via Gemini Flash fallback")
                 return _postprocess_extracted_list(res, text, current_date, current_time)
 
         elif chosen == "groq":
-            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_groq(text, current_date, relevant_goals, current_time)
             if res is not None:
                 return _postprocess_extracted_list(res, text, current_date, current_time)
             # Cascade fallbacks
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
+                res = await self._parse_text_openrouter(text, current_date, relevant_goals, current_time)
                 if res is not None:
                     return _postprocess_extracted_list(res, text, current_date, current_time)
-            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_gemini(text, current_date, relevant_goals, current_time)
             if res is not None:
                 return _postprocess_extracted_list(res, text, current_date, current_time)
 
         elif chosen == "openrouter":
-            res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_openrouter(text, current_date, relevant_goals, current_time)
             if res is not None:
                 return _postprocess_extracted_list(res, text, current_date, current_time)
-            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_groq(text, current_date, relevant_goals, current_time)
             if res is not None:
                 return _postprocess_extracted_list(res, text, current_date, current_time)
-            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_gemini(text, current_date, relevant_goals, current_time)
             if res is not None:
                 return _postprocess_extracted_list(res, text, current_date, current_time)
 
         elif chosen == "gemini":
-            res = await self._parse_text_gemini(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_gemini(text, current_date, relevant_goals, current_time)
             if res is not None:
                 return _postprocess_extracted_list(res, text, current_date, current_time)
-            res = await self._parse_text_groq(text, current_date, existing_goals, current_time)
+            res = await self._parse_text_groq(text, current_date, relevant_goals, current_time)
             if res is not None:
                 return _postprocess_extracted_list(res, text, current_date, current_time)
             if settings.OPENROUTER_API_KEY and settings.OPENROUTER_API_KEY.strip():
-                res = await self._parse_text_openrouter(text, current_date, existing_goals, current_time)
+                res = await self._parse_text_openrouter(text, current_date, relevant_goals, current_time)
                 if res is not None:
                     return _postprocess_extracted_list(res, text, current_date, current_time)
 
-        return _fallback_parse(text, current_date, existing_goals, current_time)
+        return _fallback_parse(text, current_date, relevant_goals, current_time)
 
     async def _parse_text_groq(
         self,
@@ -1185,6 +1223,10 @@ class AIService:
                             return ExtractedTaskList(tasks=valid_fallback)
         except Exception as wce:
             logger.warning(f"Local whisper.cpp transcription error: {wce}")
+
+        if chosen in ("offline", "none", "local"):
+            logger.info("Local/Offline mode active: skipping cloud audio transcription fallbacks")
+            return ExtractedTaskList(tasks=[])
 
         # 2. Groq Whisper (Cloud fallback ~300ms transcription with FFmpeg noise reduction, pause compression & neutral prompt)
         groq_client = self._get_groq_client()

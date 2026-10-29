@@ -55,11 +55,9 @@ export const setDemoMode = (enabled) => {
 };
 
 export const isAuthenticated = () => {
-  if (isInsideTelegram()) return true;
   if (isDemoMode()) return true;
   const token = getAuthToken();
-  const stored = getStoredUser();
-  return Boolean(token && stored);
+  return Boolean(token);
 };
 
 const resolveInitialUser = () => {
