@@ -3,70 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0d0d0d" id="meta-theme-color" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f4f6" />
-    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="color-scheme" content="dark light" id="meta-color-scheme" />
+    <meta name="theme-color" content="#0d0d0d" id="meta-theme-color" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" id="meta-status-bar-style" />
     <meta name="apple-mobile-web-app-title" content="Chihiro Tasker" />
-    <title>Chihiro Tasker — Трекер задач, привычек и целей</title>
-    <meta name="description" content="Персональный трекер задач, привычек и списков покупок с поддержкой Telegram WebApp" />
-
-    <!-- Favicon & Icons -->
-    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-
-    <!-- Open Graph / Meta -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="Chihiro Tasker — Трекер задач, привычек и целей" />
-    <meta property="og:description" content="Персональный трекер задач, привычек и списков покупок с поддержкой Telegram WebApp" />
-    <meta property="og:image" content="/brand-avatar.png" />
-
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Chihiro Tasker — Трекер задач, привычек и целей" />
-    <meta name="twitter:description" content="Персональный трекер задач, привычек и списков покупок с поддержкой Telegram WebApp" />
-    <meta name="twitter:image" content="/brand-avatar.png" />
-    <!-- Critical first-paint background & color-scheme: guarantees solid root canvas in safe-area zones before the CSS bundle loads -->
-    <style>
-      :root {
-        color-scheme: dark;
-      }
-      :root[data-theme="light"],
-      [data-theme="light"] {
-        color-scheme: light;
-      }
-      :root[data-theme="dark"],
-      [data-theme="dark"] {
-        color-scheme: dark;
-      }
-      html, body, #root {
-        background-color: #0d0d0d;
-        color-scheme: dark;
-        min-height: 100%;
-        min-height: 100dvh;
-      }
-      html[data-theme="light"],
-      html[data-theme="light"] body,
-      html[data-theme="light"] #root,
-      [data-theme="light"],
-      [data-theme="light"] body,
-      [data-theme="light"] #root {
-        background-color: #f4f4f6;
-        color-scheme: light;
-      }
-      html[data-theme="dark"],
-      html[data-theme="dark"] body,
-      html[data-theme="dark"] #root,
-      [data-theme="dark"],
-      [data-theme="dark"] body,
-      [data-theme="dark"] #root {
-        background-color: #0d0d0d;
-        color-scheme: dark;
-      }
-    </style>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Synchronous 0ms theme & chrome lock BEFORE any external script or stylesheet to prevent iOS 26/27 reload white-bar race -->
     <script>
       (function() {
         try {
@@ -91,61 +33,145 @@
               var cur = h + ':' + m;
               var isDay = start <= end ? (cur >= start && cur < end) : (cur >= start || cur < end);
               theme = isDay ? 'light' : 'dark';
+            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+              theme = 'light';
             } else {
-              var tg = window.Telegram && window.Telegram.WebApp;
-              var isTg = tg && ((tg.initData && tg.initData.length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user) || (tg.platform && tg.platform !== 'unknown') || (window.location.hash && window.location.hash.indexOf('tgWebAppData')) !== -1);
-              if (isTg && tg.colorScheme) {
-                theme = tg.colorScheme === 'light' ? 'light' : 'dark';
-              } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                theme = 'dark';
-              } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-                theme = 'light';
-              }
+              theme = 'dark';
             }
           }
+          var themeColor = theme === 'light' ? '#f4f4f6' : '#0d0d0d';
           document.documentElement.setAttribute('data-theme', theme);
           document.documentElement.style.colorScheme = theme;
-          var themeColor = theme === 'light' ? '#f4f4f6' : '#0d0d0d';
           document.documentElement.style.backgroundColor = themeColor;
-          var metaColorScheme = document.querySelector('meta[name="color-scheme"]');
+          var metaColorScheme = document.getElementById('meta-color-scheme') || document.querySelector('meta[name="color-scheme"]');
           if (metaColorScheme) {
             metaColorScheme.setAttribute('content', theme);
           }
-          var metaThemes = document.querySelectorAll('meta[name="theme-color"]');
-          if (metaThemes.length > 0) {
-            metaThemes.forEach(function(m) {
-              m.setAttribute('content', themeColor);
-            });
-          }
-          var dynamicMeta = document.getElementById('meta-theme-color');
+          var dynamicMeta = document.getElementById('meta-theme-color') || document.querySelector('meta[name="theme-color"]');
           if (dynamicMeta) {
             dynamicMeta.removeAttribute('media');
             dynamicMeta.setAttribute('content', themeColor);
           }
-          var metaStatusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+          var metaStatusBar = document.getElementById('meta-status-bar-style') || document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
           if (metaStatusBar) {
             metaStatusBar.setAttribute('content', theme === 'light' ? 'default' : 'black-translucent');
           }
-          if (document.body) {
-            document.body.setAttribute('data-theme', theme);
-            document.body.style.colorScheme = theme;
-            document.body.style.backgroundColor = themeColor;
-            if (isIOS) document.body.classList.add('is-ios');
+        } catch (_) {}
+      })();
+    </script>
+    <title>Chihiro Tasker — Трекер задач, привычек и целей</title>
+    <meta name="description" content="Персональный трекер задач, привычек и списков покупок с поддержкой Telegram WebApp" />
+
+    <!-- Favicon & Icons -->
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
+    <!-- Open Graph / Meta -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Chihiro Tasker — Трекер задач, привычек и целей" />
+    <meta property="og:description" content="Персональный трекер задач, привычек и списков покупок с поддержкой Telegram WebApp" />
+    <meta property="og:image" content="/brand-avatar.png" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Chihiro Tasker — Трекер задач, привычек и целей" />
+    <meta name="twitter:description" content="Персональный трекер задач, привычек и списков покупок с поддержкой Telegram WebApp" />
+    <meta name="twitter:image" content="/brand-avatar.png" />
+    <!-- Critical first-paint background, color-scheme & iOS 26/27 WebKit fixedContainerEdges shims -->
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      :root[data-theme="light"],
+      [data-theme="light"] {
+        color-scheme: light;
+      }
+      :root[data-theme="dark"],
+      [data-theme="dark"] {
+        color-scheme: dark;
+      }
+      html, body, #root {
+        background-color: #0d0d0d;
+        color-scheme: dark;
+        min-height: 100%;
+        min-height: 100dvh;
+        transition: none !important;
+      }
+      html[data-theme="light"],
+      html[data-theme="light"] body,
+      html[data-theme="light"] #root,
+      [data-theme="light"],
+      [data-theme="light"] body,
+      [data-theme="light"] #root {
+        background-color: #f4f4f6;
+        color-scheme: light;
+      }
+      html[data-theme="dark"],
+      html[data-theme="dark"] body,
+      html[data-theme="dark"] #root,
+      [data-theme="dark"],
+      [data-theme="dark"] body,
+      [data-theme="dark"] #root {
+        background-color: #0d0d0d;
+        color-scheme: dark;
+      }
+      .safari-edge-shim {
+        position: fixed;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 12px;
+        background-color: #0d0d0d;
+        pointer-events: none;
+        z-index: 95;
+        transition: none !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+      }
+      .safari-edge-shim-top {
+        top: 0;
+      }
+      .safari-edge-shim-bottom {
+        bottom: 0;
+      }
+      html[data-theme="light"] .safari-edge-shim,
+      body[data-theme="light"] .safari-edge-shim,
+      [data-theme="light"] .safari-edge-shim {
+        background-color: #f4f4f6;
+      }
+      html[data-theme="dark"] .safari-edge-shim,
+      body[data-theme="dark"] .safari-edge-shim,
+      [data-theme="dark"] .safari-edge-shim {
+        background-color: #0d0d0d;
+      }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+      (function() {
+        try {
+          var mode = localStorage.getItem('tasker_theme_mode') || 'auto';
+          var sched = localStorage.getItem('tasker_theme_schedule_enabled') === 'true';
+          var tg = window.Telegram && window.Telegram.WebApp;
+          var isTg = tg && ((tg.initData && tg.initData.length > 0) || (tg.initDataUnsafe && tg.initDataUnsafe.user) || (tg.platform && tg.platform !== 'unknown') || (window.location.hash && window.location.hash.indexOf('tgWebAppData') !== -1));
+          var theme = document.documentElement.getAttribute('data-theme') || 'dark';
+          if (mode === 'auto' && !sched && isTg && tg.colorScheme) {
+            theme = tg.colorScheme === 'light' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', theme);
+            document.documentElement.style.colorScheme = theme;
           }
-          document.addEventListener('DOMContentLoaded', function() {
-            if (document.body) {
-              document.body.setAttribute('data-theme', theme);
-              document.body.style.colorScheme = theme;
-              document.body.style.backgroundColor = themeColor;
-              if (isIOS) document.body.classList.add('is-ios');
-            }
-          });
-          if (window.Telegram && window.Telegram.WebApp) {
+          var themeColor = theme === 'light' ? '#f4f4f6' : '#0d0d0d';
+          document.documentElement.style.backgroundColor = themeColor;
+          var dynamicMeta = document.getElementById('meta-theme-color') || document.querySelector('meta[name="theme-color"]');
+          if (dynamicMeta) {
+            dynamicMeta.setAttribute('content', themeColor);
+          }
+          if (tg) {
             try {
-              var tgObj = window.Telegram.WebApp;
-              if (typeof tgObj.setHeaderColor === 'function') tgObj.setHeaderColor(themeColor);
-              if (typeof tgObj.setBackgroundColor === 'function') tgObj.setBackgroundColor(themeColor);
-              if (typeof tgObj.setBottomBarColor === 'function') tgObj.setBottomBarColor(themeColor);
+              if (typeof tg.setHeaderColor === 'function') tg.setHeaderColor(themeColor);
+              if (typeof tg.setBackgroundColor === 'function') tg.setBackgroundColor(themeColor);
+              if (typeof tg.setBottomBarColor === 'function') tg.setBottomBarColor(themeColor);
             } catch (_) {}
           }
         } catch (_) {}
@@ -153,15 +179,24 @@
     </script>
   </head>
   <body>
+    <div id="safari-edge-top" class="safari-edge-shim safari-edge-shim-top" aria-hidden="true"></div>
+    <div id="safari-edge-bottom" class="safari-edge-shim safari-edge-shim-bottom" aria-hidden="true"></div>
     <script>
       (function() {
         try {
+          var isIOS = document.documentElement.classList.contains('is-ios');
           var t = document.documentElement.getAttribute('data-theme') || 'dark';
+          var c = t === 'light' ? '#f4f4f6' : '#0d0d0d';
           if (document.body) {
             document.body.setAttribute('data-theme', t);
             document.body.style.colorScheme = t;
-            document.body.style.backgroundColor = t === 'light' ? '#f4f4f6' : '#0d0d0d';
+            document.body.style.backgroundColor = c;
+            if (isIOS) document.body.classList.add('is-ios');
           }
+          var topShim = document.getElementById('safari-edge-top');
+          var botShim = document.getElementById('safari-edge-bottom');
+          if (topShim) topShim.style.backgroundColor = c;
+          if (botShim) botShim.style.backgroundColor = c;
         } catch (_) {}
       })();
     </script>

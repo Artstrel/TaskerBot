@@ -22,6 +22,145 @@ let currentConfig = {
 let currentTimezone = null;
 let intervalId = null;
 let isInitialized = false;
+let flushTimerA = null;
+let flushTimerB = null;
+
+/**
+ * Ensures the top and bottom fixed-edge sampling shims exist in document.body
+ * and returns them so WebKit's LocalFrameView::fixedContainerEdges always hits
+ * an opaque position:fixed box (>10px tall, 100% wide, no backdrop-filter).
+ */
+function ensureSafariEdgeShims(themeColor) {
+  if (typeof document === 'undefined' || !document.body) return { topShim: null, botShim: null };
+
+  let topShim = document.getElementById('safari-edge-top');
+  if (!topShim) {
+    topShim = document.createElement('div');
+    topShim.id = 'safari-edge-top';
+    topShim.className = 'safari-edge-shim safari-edge-shim-top';
+    topShim.setAttribute('aria-hidden', 'true');
+    document.body.prepend(topShim);
+  }
+
+  let botShim = document.getElementById('safari-edge-bottom');
+  if (!botShim) {
+    botShim = document.createElement('div');
+    botShim.id = 'safari-edge-bottom';
+    botShim.className = 'safari-edge-shim safari-edge-shim-bottom';
+    botShim.setAttribute('aria-hidden', 'true');
+    document.body.prepend(botShim);
+  }
+
+  if (themeColor) {
+    topShim.style.backgroundColor = themeColor;
+    botShim.style.backgroundColor = themeColor;
+  }
+
+  return { topShim, botShim };
+}
+
+/**
+ * Replaces <meta name="theme-color"> in document.head and forces WebKit iOS 26/27
+ * (LocalFrameView::fixedContainerEdges + PageColorSampler + ScrollPocket) to
+ * recompute and commit a new RemoteLayerTreeTransaction with the active theme color.
+ */
+function syncSafariChromeAndShims(themeColor, effectiveTheme) {
+  if (typeof document === 'undefined') return;
+
+  const root = document.documentElement;
+  root.setAttribute('data-theme', effectiveTheme);
+  root.style.colorScheme = effectiveTheme;
+  root.style.backgroundColor = themeColor;
+
+  if (document.body) {
+    document.body.setAttribute('data-theme', effectiveTheme);
+    document.body.style.colorScheme = effectiveTheme;
+    document.body.style.backgroundColor = themeColor;
+  }
+
+  const appRoot = document.getElementById('root');
+  if (appRoot) {
+    appRoot.style.backgroundColor = themeColor;
+  }
+
+  const { topShim, botShim } = ensureSafariEdgeShims(themeColor);
+
+  const metaColorScheme =
+    document.getElementById('meta-color-scheme') ||
+    document.querySelector('meta[name="color-scheme"]');
+  if (metaColorScheme) {
+    metaColorScheme.setAttribute('content', effectiveTheme);
+  }
+
+  const metaStatusBar =
+    document.getElementById('meta-status-bar-style') ||
+    document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (metaStatusBar) {
+    metaStatusBar.setAttribute(
+      'content',
+      effectiveTheme === 'light' ? 'default' : 'black-translucent'
+    );
+  }
+
+  // Replace <meta name="theme-color"> node in <head> so WebKit's HTMLMetaElement
+  // insertion hook fires unconditionally on live theme switches and reloads.
+  if (document.head) {
+    const existingMetas = document.head.querySelectorAll('meta[name="theme-color"]');
+    existingMetas.forEach((m) => m.remove());
+    const freshMeta = document.createElement('meta');
+    freshMeta.setAttribute('name', 'theme-color');
+    freshMeta.setAttribute('content', themeColor);
+    freshMeta.id = 'meta-theme-color';
+    document.head.appendChild(freshMeta);
+  }
+
+  // Force WebKit RenderLayerCompositor & LocalFrameView::fixedContainerEdges to
+  // invalidate fixed-edge geometry and emit a fresh RemoteLayerTreeTransaction.
+  if (topShim && botShim) {
+    topShim.style.height = '13px';
+    botShim.style.height = '13px';
+    topShim.style.transform = 'translate3d(0, 0, 0)';
+    botShim.style.transform = 'translate3d(0, 0, 0)';
+  }
+  // Synchronous style/layout flush at t=0ms (with CSS transition:none on root/body/shims)
+  void root.offsetHeight;
+
+  if (typeof window !== 'undefined') {
+    const commitEdgeSample = (h, tf) => {
+      try {
+        const currentTheme = root.getAttribute('data-theme') || effectiveTheme;
+        const targetColor = currentTheme === 'light' ? '#f4f4f6' : '#0d0d0d';
+        root.style.backgroundColor = targetColor;
+        if (document.body) {
+          document.body.style.backgroundColor = targetColor;
+        }
+        const { topShim: ts, botShim: bs } = ensureSafariEdgeShims(targetColor);
+        if (ts && bs) {
+          ts.style.height = h;
+          bs.style.height = h;
+          ts.style.transform = tf;
+          bs.style.transform = tf;
+        }
+        void root.offsetHeight;
+        window.scrollBy(0, 0);
+      } catch (_) {}
+    };
+
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(() => {
+        commitEdgeSample('12px', 'translateZ(0)');
+        window.requestAnimationFrame(() => {
+          commitEdgeSample('12px', 'translate3d(0, 0, 0)');
+        });
+      });
+    }
+
+    if (flushTimerA) clearTimeout(flushTimerA);
+    if (flushTimerB) clearTimeout(flushTimerB);
+    flushTimerA = setTimeout(() => commitEdgeSample('13px', 'translateZ(0)'), 50);
+    flushTimerB = setTimeout(() => commitEdgeSample('12px', 'translateZ(0)'), 150);
+  }
+}
 
 /**
  * Retrieve saved theme settings from LocalStorage
@@ -173,38 +312,9 @@ export function applyTheme(config = null, timezone = null) {
   if (typeof document !== 'undefined') {
     const root = document.documentElement;
     const prevTheme = root.getAttribute('data-theme');
-    root.setAttribute('data-theme', effectiveTheme);
-    root.style.colorScheme = effectiveTheme;
-
     const themeColor = effectiveTheme === 'light' ? '#f4f4f6' : '#0d0d0d';
-    root.style.backgroundColor = themeColor;
 
-    if (document.body) {
-      document.body.setAttribute('data-theme', effectiveTheme);
-      document.body.style.colorScheme = effectiveTheme;
-      document.body.style.backgroundColor = themeColor;
-    }
-
-    const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
-    if (metaColorScheme) {
-      metaColorScheme.setAttribute('content', effectiveTheme);
-    }
-
-    const metaThemeColors = document.querySelectorAll('meta[name="theme-color"]');
-    if (metaThemeColors.length > 0) {
-      metaThemeColors.forEach((m) => m.setAttribute('content', themeColor));
-    }
-    const dynamicMeta = document.getElementById('meta-theme-color');
-    if (dynamicMeta) {
-      dynamicMeta.removeAttribute('media');
-      dynamicMeta.setAttribute('content', themeColor);
-    }
-
-    const metaStatusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-    if (metaStatusBar) {
-      metaStatusBar.setAttribute('content', effectiveTheme === 'light' ? 'default' : 'black-translucent');
-    }
-
+    syncSafariChromeAndShims(themeColor, effectiveTheme);
     syncTelegramChromeColors(themeColor);
 
     if (prevTheme !== effectiveTheme && typeof window !== 'undefined') {
@@ -220,7 +330,7 @@ export function applyTheme(config = null, timezone = null) {
 }
 
 /**
- * Initialize theme listeners (Telegram events, media query, periodic schedule check)
+ * Initialize theme listeners (Telegram events, media query, reload/bfcache, periodic schedule check)
  */
 export function initTheme(initialTimezone = null) {
   if (typeof window === 'undefined') return;
@@ -240,6 +350,23 @@ export function initTheme(initialTimezone = null) {
 
   if (isInitialized) return;
   isInitialized = true;
+
+  // Re-sync Safari & PWA top/bottom chrome on system reload, bfcache restore, and tab activation
+  try {
+    window.addEventListener('pageshow', () => {
+      currentConfig = getStoredThemeConfig();
+      applyTheme(currentConfig, currentTimezone);
+    });
+    window.addEventListener('load', () => {
+      applyTheme(currentConfig, currentTimezone);
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        currentConfig = getStoredThemeConfig();
+        applyTheme(currentConfig, currentTimezone);
+      }
+    });
+  } catch (_) {}
 
   // Telegram theme change listener (active only when running in Telegram WebApp)
   if (window.Telegram?.WebApp && isTelegramWebAppActive()) {
