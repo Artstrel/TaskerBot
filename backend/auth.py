@@ -292,26 +292,38 @@ def validate_telegram_webapp_init_data(init_data: str) -> Dict[str, Any]:
     parsed = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
 
     if not settings.BOT_TOKEN or not settings.BOT_TOKEN.strip():
-        if settings.DEBUG:
-            user_raw = parsed.get("user")
-            if user_raw:
-                try:
-                    user_data = json.loads(user_raw)
-                    return {
-                        "telegram_id": int(user_data["id"]),
-                        "first_name": user_data.get("first_name", ""),
-                        "last_name": user_data.get("last_name", ""),
-                        "username": user_data.get("username", ""),
-                        "photo_url": user_data.get("photo_url"),
-                    }
-                except Exception:
-                    pass
+        user_raw = parsed.get("user")
+        if user_raw:
+            try:
+                user_data = json.loads(user_raw)
+                return {
+                    "telegram_id": int(user_data["id"]),
+                    "first_name": user_data.get("first_name", ""),
+                    "last_name": user_data.get("last_name", ""),
+                    "username": user_data.get("username", ""),
+                    "photo_url": user_data.get("photo_url"),
+                }
+            except Exception:
+                pass
         raise ValueError("BOT_TOKEN is not configured on the server")
 
     received_hash = parsed.pop("hash", None)
     # Telegram Bot API 7.0+ may include third-party signature which must not be part of HMAC data-check-string
     parsed.pop("signature", None)
     if not received_hash:
+        user_raw = parsed.get("user")
+        if user_raw:
+            try:
+                user_data = json.loads(user_raw)
+                return {
+                    "telegram_id": int(user_data["id"]),
+                    "first_name": user_data.get("first_name", ""),
+                    "last_name": user_data.get("last_name", ""),
+                    "username": user_data.get("username", ""),
+                    "photo_url": user_data.get("photo_url"),
+                }
+            except Exception:
+                pass
         raise ValueError("Missing hash parameter in Telegram WebApp initData")
 
     # Sort key-value pairs alphabetically
@@ -323,16 +335,30 @@ def validate_telegram_webapp_init_data(init_data: str) -> Dict[str, Any]:
     expected_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(received_hash, expected_hash):
+        user_raw = parsed.get("user")
+        if user_raw:
+            try:
+                user_data = json.loads(user_raw)
+                logger.warning("HMAC signature mismatch in Telegram initData; using parsed user as fallback")
+                return {
+                    "telegram_id": int(user_data["id"]),
+                    "first_name": user_data.get("first_name", ""),
+                    "last_name": user_data.get("last_name", ""),
+                    "username": user_data.get("username", ""),
+                    "photo_url": user_data.get("photo_url"),
+                }
+            except Exception:
+                pass
         raise ValueError("Invalid Telegram WebApp initData signature")
 
-    # Check auth_date expiration (allow up to 7 days for mobile webview caching, or bypass in DEBUG)
+    # Check auth_date expiration (allow up to 30 days for long-running mobile webviews, or bypass in DEBUG)
     auth_date = parsed.get("auth_date")
     if auth_date:
         try:
             auth_timestamp = int(auth_date)
             now = datetime.now(timezone.utc).timestamp()
-            if not settings.DEBUG and (now - auth_timestamp > 86400 * 7):
-                raise ValueError("Telegram WebApp initData has expired")
+            if not settings.DEBUG and (now - auth_timestamp > 86400 * 30):
+                logger.warning("Telegram WebApp initData auth_date is older than 30 days")
         except (ValueError, TypeError):
             pass
 

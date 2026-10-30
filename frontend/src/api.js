@@ -61,57 +61,150 @@ export const isAuthenticated = () => {
   return Boolean(token);
 };
 
-const resolveInitialUser = () => {
-  if (typeof window !== 'undefined') {
-    // 1. Direct Telegram WebApp user object
-    if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-      const u = window.Telegram.WebApp.initDataUnsafe.user;
+export const extractTelegramUser = () => {
+  if (typeof window === 'undefined') return null;
+
+  // 1. Direct Telegram WebApp user object
+  if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
+    const u = window.Telegram.WebApp.initDataUnsafe.user;
+    if (u && u.id && Number(u.id) > 0) {
       return {
-        id: u.id,
-        telegram_id: u.id,
+        id: Number(u.id),
+        telegram_id: Number(u.id),
         first_name: u.first_name || '',
+        last_name: u.last_name || '',
         username: u.username || '',
         photo_url: u.photo_url || null,
         isGuest: false,
         isDemo: false,
       };
     }
-    // 2. Parse user from initData string if available
-    if (window.Telegram?.WebApp?.initData) {
-      try {
-        const params = new URLSearchParams(window.Telegram.WebApp.initData);
-        const rawUser = params.get('user');
-        if (rawUser) {
-          const u = JSON.parse(rawUser);
+  }
+
+  // 2. Parse user from initData string if available
+  if (window.Telegram?.WebApp?.initData) {
+    try {
+      const params = new URLSearchParams(window.Telegram.WebApp.initData);
+      const rawUser = params.get('user');
+      if (rawUser) {
+        const u = JSON.parse(rawUser);
+        if (u && u.id && Number(u.id) > 0) {
           return {
-            id: u.id,
-            telegram_id: u.id,
+            id: Number(u.id),
+            telegram_id: Number(u.id),
             first_name: u.first_name || '',
+            last_name: u.last_name || '',
             username: u.username || '',
             photo_url: u.photo_url || null,
             isGuest: false,
             isDemo: false,
           };
         }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Parse user from window.location.hash (#tgWebAppData=...)
+  if (typeof window.location !== 'undefined' && window.location.hash) {
+    try {
+      const hash = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash;
+      const hashParams = new URLSearchParams(hash);
+      const tgWebAppData = hashParams.get('tgWebAppData');
+      if (tgWebAppData) {
+        const dataParams = new URLSearchParams(tgWebAppData);
+        const rawUser = dataParams.get('user');
+        if (rawUser) {
+          const u = JSON.parse(rawUser);
+          if (u && u.id && Number(u.id) > 0) {
+            return {
+              id: Number(u.id),
+              telegram_id: Number(u.id),
+              first_name: u.first_name || '',
+              last_name: u.last_name || '',
+              username: u.username || '',
+              photo_url: u.photo_url || null,
+              isGuest: false,
+              isDemo: false,
+            };
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 4. Parse user from window.location.search (?tgWebAppData=...)
+  if (typeof window.location !== 'undefined' && window.location.search) {
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const tgWebAppData = searchParams.get('tgWebAppData');
+      if (tgWebAppData) {
+        const dataParams = new URLSearchParams(tgWebAppData);
+        const rawUser = dataParams.get('user');
+        if (rawUser) {
+          const u = JSON.parse(rawUser);
+          if (u && u.id && Number(u.id) > 0) {
+            return {
+              id: Number(u.id),
+              telegram_id: Number(u.id),
+              first_name: u.first_name || '',
+              last_name: u.last_name || '',
+              username: u.username || '',
+              photo_url: u.photo_url || null,
+              isGuest: false,
+              isDemo: false,
+            };
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 5. Stored profile in localStorage (if not guest)
+  const stored = getStoredUser();
+  if (stored && (stored.id || stored.telegram_id) && Number(stored.id || stored.telegram_id) > 0 && !stored.isGuest) {
+    return {
+      id: Number(stored.id || stored.telegram_id),
+      telegram_id: Number(stored.telegram_id || stored.id),
+      first_name: stored.first_name || '',
+      last_name: stored.last_name || '',
+      username: stored.username || '',
+      photo_url: stored.photo_url || null,
+      isGuest: false,
+      isDemo: Boolean(stored.isDemo),
+    };
+  }
+
+  return null;
+};
+
+export const syncTelegramUser = () => {
+  const extracted = extractTelegramUser();
+  if (extracted && extracted.id > 0) {
+    Object.assign(currentUser, extracted);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('tasker_user_profile', JSON.stringify(currentUser));
       } catch (_) {}
     }
-    // 3. Stored profile in localStorage
-    const stored = getStoredUser();
-    if (stored) {
-      return stored;
-    }
-    // 4. Demo mode
-    if (isDemoMode()) {
-      return {
-        id: 123456789,
-        telegram_id: 123456789,
-        first_name: 'Демо-Пользователь',
-        username: 'demo_user',
-        photo_url: null,
-        isDemo: true,
-        isGuest: false,
-      };
-    }
+  }
+  return currentUser;
+};
+
+const resolveInitialUser = () => {
+  const tgUser = extractTelegramUser();
+  if (tgUser) {
+    return tgUser;
+  }
+  if (isDemoMode()) {
+    return {
+      id: 123456789,
+      telegram_id: 123456789,
+      first_name: 'Демо-Пользователь',
+      username: 'demo_user',
+      photo_url: null,
+      isDemo: true,
+      isGuest: false,
+    };
   }
   return {
     id: 0,
@@ -150,6 +243,14 @@ export const setAuthSession = (token, user) => {
 export const clearAuthSession = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('tasker_auth_token');
+    if (isInsideTelegram()) {
+      const tgUser = extractTelegramUser();
+      if (tgUser && tgUser.id > 0) {
+        Object.assign(currentUser, tgUser);
+        localStorage.setItem('tasker_user_profile', JSON.stringify(currentUser));
+        return;
+      }
+    }
     localStorage.removeItem('tasker_user_profile');
     localStorage.removeItem('tasker_demo_mode');
     window.__tasker_is_demo = false;
@@ -175,8 +276,11 @@ if (typeof window !== 'undefined' && window.fetch) {
         if (token && !headers.has('Authorization')) {
           headers.set('Authorization', `Bearer ${token}`);
         }
-        if (window.Telegram?.WebApp?.initData && !headers.has('X-Telegram-Init-Data')) {
-          headers.set('X-Telegram-Init-Data', window.Telegram.WebApp.initData);
+        const tgInitData = window.Telegram?.WebApp?.initData ||
+          (typeof window.location !== 'undefined' && window.location.hash.includes('tgWebAppData') ?
+            new URLSearchParams(window.location.hash.slice(1)).get('tgWebAppData') : null);
+        if (tgInitData && !headers.has('X-Telegram-Init-Data')) {
+          headers.set('X-Telegram-Init-Data', tgInitData);
         }
         const reqInit = { ...init, headers };
         if (!reqInit.credentials) {
@@ -186,8 +290,8 @@ if (typeof window !== 'undefined' && window.fetch) {
         if (res.status === 401 && !urlStr.includes('/auth/')) {
           console.warn('API returned 401 Unauthorized, clearing stale token');
           clearAuthSession();
-          if (window.Telegram?.WebApp?.initData) {
-            authenticateWithTelegramWebApp(window.Telegram.WebApp.initData).catch(() => {});
+          if (tgInitData) {
+            authenticateWithTelegramWebApp(tgInitData).catch(() => {});
           }
         }
         return res;
@@ -1638,12 +1742,14 @@ export const updateTask = async (taskId, updateData) => {
 export const updateTaskProgress = async (taskId, { current_value, delta }) => {
   hapticFeedback('light');
   recordUserAction();
+  if (!currentUser.id || currentUser.id <= 0) syncTelegramUser();
+  const effectiveUserId = currentUser.id > 0 ? currentUser.id : (extractTelegramUser()?.id || 0);
   const mutationId = `progress_task_${taskId}_${Date.now()}`;
   if (current_value !== undefined) {
     addPendingMutation({ id: mutationId, type: 'progress_task', taskId, current_value, timestamp: Date.now() });
   }
   try {
-    const res = await fetch(`${API_BASE}/tasks/${taskId}/progress?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}/progress?telegram_id=${effectiveUserId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ current_value, delta }),
@@ -1656,7 +1762,7 @@ export const updateTaskProgress = async (taskId, { current_value, delta }) => {
 
   if (current_value !== undefined) removePendingMutation(mutationId);
   const db = getLocalDb();
-  const task = db.tasks.find((t) => t.id === taskId);
+  const task = db.tasks.find((t) => String(t.id) === String(taskId));
   if (task) {
     let newVal = task.current_value || 0;
     if (current_value !== undefined) newVal = current_value;
@@ -1677,8 +1783,10 @@ export const updateTaskProgress = async (taskId, { current_value, delta }) => {
 export const updateRoutine = async (routineId, updateData) => {
   hapticFeedback('selection');
   recordUserAction();
+  if (!currentUser.id || currentUser.id <= 0) syncTelegramUser();
+  const effectiveUserId = currentUser.id > 0 ? currentUser.id : (extractTelegramUser()?.id || 0);
   try {
-    const res = await fetch(`${API_BASE}/routines/${routineId}?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/routines/${routineId}?telegram_id=${effectiveUserId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData),
@@ -1687,7 +1795,7 @@ export const updateRoutine = async (routineId, updateData) => {
   } catch (e) {}
 
   const db = getLocalDb();
-  const r = db.routines.find((item) => item.id === routineId);
+  const r = db.routines.find((item) => String(item.id) === String(routineId));
   if (r) {
     Object.assign(r, updateData);
     saveLocalDb(db);
@@ -1699,12 +1807,14 @@ export const updateRoutine = async (routineId, updateData) => {
 export const updateRoutineProgress = async (routineId, { current_value, delta }) => {
   hapticFeedback('light');
   recordUserAction();
+  if (!currentUser.id || currentUser.id <= 0) syncTelegramUser();
+  const effectiveUserId = currentUser.id > 0 ? currentUser.id : (extractTelegramUser()?.id || 0);
   const mutationId = `progress_routine_${routineId}_${Date.now()}`;
   if (current_value !== undefined) {
     addPendingMutation({ id: mutationId, type: 'progress_routine', routineId, current_value, timestamp: Date.now() });
   }
   try {
-    const res = await fetch(`${API_BASE}/routines/${routineId}/progress?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/routines/${routineId}/progress?telegram_id=${effectiveUserId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ current_value, delta }),
@@ -1717,7 +1827,7 @@ export const updateRoutineProgress = async (routineId, { current_value, delta })
 
   if (current_value !== undefined) removePendingMutation(mutationId);
   const db = getLocalDb();
-  const r = db.routines.find((item) => item.id === routineId);
+  const r = db.routines.find((item) => String(item.id) === String(routineId));
   if (r) {
     let newVal = r.current_value || 0;
     if (current_value !== undefined) newVal = current_value;

@@ -9,6 +9,7 @@ import {
 } from './components/ui/icons';
 import {
   currentUser,
+  syncTelegramUser,
   syncUserTimezone,
   fetchDashboard,
   fetchGoals,
@@ -86,6 +87,7 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  const [userProfile, setUserProfile] = useState(() => syncTelegramUser());
   const [authed, setAuthed] = useState(() => isAuthenticated());
   const [isCallbackRoute, setIsCallbackRoute] = useState(() => {
     // Mini App launched with #tgWebAppData should never be treated as an OAuth callback
@@ -133,18 +135,21 @@ export default function App() {
   const handleLoginSuccess = useCallback((user) => {
     setAuthed(true);
     setIsCallbackRoute(false);
+    setUserProfile({ ...syncTelegramUser() });
     window.history.replaceState({}, document.title, getAppHomeUrl());
   }, []);
 
   const handleEnterDemo = useCallback(() => {
     setDemoMode(true);
     setAuthed(true);
+    setUserProfile({ ...syncTelegramUser() });
   }, []);
 
   const handleExitDemo = useCallback(() => {
     setDemoMode(false);
     clearAuthSession();
     setAuthed(false);
+    setUserProfile({ ...syncTelegramUser() });
   }, []);
 
   const handleCloseQuickAdd = useCallback(() => {
@@ -171,16 +176,22 @@ export default function App() {
         // Telegram Bot API < 7.7
       }
 
+      // Synchronously resolve user profile from Telegram context
+      const immediateTgUser = syncTelegramUser();
+      setUserProfile({ ...immediateTgUser });
+
       if (tg.initData) {
         setTgAuthStatus('authenticating');
         setTgAuthError(null);
         authenticateWithTelegramWebApp(tg.initData)
           .then((res) => {
+            const updatedProfile = syncTelegramUser();
+            setUserProfile({ ...updatedProfile });
             if (res?.access_token) {
               setTgAuthStatus('success');
               setAuthed(true);
               loadData(true, false, true);
-            } else if (tg.initDataUnsafe?.user) {
+            } else if (tg.initDataUnsafe?.user || updatedProfile.id > 0) {
               setTgAuthStatus('success');
               setAuthed(true);
               loadData(true, false, true);
@@ -191,7 +202,9 @@ export default function App() {
           })
           .catch((err) => {
             console.warn('Telegram WebApp auth error:', err);
-            if (tg.initDataUnsafe?.user) {
+            const updatedProfile = syncTelegramUser();
+            setUserProfile({ ...updatedProfile });
+            if (tg.initDataUnsafe?.user || updatedProfile.id > 0) {
               setTgAuthStatus('success');
               setAuthed(true);
               loadData(true, false, true);
@@ -201,6 +214,8 @@ export default function App() {
             }
           });
       } else if (isInsideTelegram()) {
+        const updatedProfile = syncTelegramUser();
+        setUserProfile({ ...updatedProfile });
         setTgAuthStatus('success');
         setAuthed(true);
         loadData(true, false, true);
@@ -609,27 +624,27 @@ export default function App() {
             >
               <div className="header-avatar-wrapper">
                 <div className="header-avatar-circle">
-                  {currentUser.photo_url && !avatarError ? (
+                  {(userProfile?.photo_url || currentUser.photo_url) && !avatarError ? (
                     <img
-                      src={currentUser.photo_url}
-                      alt={currentUser.first_name || 'User'}
+                      src={userProfile?.photo_url || currentUser.photo_url}
+                      alt={userProfile?.first_name || currentUser.first_name || 'User'}
                       className="header-avatar-img"
                       referrerPolicy="no-referrer"
                       onError={() => setAvatarError(true)}
                     />
                   ) : (
                     <span className="header-avatar-initial">
-                      {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                      {(userProfile?.first_name || currentUser.first_name || 'П').charAt(0).toUpperCase()}
                     </span>
                   )}
                 </div>
               </div>
               <div className="header-bubble-text">
-                <span className="header-bubble-name">{currentUser.first_name || 'TaskerBot'}</span>
+                <span className="header-bubble-name">{userProfile?.first_name || currentUser.first_name || 'TaskerBot'}</span>
                 <span className="header-bubble-date">{todayFormatted}</span>
               </div>
             </button>
-            {currentUser.isDemo && (
+            {(userProfile?.isDemo ?? currentUser.isDemo) && (
               <button
                 type="button"
                 className="header-demo-chip"
@@ -758,27 +773,27 @@ export default function App() {
             >
               <div className="header-avatar-wrapper">
                 <div className="header-avatar-circle">
-                  {currentUser.photo_url && !avatarError ? (
+                  {(userProfile?.photo_url || currentUser.photo_url) && !avatarError ? (
                     <img
-                      src={currentUser.photo_url}
-                      alt={currentUser.first_name || 'User'}
+                      src={userProfile?.photo_url || currentUser.photo_url}
+                      alt={userProfile?.first_name || currentUser.first_name || 'User'}
                       className="header-avatar-img"
                       referrerPolicy="no-referrer"
                       onError={() => setAvatarError(true)}
                     />
                   ) : (
                     <span className="header-avatar-initial">
-                      {(currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                      {(userProfile?.first_name || currentUser.first_name || 'П').charAt(0).toUpperCase()}
                     </span>
                   )}
                 </div>
               </div>
               <div className="header-bubble-text">
-                <span className="header-bubble-name">{currentUser.first_name || 'TaskerBot'}</span>
+                <span className="header-bubble-name">{userProfile?.first_name || currentUser.first_name || 'TaskerBot'}</span>
                 <span className="header-bubble-date">{todayFormatted}</span>
               </div>
             </button>
-            {currentUser.isDemo && (
+            {(userProfile?.isDemo ?? currentUser.isDemo) && (
               <button
                 type="button"
                 className="header-demo-chip"

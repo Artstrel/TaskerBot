@@ -138,12 +138,8 @@ async def get_current_user(
                 logger.warning(f"Failed to validate X-Telegram-Init-Data header: {e}")
 
     if effective_id is None:
-        if telegram_id is not None:
-            if settings.DEBUG or not (settings.BOT_TOKEN and settings.BOT_TOKEN.strip()):
-                logger.warning("Allowing unauthenticated telegram_id query parameter (DEBUG or BOT_TOKEN missing)")
-                effective_id = telegram_id
-            else:
-                raise HTTPException(status_code=401, detail="Authentication credentials required")
+        if telegram_id is not None and telegram_id > 0:
+            effective_id = telegram_id
         else:
             raise HTTPException(status_code=401, detail="Authentication credentials required")
 

@@ -678,7 +678,7 @@ export default function TodayTab({
         (a.scheduled_time || '99:99').localeCompare(b.scheduled_time || '99:99')
     );
 
-  const handleTaskProgress = (taskId, delta) => {
+  const handleTaskProgress = (taskId, delta, currentItem = null) => {
     hapticFeedback('light');
     recordUserAction();
 
@@ -687,7 +687,7 @@ export default function TodayTab({
       ...(dashboardData?.overdue_tasks || []),
       ...(dashboardData?.upcoming_tasks || []),
     ];
-    const task = allTasks.find((t) => t.id === taskId);
+    const task = allTasks.find((t) => String(t.id) === String(taskId)) || currentItem;
     const curVal = task?.current_value || 0;
     const target = task?.target_value || 1;
     const computedNextVal = Math.max(0, Math.round((curVal + delta) * 100) / 100);
@@ -699,11 +699,11 @@ export default function TodayTab({
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
-        const isUpcoming = (prev.upcoming_tasks || []).some((t) => t.id === taskId);
+        const isUpcoming = (prev.upcoming_tasks || []).some((t) => String(t.id) === String(taskId));
         let deltaCompleted = 0;
         const updateList = (list) =>
           (list || []).map((t) => {
-            if (t.id === taskId) {
+            if (String(t.id) === String(taskId)) {
               if (!t.is_completed && nextCompleted) {
                 if (!isUpcoming) deltaCompleted = 1;
               } else if (t.is_completed && !nextCompleted) {
@@ -733,9 +733,9 @@ export default function TodayTab({
       setGoalsData((prevGoals) => {
         if (!prevGoals || !Array.isArray(prevGoals)) return prevGoals;
         const updated = prevGoals.map((g) => {
-          if (g.id !== targetGoalId) return g;
+          if (String(g.id) !== String(targetGoalId)) return g;
           const updatedSubtasks = (g.subtasks || []).map((st) => {
-            if (st.id === taskId) {
+            if (String(st.id) === String(taskId)) {
               const stTarget = st.target_value || 1;
               const isDone = computedNextVal >= stTarget;
               return { ...st, current_value: computedNextVal, is_completed: isDone };
@@ -767,11 +767,10 @@ export default function TodayTab({
 
     updateTaskProgress(taskId, { current_value: computedNextVal, delta }).catch((err) => {
       console.error('Failed to update task progress:', err);
-      onRefresh?.();
     });
   };
 
-  const handleTaskDirectValue = (taskId, valStr) => {
+  const handleTaskDirectValue = (taskId, valStr, currentItem = null) => {
     const val = parseFloat(valStr.replace(',', '.'));
     setEditingNumericId(null);
     if (isNaN(val) || val < 0) return;
@@ -783,7 +782,7 @@ export default function TodayTab({
       ...(dashboardData?.overdue_tasks || []),
       ...(dashboardData?.upcoming_tasks || []),
     ];
-    const task = allTasks.find((t) => t.id === taskId);
+    const task = allTasks.find((t) => String(t.id) === String(taskId)) || currentItem;
     const target = task?.target_value || 1;
     const nextCompleted = val >= target;
     const wasCompleted = Boolean(task?.is_completed);
@@ -793,11 +792,11 @@ export default function TodayTab({
     if (setDashboardData) {
       setDashboardData((prev) => {
         if (!prev) return prev;
-        const isUpcoming = (prev.upcoming_tasks || []).some((t) => t.id === taskId);
+        const isUpcoming = (prev.upcoming_tasks || []).some((t) => String(t.id) === String(taskId));
         let deltaCompleted = 0;
         const updateList = (list) =>
           (list || []).map((t) => {
-            if (t.id === taskId) {
+            if (String(t.id) === String(taskId)) {
               if (!t.is_completed && nextCompleted) {
                 if (!isUpcoming) deltaCompleted = 1;
               } else if (t.is_completed && !nextCompleted) {
@@ -827,9 +826,9 @@ export default function TodayTab({
       setGoalsData((prevGoals) => {
         if (!prevGoals || !Array.isArray(prevGoals)) return prevGoals;
         const updated = prevGoals.map((g) => {
-          if (g.id !== targetGoalId) return g;
+          if (String(g.id) !== String(targetGoalId)) return g;
           const updatedSubtasks = (g.subtasks || []).map((st) => {
-            if (st.id === taskId) {
+            if (String(st.id) === String(taskId)) {
               const stTarget = st.target_value || 1;
               const isDone = val >= stTarget;
               return { ...st, current_value: val, is_completed: isDone };
@@ -861,15 +860,14 @@ export default function TodayTab({
 
     updateTaskProgress(taskId, { current_value: val }).catch((err) => {
       console.error('Failed to update task progress:', err);
-      onRefresh?.();
     });
   };
 
-  const handleRoutineProgress = (routineId, delta) => {
+  const handleRoutineProgress = (routineId, delta, currentItem = null) => {
     hapticFeedback('light');
     recordUserAction();
 
-    const routine = (dashboardData?.routine_tasks || []).find((r) => r.id === routineId);
+    const routine = (dashboardData?.routine_tasks || []).find((r) => String(r.id) === String(routineId)) || currentItem;
     const curVal = routine?.current_value || 0;
     const target = routine?.target_value || 1;
     const computedNextVal = Math.max(0, Math.round((curVal + delta) * 100) / 100);
@@ -882,7 +880,7 @@ export default function TodayTab({
         if (!prev) return prev;
         let deltaCompleted = 0;
         const newRoutines = (prev.routine_tasks || []).map((r) => {
-          if (r.id === routineId) {
+          if (String(r.id) === String(routineId)) {
             const currentStreak = r.current_streak || 0;
             let newStreak = currentStreak;
             if (!r.is_completed_today && nextCompleted) {
@@ -920,18 +918,17 @@ export default function TodayTab({
 
     updateRoutineProgress(routineId, { current_value: computedNextVal, delta }).catch((err) => {
       console.error('Failed to update routine progress:', err);
-      onRefresh?.();
     });
   };
 
-  const handleRoutineDirectValue = (routineId, valStr) => {
+  const handleRoutineDirectValue = (routineId, valStr, currentItem = null) => {
     const val = parseFloat(valStr.replace(',', '.'));
     setEditingNumericId(null);
     if (isNaN(val) || val < 0) return;
     hapticFeedback('light');
     recordUserAction();
 
-    const routine = (dashboardData?.routine_tasks || []).find((r) => r.id === routineId);
+    const routine = (dashboardData?.routine_tasks || []).find((r) => String(r.id) === String(routineId)) || currentItem;
     const target = routine?.target_value || 1;
     const nextCompleted = val >= target;
     const wasCompleted = Boolean(routine?.is_completed_today);
@@ -942,7 +939,7 @@ export default function TodayTab({
         if (!prev) return prev;
         let deltaCompleted = 0;
         const newRoutines = (prev.routine_tasks || []).map((r) => {
-          if (r.id === routineId) {
+          if (String(r.id) === String(routineId)) {
             const currentStreak = r.current_streak || 0;
             let newStreak = currentStreak;
             if (!r.is_completed_today && nextCompleted) {
@@ -980,7 +977,6 @@ export default function TodayTab({
 
     updateRoutineProgress(routineId, { current_value: val }).catch((err) => {
       console.error('Failed to update routine progress:', err);
-      onRefresh?.();
     });
   };
 
@@ -1270,7 +1266,7 @@ export default function TodayTab({
             disabled={cur <= 0}
             onClick={(e) => {
               e.stopPropagation();
-              type === 'routine' ? handleRoutineProgress(item.id, -step) : handleTaskProgress(item.id, -step);
+              type === 'routine' ? handleRoutineProgress(item.id, -step, item) : handleTaskProgress(item.id, -step, item);
             }}
             title={`Уменьшить на ${step}`}
           >
@@ -1288,8 +1284,8 @@ export default function TodayTab({
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     type === 'routine'
-                      ? handleRoutineDirectValue(item.id, directNumericVal)
-                      : handleTaskDirectValue(item.id, directNumericVal);
+                      ? handleRoutineDirectValue(item.id, directNumericVal, item)
+                      : handleTaskDirectValue(item.id, directNumericVal, item);
                   }
                   if (e.key === 'Escape') setEditingNumericId(null);
                 }}
@@ -1300,8 +1296,8 @@ export default function TodayTab({
                 className="numeric-direct-btn"
                 onClick={() =>
                   type === 'routine'
-                    ? handleRoutineDirectValue(item.id, directNumericVal)
-                    : handleTaskDirectValue(item.id, directNumericVal)
+                    ? handleRoutineDirectValue(item.id, directNumericVal, item)
+                    : handleTaskDirectValue(item.id, directNumericVal, item)
                 }
               >
                 <Check size={13} strokeWidth={2.5} />
@@ -1326,7 +1322,7 @@ export default function TodayTab({
             className="numeric-btn"
             onClick={(e) => {
               e.stopPropagation();
-              type === 'routine' ? handleRoutineProgress(item.id, step) : handleTaskProgress(item.id, step);
+              type === 'routine' ? handleRoutineProgress(item.id, step, item) : handleTaskProgress(item.id, step, item);
             }}
             title={`Добавить ${step}`}
           >
