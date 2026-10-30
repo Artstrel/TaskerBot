@@ -2,6 +2,7 @@ import hashlib
 import base64
 import os
 import secrets
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple, Dict, Any
 import httpx
@@ -9,6 +10,8 @@ import jwt
 from jwt import PyJWKSet, PyJWKClientError
 
 from backend.config import settings
+
+logger = logging.getLogger(__name__)
 
 # In-memory PKCE & State store with TTL cleanup for CSRF protection
 _oauth_states: Dict[str, Dict[str, Any]] = {}

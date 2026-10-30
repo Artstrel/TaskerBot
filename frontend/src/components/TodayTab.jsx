@@ -1002,9 +1002,9 @@ export default function TodayTab({
           : null;
         const nextUpcoming = movedTask
           ? sortUpcomingList([
-              ...(prev.upcoming_tasks || []).filter((t) => t.id !== taskId),
-              movedTask,
-            ])
+            ...(prev.upcoming_tasks || []).filter((t) => t.id !== taskId),
+            movedTask,
+          ])
           : (prev.upcoming_tasks || []);
         const updated = {
           ...prev,
@@ -1146,14 +1146,14 @@ export default function TodayTab({
         if (!prev) return prev;
         const updated = isFuture
           ? {
-              ...prev,
-              upcoming_tasks: sortUpcomingList([...(prev.upcoming_tasks || []), optimisticTask]),
-            }
+            ...prev,
+            upcoming_tasks: sortUpcomingList([...(prev.upcoming_tasks || []), optimisticTask]),
+          }
           : {
-              ...prev,
-              today_tasks: [optimisticTask, ...(prev.today_tasks || [])],
-              total_count: (prev.total_count || 0) + 1,
-            };
+            ...prev,
+            today_tasks: [optimisticTask, ...(prev.today_tasks || [])],
+            total_count: (prev.total_count || 0) + 1,
+          };
         setCachedDashboard(updated);
         return updated;
       });
@@ -1431,644 +1431,644 @@ export default function TodayTab({
 
       {!isDayCompletelyEmpty && (routine_tasks.length > 0 || hasVisibleRightColSections) && (
         <div className="today-desktop-grid">
-        {/* LEFT COLUMN: Habits */}
-        <div className="today-col-left">
-          {/* SECTION 2: Daily Routines / Habits */}
-          {routine_tasks.length > 0 && (
-            <section className="linear-section today-routines-section">
-              <div
-                className="linear-section-header"
-                onClick={() => {
-                  setIsRoutinesOpenUserOverridden(true);
-                  setIsRoutinesOpen(!isRoutinesSectionOpen);
-                }}
-              >
-                <div className="linear-section-title">
-                  <span>Привычки & Рутины</span>
-                  <span className={`linear-count-badge badge-streak ${allRoutinesDone ? 'badge-success' : ''}`}>
-                    {routine_tasks.filter((r) => r.is_completed_today).length}/{routine_tasks.length}
-                  </span>
+          {/* LEFT COLUMN: Habits */}
+          <div className="today-col-left">
+            {/* SECTION 2: Daily Routines / Habits */}
+            {routine_tasks.length > 0 && (
+              <section className="linear-section today-routines-section">
+                <div
+                  className="linear-section-header"
+                  onClick={() => {
+                    setIsRoutinesOpenUserOverridden(true);
+                    setIsRoutinesOpen(!isRoutinesSectionOpen);
+                  }}
+                >
+                  <div className="linear-section-title">
+                    <span>Привычки & Рутины</span>
+                    <span className={`linear-count-badge badge-streak ${allRoutinesDone ? 'badge-success' : ''}`}>
+                      {routine_tasks.filter((r) => r.is_completed_today).length}/{routine_tasks.length}
+                    </span>
+                  </div>
+                  <AnimatedChevron isOpen={isRoutinesSectionOpen} size={16} />
                 </div>
-                <AnimatedChevron isOpen={isRoutinesSectionOpen} size={16} />
-              </div>
 
-              <AnimatedAccordion isOpen={isRoutinesSectionOpen}>
-                <div className="linear-list">
-                  {routine_tasks.map((routine) => (
-                    <div
-                      key={routine.id}
-                      className={`linear-list-item ${routine.is_completed_today ? 'completed' : ''}`}
-                      style={{ alignItems: 'flex-start' }}
-                    >
-                      <AnimatedCheckbox
-                        checked={!!routine.is_completed_today}
-                        onChange={() => handleToggleRoutine(routine.id, routine.is_completed_today)}
-                        className="habit-streak"
-                        ariaLabel="Отметить привычку"
-                        style={{ marginTop: '3px' }}
-                      />
+                <AnimatedAccordion isOpen={isRoutinesSectionOpen}>
+                  <div className="linear-list">
+                    {routine_tasks.map((routine) => (
+                      <div
+                        key={routine.id}
+                        className={`linear-list-item ${routine.is_completed_today ? 'completed' : ''}`}
+                        style={{ alignItems: 'flex-start' }}
+                      >
+                        <AnimatedCheckbox
+                          checked={!!routine.is_completed_today}
+                          onChange={() => handleToggleRoutine(routine.id, routine.is_completed_today)}
+                          className="habit-streak"
+                          ariaLabel="Отметить привычку"
+                          style={{ marginTop: '3px' }}
+                        />
 
-                      {editingRoutineId === routine.id ? (
-                        <div className="task-inline-edit-box">
-                          <input
-                            type="text"
-                            className="task-inline-input"
-                            value={editRoutineTitle}
-                            onChange={(e) => setEditRoutineTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveRoutineEdit(routine.id);
-                              if (e.key === 'Escape') setEditingRoutineId(null);
-                            }}
-                            autoFocus
-                          />
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              className="item-mini-btn"
-                              title="Отмена"
-                              onClick={() => setEditingRoutineId(null)}
-                            >
-                              <X size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="item-mini-btn btn-success"
-                              title="Сохранить"
-                              onClick={() => handleSaveRoutineEdit(routine.id)}
-                            >
-                              <Check size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="item-content-col">
-                            <div className="item-title">
-                              {routine.title}
-                            </div>
-                            <div className="item-meta-row">
-                              {routine.current_streak > 0 && (
-                                <span className="item-tag" style={{ color: 'var(--text-primary)' }}>
-                                  <Flame size={11} fill="var(--text-primary)" color="var(--text-primary)" />
-                                  {routine.current_streak} дн. подряд
-                                </span>
-                              )}
-                              {routine.best_streak > routine.current_streak && (
-                                <span className="item-tag">
-                                  <Trophy size={10} /> рекорд {routine.best_streak}
-                                </span>
-                              )}
-                              {routine.frequency_type === 'interval' && routine.interval_days > 1 && (
-                                <span className="item-tag" title="Интервал повторения">
-                                  <RotateCw size={10} /> раз в {routine.interval_days} дн.
-                                </span>
-                              )}
-                              {routine.frequency_type === 'weekly' && routine.days_of_week && routine.days_of_week.length > 0 && (
-                                <span className="item-tag" title="Дни недели">
-                                  <RotateCw size={10} /> {
-                                    routine.days_of_week.length === 5 && [0, 1, 2, 3, 4].every(d => routine.days_of_week.includes(d))
-                                      ? 'Будни'
-                                      : routine.days_of_week.length === 2 && [5, 6].every(d => routine.days_of_week.includes(d))
-                                        ? 'Выходные'
-                                        : routine.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
-                                  }
-                                </span>
-                              )}
-                            </div>
-                            {renderNumericStepper(routine, 'routine')}
-                          </div>
-
-                          <div className="item-action-btns">
-                            <button
-                              className="item-mini-btn"
-                              title="Редактировать"
-                              onClick={() => handleStartRoutineEdit(routine)}
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              className="item-mini-btn btn-danger"
-                              title="Удалить"
-                              onClick={() => handleDeleteRoutine(routine.id)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </AnimatedAccordion>
-            </section>
-          )}
-        </div>
-
-        {/* RIGHT COLUMN: Overdue, Today & Upcoming Tasks */}
-        <div className="today-col-right">
-
-          {/* All Done Celebration State with Mascot */}
-          {isDayAllDone && (
-            <div className="empty-state-mascot-card">
-              <Mascot state="done" size={96} interactive={true} />
-              <div className="empty-mascot-title">День закрыт!</div>
-              <div className="empty-mascot-desc">
-                Все задачи и привычки на сегодня выполнены. Отличная работа!
-              </div>
-            </div>
-          )}
-
-          {/* SECTION 1: Overdue Tasks */}
-          {overdue_tasks.length > 0 && (
-            <section className="linear-section today-overdue-section">
-              <div
-                className="linear-section-header"
-                onClick={() => setIsOverdueOpen((prev) => !prev)}
-              >
-                <div className="linear-section-title">
-                  <AlertTriangle size={15} color="var(--text-primary)" />
-                  <span>Просрочено</span>
-                  <span className="linear-count-badge badge-danger">
-                    {overdue_tasks.length}
-                  </span>
-                </div>
-                <AnimatedChevron isOpen={isOverdueOpen} size={16} />
-              </div>
-
-              <AnimatedAccordion isOpen={isOverdueOpen}>
-                <div className="linear-list">
-                  {overdue_tasks.map((task) => (
-                    <div key={task.id} className={`linear-list-item ${task.is_completed ? 'completed' : ''}`} style={{ alignItems: 'flex-start' }}>
-                      <AnimatedCheckbox
-                        checked={!!task.is_completed}
-                        onChange={() => handleToggleTask(task.id, task.is_completed)}
-                        ariaLabel="Выполнить задачу"
-                        style={{ marginTop: '3px' }}
-                      />
-
-                      {editingTaskId === task.id ? (
-                        <div className="task-inline-edit-box">
-                          <input
-                            type="text"
-                            className="task-inline-input"
-                            value={editTaskTitle}
-                            onChange={(e) => setEditTaskTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEdit(task.id);
-                              if (e.key === 'Escape') setEditingTaskId(null);
-                            }}
-                            autoFocus
-                          />
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              className="item-mini-btn"
-                              title="Отмена"
-                              onClick={() => setEditingTaskId(null)}
-                            >
-                              <X size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="item-mini-btn btn-success"
-                              title="Сохранить"
-                              onClick={() => handleSaveEdit(task.id)}
-                            >
-                              <Check size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="item-content-col">
-                            <div className="item-title">
-                              {task.title}
-                            </div>
-                            <div className="item-meta-row">
-                              <span className="item-tag tag-overdue">
-                                {task.overdue_days > 0 ? `+${task.overdue_days} дн.` : 'со вчера'}
-                              </span>
-                              {task.scheduled_time && (
-                                <span className="item-tag tag-due">
-                                  <Clock size={10} />
-                                  {task.scheduled_time}
-                                </span>
-                              )}
-                              {task.goal_title && (
-                                <span className="item-tag">
-                                  <Target size={10} />
-                                  {task.goal_title}
-                                </span>
-                              )}
-                            </div>
-                            {renderNumericStepper(task, 'task')}
-                          </div>
-
-                          <div className="item-action-btns">
-                            <button
-                              className="item-mini-btn"
-                              title="Редактировать"
-                              onClick={() => handleStartEdit(task)}
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              className="item-mini-btn"
-                              title="Перенести на завтра"
-                              onClick={() => handlePostponeTomorrow(task.id)}
-                            >
-                              <ArrowRight size={14} />
-                            </button>
-                            <button
-                              className="item-mini-btn btn-danger"
-                              title="Удалить"
-                              onClick={() => handleDeleteTask(task.id)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </AnimatedAccordion>
-            </section>
-          )}
-
-          {/* SECTION 3: Active Today's Tasks */}
-          {activeTodayTasks.length > 0 && (
-            <section className="linear-section today-tasks-section">
-              <div
-                className="linear-section-header"
-                onClick={() => setIsTodayOpen((prev) => !prev)}
-              >
-                <div className="linear-section-title">
-                  <span>Задачи</span>
-                  <span className="linear-count-badge">
-                    {activeTodayTasks.length}
-                  </span>
-                </div>
-                <AnimatedChevron isOpen={isTodayOpen} size={16} />
-              </div>
-
-              <AnimatedAccordion isOpen={isTodayOpen}>
-                <div className="linear-list">
-                  {activeTodayTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className={`linear-list-item ${task.is_completed ? 'completed' : ''}`}
-                      style={{ alignItems: 'flex-start' }}
-                    >
-                      <AnimatedCheckbox
-                        checked={!!task.is_completed}
-                        onChange={() => handleToggleTask(task.id, task.is_completed)}
-                        ariaLabel="Выполнить задачу"
-                        style={{ marginTop: '3px' }}
-                      />
-
-                      {editingTaskId === task.id ? (
-                        <div className="task-inline-edit-box">
-                          <input
-                            type="text"
-                            className="task-inline-input"
-                            value={editTaskTitle}
-                            onChange={(e) => setEditTaskTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEdit(task.id);
-                              if (e.key === 'Escape') setEditingTaskId(null);
-                            }}
-                            autoFocus
-                          />
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              className="item-mini-btn"
-                              title="Отмена"
-                              onClick={() => setEditingTaskId(null)}
-                            >
-                              <X size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="item-mini-btn btn-success"
-                              title="Сохранить"
-                              onClick={() => handleSaveEdit(task.id)}
-                            >
-                              <Check size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="item-content-col">
-                            <div className="item-title">
-                              {task.title}
-                            </div>
-                            <div className="item-meta-row">
-                              {task.scheduled_time && (
-                                <span className="item-tag tag-due">
-                                  <Clock size={10} />
-                                  {task.scheduled_time}
-                                </span>
-                              )}
-                              {task.goal_title && (
-                                <span className="item-tag">
-                                  <Target size={10} />
-                                  {task.goal_title}
-                                </span>
-                              )}
-                            </div>
-                            {renderNumericStepper(task, 'task')}
-                          </div>
-
-                          <div className="item-action-btns">
-                            <button
-                              className="item-mini-btn"
-                              title="Редактировать"
-                              onClick={() => handleStartEdit(task)}
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              className="item-mini-btn"
-                              title="Перенести на завтра"
-                              onClick={() => handlePostponeTomorrow(task.id)}
-                            >
-                              <ArrowRight size={14} />
-                            </button>
-                            <button
-                              className="item-mini-btn btn-danger"
-                              title="Удалить"
-                              onClick={() => handleDeleteTask(task.id)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </AnimatedAccordion>
-            </section>
-          )}
-
-          {/* SECTION 3.5: Upcoming Tasks (Предстоящие) */}
-          {activeUpcomingTasks.length > 0 && (
-            <section className="linear-section today-upcoming-section">
-              <div
-                className="linear-section-header"
-                onClick={() => setIsUpcomingOpen((prev) => !prev)}
-                style={{ cursor: 'pointer' }}
-              >
-                <div className="linear-section-title">
-                  <span>Предстоящие</span>
-                  <span className="linear-count-badge">
-                    {activeUpcomingTasks.length}
-                  </span>
-                </div>
-                <AnimatedChevron isOpen={isUpcomingOpen} size={16} />
-              </div>
-
-              <AnimatedAccordion isOpen={isUpcomingOpen}>
-                <div className="upcoming-groups-wrap">
-                  {upcomingGroups.map((group) => (
-                    <div key={group.key} className="upcoming-group-block">
-                      <div className="upcoming-group-subheader">
-                        <span>{group.label}</span>
-                        <span className="upcoming-group-count">{group.tasks.length}</span>
-                      </div>
-                      <div className="linear-list">
-                        {group.tasks.map((task) => (
-                          <div
-                            key={task.id}
-                            className={`linear-list-item ${task.is_completed ? 'completed' : ''}`}
-                            style={{ alignItems: 'flex-start' }}
-                          >
-                            <AnimatedCheckbox
-                              checked={!!task.is_completed}
-                              onChange={() => handleToggleTask(task.id, task.is_completed)}
-                              ariaLabel="Выполнить предстоящую задачу"
-                              style={{ marginTop: '3px' }}
+                        {editingRoutineId === routine.id ? (
+                          <div className="task-inline-edit-box">
+                            <input
+                              type="text"
+                              className="task-inline-input"
+                              value={editRoutineTitle}
+                              onChange={(e) => setEditRoutineTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveRoutineEdit(routine.id);
+                                if (e.key === 'Escape') setEditingRoutineId(null);
+                              }}
+                              autoFocus
                             />
-
-                            {editingTaskId === task.id ? (
-                              <div className="task-inline-edit-box">
-                                <input
-                                  type="text"
-                                  className="task-inline-input"
-                                  value={editTaskTitle}
-                                  onChange={(e) => setEditTaskTitle(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleSaveEdit(task.id);
-                                    if (e.key === 'Escape') setEditingTaskId(null);
-                                  }}
-                                  autoFocus
-                                />
-                                <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
-                                  <button
-                                    type="button"
-                                    className="item-mini-btn"
-                                    title="Отмена"
-                                    onClick={() => setEditingTaskId(null)}
-                                  >
-                                    <X size={13} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="item-mini-btn btn-success"
-                                    title="Сохранить"
-                                    onClick={() => handleSaveEdit(task.id)}
-                                  >
-                                    <Check size={13} />
-                                  </button>
-                                </div>
+                            <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="item-mini-btn"
+                                title="Отмена"
+                                onClick={() => setEditingRoutineId(null)}
+                              >
+                                <X size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="item-mini-btn btn-success"
+                                title="Сохранить"
+                                onClick={() => handleSaveRoutineEdit(routine.id)}
+                              >
+                                <Check size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="item-content-col">
+                              <div className="item-title">
+                                {routine.title}
                               </div>
-                            ) : (
-                              <>
-                                <div className="item-content-col">
-                                  <div className="item-title">
-                                    {task.title}
-                                  </div>
-                                  <div className="item-meta-row">
-                                    {task.scheduled_date && (
-                                      <span className="item-tag">
-                                        <Calendar size={10} />
-                                        {formatUpcomingDateLabel(task.scheduled_date)}
-                                      </span>
-                                    )}
-                                    {task.scheduled_time && (
-                                      <span className="item-tag tag-due">
-                                        <Clock size={10} />
-                                        {task.scheduled_time}
-                                      </span>
-                                    )}
-                                    {task.goal_title && (
-                                      <span className="item-tag">
-                                        <Target size={10} />
-                                        {task.goal_title}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {renderNumericStepper(task, 'task')}
-                                </div>
+                              <div className="item-meta-row">
+                                {routine.current_streak > 0 && (
+                                  <span className="item-tag" style={{ color: 'var(--text-primary)' }}>
+                                    <Flame size={11} fill="var(--text-primary)" color="var(--text-primary)" />
+                                    {routine.current_streak} дн. подряд
+                                  </span>
+                                )}
+                                {routine.best_streak > routine.current_streak && (
+                                  <span className="item-tag">
+                                    <Trophy size={10} /> рекорд {routine.best_streak}
+                                  </span>
+                                )}
+                                {routine.frequency_type === 'interval' && routine.interval_days > 1 && (
+                                  <span className="item-tag" title="Интервал повторения">
+                                    <RotateCw size={10} /> раз в {routine.interval_days} дн.
+                                  </span>
+                                )}
+                                {routine.frequency_type === 'weekly' && routine.days_of_week && routine.days_of_week.length > 0 && (
+                                  <span className="item-tag" title="Дни недели">
+                                    <RotateCw size={10} /> {
+                                      routine.days_of_week.length === 5 && [0, 1, 2, 3, 4].every(d => routine.days_of_week.includes(d))
+                                        ? 'Будни'
+                                        : routine.days_of_week.length === 2 && [5, 6].every(d => routine.days_of_week.includes(d))
+                                          ? 'Выходные'
+                                          : routine.days_of_week.map(d => ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][d]).filter(Boolean).join(', ')
+                                    }
+                                  </span>
+                                )}
+                              </div>
+                              {renderNumericStepper(routine, 'routine')}
+                            </div>
 
-                                <div className="item-action-btns">
-                                  <button
-                                    className="item-mini-btn"
-                                    title="Редактировать"
-                                    onClick={() => handleStartEdit(task)}
-                                  >
-                                    <Pencil size={13} />
-                                  </button>
-                                  <button
-                                    className="item-mini-btn btn-danger"
-                                    title="Удалить"
-                                    onClick={() => handleDeleteTask(task.id)}
-                                  >
-                                    <Trash2 size={14} />
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        ))}
+                            <div className="item-action-btns">
+                              <button
+                                className="item-mini-btn"
+                                title="Редактировать"
+                                onClick={() => handleStartRoutineEdit(routine)}
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                className="item-mini-btn btn-danger"
+                                title="Удалить"
+                                onClick={() => handleDeleteRoutine(routine.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </AnimatedAccordion>
-            </section>
-          )}
+                    ))}
+                  </div>
+                </AnimatedAccordion>
+              </section>
+            )}
+          </div>
 
-          {/* SECTION 4: Completed Tasks Accordion (Выполненные) */}
-          {completedTodayTasks.length > 0 && (
-            <section className="linear-section today-completed-section">
-              <div
-                className="linear-section-header"
-                onClick={() => setIsCompletedOpen((prev) => !prev)}
-                style={{ cursor: 'pointer' }}
-              >
-                <div className="linear-section-title">
-                  <span style={{ color: 'var(--text-secondary)' }}>Выполненные</span>
-                  <span className="linear-count-badge badge-success">
-                    {completedTodayTasks.length}
-                  </span>
+          {/* RIGHT COLUMN: Overdue, Today & Upcoming Tasks */}
+          <div className="today-col-right">
+
+            {/* All Done Celebration State with Mascot */}
+            {isDayAllDone && (
+              <div className="empty-state-mascot-card">
+                <Mascot state="done" size={96} interactive={true} />
+                <div className="empty-mascot-title">День закрыт!</div>
+                <div className="empty-mascot-desc">
+                  Все задачи и привычки на сегодня выполнены. Отличная работа!
                 </div>
-                <AnimatedChevron isOpen={isCompletedOpen} size={16} />
               </div>
+            )}
 
-              <AnimatedAccordion isOpen={isCompletedOpen}>
-                <div className="linear-list">
-                  {completedTodayTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className="linear-list-item completed"
-                      style={{ alignItems: 'flex-start' }}
-                    >
-                      <AnimatedCheckbox
-                        checked={true}
-                        onChange={() => handleToggleTask(task.id, task.is_completed)}
-                        ariaLabel="Вернуть в активные задачи"
-                        style={{ marginTop: '3px' }}
-                      />
-
-                      {editingTaskId === task.id ? (
-                        <div className="task-inline-edit-box">
-                          <input
-                            type="text"
-                            className="task-inline-input"
-                            value={editTaskTitle}
-                            onChange={(e) => setEditTaskTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEdit(task.id);
-                              if (e.key === 'Escape') setEditingTaskId(null);
-                            }}
-                            autoFocus
-                          />
-                          <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
-                            <button
-                              type="button"
-                              className="item-mini-btn"
-                              title="Отмена"
-                              onClick={() => setEditingTaskId(null)}
-                            >
-                              <X size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              className="item-mini-btn btn-success"
-                              title="Сохранить"
-                              onClick={() => handleSaveEdit(task.id)}
-                            >
-                              <Check size={13} />
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="item-content-col">
-                            <div className="item-title" style={{ textDecoration: 'line-through', opacity: 0.65 }}>
-                              {task.title}
-                            </div>
-                            <div className="item-meta-row">
-                              {task.scheduled_date && task.scheduled_date > todayIso && (
-                                <span className="item-tag">
-                                  <Calendar size={10} />
-                                  {formatUpcomingDateLabel(task.scheduled_date)}
-                                </span>
-                              )}
-                              {task.scheduled_time && (
-                                <span className="item-tag tag-due">
-                                  <Clock size={10} />
-                                  {task.scheduled_time}
-                                </span>
-                              )}
-                              {task.goal_title && (
-                                <span className="item-tag">
-                                  <Target size={10} />
-                                  {task.goal_title}
-                                </span>
-                              )}
-                            </div>
-                            {renderNumericStepper(task, 'task')}
-                          </div>
-
-                          <div className="item-action-btns">
-                            <button
-                              className="item-mini-btn"
-                              title="Редактировать"
-                              onClick={() => handleStartEdit(task)}
-                            >
-                              <Pencil size={13} />
-                            </button>
-                            <button
-                              className="item-mini-btn"
-                              title="Перенести на завтра"
-                              onClick={() => handlePostponeTomorrow(task.id)}
-                            >
-                              <ArrowRight size={14} />
-                            </button>
-                            <button
-                              className="item-mini-btn btn-danger"
-                              title="Удалить"
-                              onClick={() => handleDeleteTask(task.id)}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
+            {/* SECTION 1: Overdue Tasks */}
+            {overdue_tasks.length > 0 && (
+              <section className="linear-section today-overdue-section">
+                <div
+                  className="linear-section-header"
+                  onClick={() => setIsOverdueOpen((prev) => !prev)}
+                >
+                  <div className="linear-section-title">
+                    <AlertTriangle size={15} color="var(--text-primary)" />
+                    <span>Просрочено</span>
+                    <span className="linear-count-badge badge-danger">
+                      {overdue_tasks.length}
+                    </span>
+                  </div>
+                  <AnimatedChevron isOpen={isOverdueOpen} size={16} />
                 </div>
-              </AnimatedAccordion>
-            </section>
-          )}
+
+                <AnimatedAccordion isOpen={isOverdueOpen}>
+                  <div className="linear-list">
+                    {overdue_tasks.map((task) => (
+                      <div key={task.id} className={`linear-list-item ${task.is_completed ? 'completed' : ''}`} style={{ alignItems: 'flex-start' }}>
+                        <AnimatedCheckbox
+                          checked={!!task.is_completed}
+                          onChange={() => handleToggleTask(task.id, task.is_completed)}
+                          ariaLabel="Выполнить задачу"
+                          style={{ marginTop: '3px' }}
+                        />
+
+                        {editingTaskId === task.id ? (
+                          <div className="task-inline-edit-box">
+                            <input
+                              type="text"
+                              className="task-inline-input"
+                              value={editTaskTitle}
+                              onChange={(e) => setEditTaskTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEdit(task.id);
+                                if (e.key === 'Escape') setEditingTaskId(null);
+                              }}
+                              autoFocus
+                            />
+                            <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="item-mini-btn"
+                                title="Отмена"
+                                onClick={() => setEditingTaskId(null)}
+                              >
+                                <X size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="item-mini-btn btn-success"
+                                title="Сохранить"
+                                onClick={() => handleSaveEdit(task.id)}
+                              >
+                                <Check size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="item-content-col">
+                              <div className="item-title">
+                                {task.title}
+                              </div>
+                              <div className="item-meta-row">
+                                <span className="item-tag tag-overdue">
+                                  {task.overdue_days > 0 ? `+${task.overdue_days} дн.` : 'со вчера'}
+                                </span>
+                                {task.scheduled_time && (
+                                  <span className="item-tag tag-due">
+                                    <Clock size={10} />
+                                    {task.scheduled_time}
+                                  </span>
+                                )}
+                                {task.goal_title && (
+                                  <span className="item-tag">
+                                    <Target size={10} />
+                                    {task.goal_title}
+                                  </span>
+                                )}
+                              </div>
+                              {renderNumericStepper(task, 'task')}
+                            </div>
+
+                            <div className="item-action-btns">
+                              <button
+                                className="item-mini-btn"
+                                title="Редактировать"
+                                onClick={() => handleStartEdit(task)}
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                className="item-mini-btn"
+                                title="Перенести на завтра"
+                                onClick={() => handlePostponeTomorrow(task.id)}
+                              >
+                                <ArrowRight size={14} />
+                              </button>
+                              <button
+                                className="item-mini-btn btn-danger"
+                                title="Удалить"
+                                onClick={() => handleDeleteTask(task.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </AnimatedAccordion>
+              </section>
+            )}
+
+            {/* SECTION 3: Active Today's Tasks */}
+            {activeTodayTasks.length > 0 && (
+              <section className="linear-section today-tasks-section">
+                <div
+                  className="linear-section-header"
+                  onClick={() => setIsTodayOpen((prev) => !prev)}
+                >
+                  <div className="linear-section-title">
+                    <span>Задачи</span>
+                    <span className="linear-count-badge">
+                      {activeTodayTasks.length}
+                    </span>
+                  </div>
+                  <AnimatedChevron isOpen={isTodayOpen} size={16} />
+                </div>
+
+                <AnimatedAccordion isOpen={isTodayOpen}>
+                  <div className="linear-list">
+                    {activeTodayTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className={`linear-list-item ${task.is_completed ? 'completed' : ''}`}
+                        style={{ alignItems: 'flex-start' }}
+                      >
+                        <AnimatedCheckbox
+                          checked={!!task.is_completed}
+                          onChange={() => handleToggleTask(task.id, task.is_completed)}
+                          ariaLabel="Выполнить задачу"
+                          style={{ marginTop: '3px' }}
+                        />
+
+                        {editingTaskId === task.id ? (
+                          <div className="task-inline-edit-box">
+                            <input
+                              type="text"
+                              className="task-inline-input"
+                              value={editTaskTitle}
+                              onChange={(e) => setEditTaskTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEdit(task.id);
+                                if (e.key === 'Escape') setEditingTaskId(null);
+                              }}
+                              autoFocus
+                            />
+                            <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="item-mini-btn"
+                                title="Отмена"
+                                onClick={() => setEditingTaskId(null)}
+                              >
+                                <X size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="item-mini-btn btn-success"
+                                title="Сохранить"
+                                onClick={() => handleSaveEdit(task.id)}
+                              >
+                                <Check size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="item-content-col">
+                              <div className="item-title">
+                                {task.title}
+                              </div>
+                              <div className="item-meta-row">
+                                {task.scheduled_time && (
+                                  <span className="item-tag tag-due">
+                                    <Clock size={10} />
+                                    {task.scheduled_time}
+                                  </span>
+                                )}
+                                {task.goal_title && (
+                                  <span className="item-tag">
+                                    <Target size={10} />
+                                    {task.goal_title}
+                                  </span>
+                                )}
+                              </div>
+                              {renderNumericStepper(task, 'task')}
+                            </div>
+
+                            <div className="item-action-btns">
+                              <button
+                                className="item-mini-btn"
+                                title="Редактировать"
+                                onClick={() => handleStartEdit(task)}
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                className="item-mini-btn"
+                                title="Перенести на завтра"
+                                onClick={() => handlePostponeTomorrow(task.id)}
+                              >
+                                <ArrowRight size={14} />
+                              </button>
+                              <button
+                                className="item-mini-btn btn-danger"
+                                title="Удалить"
+                                onClick={() => handleDeleteTask(task.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </AnimatedAccordion>
+              </section>
+            )}
+
+            {/* SECTION 3.5: Upcoming Tasks (Предстоящие) */}
+            {activeUpcomingTasks.length > 0 && (
+              <section className="linear-section today-upcoming-section">
+                <div
+                  className="linear-section-header"
+                  onClick={() => setIsUpcomingOpen((prev) => !prev)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="linear-section-title">
+                    <span>Предстоящие</span>
+                    <span className="linear-count-badge">
+                      {activeUpcomingTasks.length}
+                    </span>
+                  </div>
+                  <AnimatedChevron isOpen={isUpcomingOpen} size={16} />
+                </div>
+
+                <AnimatedAccordion isOpen={isUpcomingOpen}>
+                  <div className="upcoming-groups-wrap">
+                    {upcomingGroups.map((group) => (
+                      <div key={group.key} className="upcoming-group-block">
+                        <div className="upcoming-group-subheader">
+                          <span>{group.label}</span>
+                          <span className="upcoming-group-count">{group.tasks.length}</span>
+                        </div>
+                        <div className="linear-list">
+                          {group.tasks.map((task) => (
+                            <div
+                              key={task.id}
+                              className={`linear-list-item ${task.is_completed ? 'completed' : ''}`}
+                              style={{ alignItems: 'flex-start' }}
+                            >
+                              <AnimatedCheckbox
+                                checked={!!task.is_completed}
+                                onChange={() => handleToggleTask(task.id, task.is_completed)}
+                                ariaLabel="Выполнить предстоящую задачу"
+                                style={{ marginTop: '3px' }}
+                              />
+
+                              {editingTaskId === task.id ? (
+                                <div className="task-inline-edit-box">
+                                  <input
+                                    type="text"
+                                    className="task-inline-input"
+                                    value={editTaskTitle}
+                                    onChange={(e) => setEditTaskTitle(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveEdit(task.id);
+                                      if (e.key === 'Escape') setEditingTaskId(null);
+                                    }}
+                                    autoFocus
+                                  />
+                                  <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                                    <button
+                                      type="button"
+                                      className="item-mini-btn"
+                                      title="Отмена"
+                                      onClick={() => setEditingTaskId(null)}
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="item-mini-btn btn-success"
+                                      title="Сохранить"
+                                      onClick={() => handleSaveEdit(task.id)}
+                                    >
+                                      <Check size={13} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="item-content-col">
+                                    <div className="item-title">
+                                      {task.title}
+                                    </div>
+                                    <div className="item-meta-row">
+                                      {task.scheduled_date && (
+                                        <span className="item-tag">
+                                          <Calendar size={10} />
+                                          {formatUpcomingDateLabel(task.scheduled_date)}
+                                        </span>
+                                      )}
+                                      {task.scheduled_time && (
+                                        <span className="item-tag tag-due">
+                                          <Clock size={10} />
+                                          {task.scheduled_time}
+                                        </span>
+                                      )}
+                                      {task.goal_title && (
+                                        <span className="item-tag">
+                                          <Target size={10} />
+                                          {task.goal_title}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {renderNumericStepper(task, 'task')}
+                                  </div>
+
+                                  <div className="item-action-btns">
+                                    <button
+                                      className="item-mini-btn"
+                                      title="Редактировать"
+                                      onClick={() => handleStartEdit(task)}
+                                    >
+                                      <Pencil size={13} />
+                                    </button>
+                                    <button
+                                      className="item-mini-btn btn-danger"
+                                      title="Удалить"
+                                      onClick={() => handleDeleteTask(task.id)}
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </AnimatedAccordion>
+              </section>
+            )}
+
+            {/* SECTION 4: Completed Tasks Accordion (Выполненные) */}
+            {completedTodayTasks.length > 0 && (
+              <section className="linear-section today-completed-section">
+                <div
+                  className="linear-section-header"
+                  onClick={() => setIsCompletedOpen((prev) => !prev)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="linear-section-title">
+                    <span style={{ color: 'var(--text-secondary)' }}>Выполненные</span>
+                    <span className="linear-count-badge badge-success">
+                      {completedTodayTasks.length}
+                    </span>
+                  </div>
+                  <AnimatedChevron isOpen={isCompletedOpen} size={16} />
+                </div>
+
+                <AnimatedAccordion isOpen={isCompletedOpen}>
+                  <div className="linear-list">
+                    {completedTodayTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="linear-list-item completed"
+                        style={{ alignItems: 'flex-start' }}
+                      >
+                        <AnimatedCheckbox
+                          checked={true}
+                          onChange={() => handleToggleTask(task.id, task.is_completed)}
+                          ariaLabel="Вернуть в активные задачи"
+                          style={{ marginTop: '3px' }}
+                        />
+
+                        {editingTaskId === task.id ? (
+                          <div className="task-inline-edit-box">
+                            <input
+                              type="text"
+                              className="task-inline-input"
+                              value={editTaskTitle}
+                              onChange={(e) => setEditTaskTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEdit(task.id);
+                                if (e.key === 'Escape') setEditingTaskId(null);
+                              }}
+                              autoFocus
+                            />
+                            <div style={{ display: 'flex', gap: '4px', marginTop: '6px', justifyContent: 'flex-end' }}>
+                              <button
+                                type="button"
+                                className="item-mini-btn"
+                                title="Отмена"
+                                onClick={() => setEditingTaskId(null)}
+                              >
+                                <X size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                className="item-mini-btn btn-success"
+                                title="Сохранить"
+                                onClick={() => handleSaveEdit(task.id)}
+                              >
+                                <Check size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="item-content-col">
+                              <div className="item-title" style={{ textDecoration: 'line-through', opacity: 0.65 }}>
+                                {task.title}
+                              </div>
+                              <div className="item-meta-row">
+                                {task.scheduled_date && task.scheduled_date > todayIso && (
+                                  <span className="item-tag">
+                                    <Calendar size={10} />
+                                    {formatUpcomingDateLabel(task.scheduled_date)}
+                                  </span>
+                                )}
+                                {task.scheduled_time && (
+                                  <span className="item-tag tag-due">
+                                    <Clock size={10} />
+                                    {task.scheduled_time}
+                                  </span>
+                                )}
+                                {task.goal_title && (
+                                  <span className="item-tag">
+                                    <Target size={10} />
+                                    {task.goal_title}
+                                  </span>
+                                )}
+                              </div>
+                              {renderNumericStepper(task, 'task')}
+                            </div>
+
+                            <div className="item-action-btns">
+                              <button
+                                className="item-mini-btn"
+                                title="Редактировать"
+                                onClick={() => handleStartEdit(task)}
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                className="item-mini-btn"
+                                title="Перенести на завтра"
+                                onClick={() => handlePostponeTomorrow(task.id)}
+                              >
+                                <ArrowRight size={14} />
+                              </button>
+                              <button
+                                className="item-mini-btn btn-danger"
+                                title="Удалить"
+                                onClick={() => handleDeleteTask(task.id)}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </AnimatedAccordion>
+              </section>
+            )}
+          </div>
         </div>
-      </div>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
 }
