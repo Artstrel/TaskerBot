@@ -1,4 +1,6 @@
 :root {
+  color-scheme: dark;
+
   /* Common geometry, radii & insets */
   --radius-sm: 12px;
   --radius-md: 18px;
@@ -230,6 +232,11 @@
   color-scheme: light;
 }
 
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 body.is-tg-fullscreen.is-ios,
 html.is-tg-fullscreen.is-ios {
   --safe-top: max(var(--tg-raw-safe-top, 0px),
@@ -246,14 +253,15 @@ html.is-tg-fullscreen.is-ios {
 }
 
 html {
-  background-color: var(--bg-app);
+  background-color: var(--bg-app, #0d0d0d);
   width: 100%;
   min-height: 100%;
+  min-height: 100dvh;
   -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background-color: var(--bg-app);
+  background-color: var(--bg-app, #0d0d0d);
   color: var(--text-primary);
   width: 100%;
   min-height: 100vh;
@@ -265,7 +273,7 @@ body {
 }
 
 #root {
-  background-color: var(--bg-app);
+  background-color: var(--bg-app, #0d0d0d);
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
@@ -307,7 +315,7 @@ h4,
   display: flex;
   flex-direction: column;
   width: 100%;
-  background-color: var(--bg-app);
+  background-color: var(--bg-app, #0d0d0d);
   position: relative;
 }
 
@@ -369,13 +377,13 @@ h4,
   right: 0;
   bottom: -8px;
   background: linear-gradient(to bottom,
-      var(--bg-app) 0%,
-      var(--bg-app) 45%,
-      color-mix(in srgb, var(--bg-app) 92%, transparent) 55%,
-      color-mix(in srgb, var(--bg-app) 82%, transparent) 65%,
-      color-mix(in srgb, var(--bg-app) 68%, transparent) 75%,
-      color-mix(in srgb, var(--bg-app) 50%, transparent) 83%,
-      color-mix(in srgb, var(--bg-app) 28%, transparent) 92%,
+      var(--bg-app, #0d0d0d) 0%,
+      var(--bg-app, #0d0d0d) 45%,
+      color-mix(in srgb, var(--bg-app, #0d0d0d) 92%, transparent) 55%,
+      color-mix(in srgb, var(--bg-app, #0d0d0d) 82%, transparent) 65%,
+      color-mix(in srgb, var(--bg-app, #0d0d0d) 68%, transparent) 75%,
+      color-mix(in srgb, var(--bg-app, #0d0d0d) 50%, transparent) 83%,
+      color-mix(in srgb, var(--bg-app, #0d0d0d) 28%, transparent) 92%,
       transparent 100%);
   pointer-events: none;
   z-index: -1;
@@ -907,8 +915,8 @@ body.is-tg-fullscreen .header-actions {
   bottom: -80px;
   height: calc(190px + var(--safe-bottom));
   background: linear-gradient(to top,
-      var(--bg-app) 0%,
-      var(--bg-app) 42%,
+      var(--bg-app, #0d0d0d) 0%,
+      var(--bg-app, #0d0d0d) 42%,
       var(--dock-scrim-stop1) 62%,
       var(--dock-scrim-stop2) 78%,
       var(--dock-scrim-stop3) 92%,
@@ -3768,7 +3776,7 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--bg-app);
+  background-color: var(--bg-app, #0d0d0d);
   z-index: 1000;
   overflow: hidden;
   box-sizing: border-box;
@@ -3778,7 +3786,7 @@ body,
   content: '';
   position: fixed;
   inset: -120px;
-  background-color: var(--bg-app);
+  background-color: var(--bg-app, #0d0d0d);
   z-index: -2;
   pointer-events: none;
 }

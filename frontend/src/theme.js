@@ -176,19 +176,33 @@ export function applyTheme(config = null, timezone = null) {
     root.setAttribute('data-theme', effectiveTheme);
     root.style.colorScheme = effectiveTheme;
 
-    if (document.body) {
-      document.body.setAttribute('data-theme', effectiveTheme);
-    }
-
-    // Sync Telegram WebApp native colors and meta theme-color
     const themeColor = effectiveTheme === 'light' ? '#f4f4f6' : '#0d0d0d';
     root.style.backgroundColor = themeColor;
+
     if (document.body) {
+      document.body.setAttribute('data-theme', effectiveTheme);
+      document.body.style.colorScheme = effectiveTheme;
       document.body.style.backgroundColor = themeColor;
     }
+
+    const metaColorScheme = document.querySelector('meta[name="color-scheme"]');
+    if (metaColorScheme) {
+      metaColorScheme.setAttribute('content', effectiveTheme);
+    }
+
     const metaThemeColors = document.querySelectorAll('meta[name="theme-color"]');
     if (metaThemeColors.length > 0) {
       metaThemeColors.forEach((m) => m.setAttribute('content', themeColor));
+    }
+    const dynamicMeta = document.getElementById('meta-theme-color');
+    if (dynamicMeta) {
+      dynamicMeta.removeAttribute('media');
+      dynamicMeta.setAttribute('content', themeColor);
+    }
+
+    const metaStatusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    if (metaStatusBar) {
+      metaStatusBar.setAttribute('content', effectiveTheme === 'light' ? 'default' : 'black-translucent');
     }
 
     syncTelegramChromeColors(themeColor);
