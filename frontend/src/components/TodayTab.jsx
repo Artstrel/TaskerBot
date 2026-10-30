@@ -681,9 +681,20 @@ export default function TodayTab({
   const handleTaskProgress = (taskId, delta) => {
     hapticFeedback('light');
     recordUserAction();
-    let willComplete = false;
-    let computedNextVal = 0;
-    let targetGoalId = null;
+
+    const allTasks = [
+      ...(dashboardData?.today_tasks || []),
+      ...(dashboardData?.overdue_tasks || []),
+      ...(dashboardData?.upcoming_tasks || []),
+    ];
+    const task = allTasks.find((t) => t.id === taskId);
+    const curVal = task?.current_value || 0;
+    const target = task?.target_value || 1;
+    const computedNextVal = Math.max(0, Math.round((curVal + delta) * 100) / 100);
+    const nextCompleted = computedNextVal >= target;
+    const wasCompleted = Boolean(task?.is_completed);
+    const willComplete = !wasCompleted && nextCompleted;
+    const targetGoalId = task?.goal_id || null;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
@@ -693,19 +704,12 @@ export default function TodayTab({
         const updateList = (list) =>
           (list || []).map((t) => {
             if (t.id === taskId) {
-              const target = t.target_value || 1;
-              const cur = t.current_value || 0;
-              const nextVal = Math.max(0, Math.round((cur + delta) * 100) / 100);
-              computedNextVal = nextVal;
-              targetGoalId = t.goal_id;
-              const nextCompleted = nextVal >= target;
               if (!t.is_completed && nextCompleted) {
-                willComplete = true;
                 if (!isUpcoming) deltaCompleted = 1;
               } else if (t.is_completed && !nextCompleted) {
                 if (!isUpcoming) deltaCompleted = -1;
               }
-              return { ...t, current_value: nextVal, is_completed: nextCompleted };
+              return { ...t, current_value: computedNextVal, is_completed: nextCompleted };
             }
             return t;
           });
@@ -732,8 +736,8 @@ export default function TodayTab({
           if (g.id !== targetGoalId) return g;
           const updatedSubtasks = (g.subtasks || []).map((st) => {
             if (st.id === taskId) {
-              const target = st.target_value || 1;
-              const isDone = computedNextVal >= target;
+              const stTarget = st.target_value || 1;
+              const isDone = computedNextVal >= stTarget;
               return { ...st, current_value: computedNextVal, is_completed: isDone };
             }
             return st;
@@ -773,8 +777,18 @@ export default function TodayTab({
     if (isNaN(val) || val < 0) return;
     hapticFeedback('light');
     recordUserAction();
-    let willComplete = false;
-    let targetGoalId = null;
+
+    const allTasks = [
+      ...(dashboardData?.today_tasks || []),
+      ...(dashboardData?.overdue_tasks || []),
+      ...(dashboardData?.upcoming_tasks || []),
+    ];
+    const task = allTasks.find((t) => t.id === taskId);
+    const target = task?.target_value || 1;
+    const nextCompleted = val >= target;
+    const wasCompleted = Boolean(task?.is_completed);
+    const willComplete = !wasCompleted && nextCompleted;
+    const targetGoalId = task?.goal_id || null;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
@@ -784,11 +798,7 @@ export default function TodayTab({
         const updateList = (list) =>
           (list || []).map((t) => {
             if (t.id === taskId) {
-              const target = t.target_value || 1;
-              targetGoalId = t.goal_id;
-              const nextCompleted = val >= target;
               if (!t.is_completed && nextCompleted) {
-                willComplete = true;
                 if (!isUpcoming) deltaCompleted = 1;
               } else if (t.is_completed && !nextCompleted) {
                 if (!isUpcoming) deltaCompleted = -1;
@@ -820,8 +830,8 @@ export default function TodayTab({
           if (g.id !== targetGoalId) return g;
           const updatedSubtasks = (g.subtasks || []).map((st) => {
             if (st.id === taskId) {
-              const target = st.target_value || 1;
-              const isDone = val >= target;
+              const stTarget = st.target_value || 1;
+              const isDone = val >= stTarget;
               return { ...st, current_value: val, is_completed: isDone };
             }
             return st;
@@ -858,8 +868,14 @@ export default function TodayTab({
   const handleRoutineProgress = (routineId, delta) => {
     hapticFeedback('light');
     recordUserAction();
-    let willComplete = false;
-    let computedNextVal = 0;
+
+    const routine = (dashboardData?.routine_tasks || []).find((r) => r.id === routineId);
+    const curVal = routine?.current_value || 0;
+    const target = routine?.target_value || 1;
+    const computedNextVal = Math.max(0, Math.round((curVal + delta) * 100) / 100);
+    const nextCompleted = computedNextVal >= target;
+    const wasCompleted = Boolean(routine?.is_completed_today);
+    const willComplete = !wasCompleted && nextCompleted;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
@@ -867,15 +883,9 @@ export default function TodayTab({
         let deltaCompleted = 0;
         const newRoutines = (prev.routine_tasks || []).map((r) => {
           if (r.id === routineId) {
-            const target = r.target_value || 1;
-            const cur = r.current_value || 0;
-            const nextVal = Math.max(0, Math.round((cur + delta) * 100) / 100);
-            computedNextVal = nextVal;
-            const nextCompleted = nextVal >= target;
             const currentStreak = r.current_streak || 0;
             let newStreak = currentStreak;
             if (!r.is_completed_today && nextCompleted) {
-              willComplete = true;
               deltaCompleted = 1;
               newStreak = currentStreak + 1;
             } else if (r.is_completed_today && !nextCompleted) {
@@ -884,7 +894,7 @@ export default function TodayTab({
             }
             return {
               ...r,
-              current_value: nextVal,
+              current_value: computedNextVal,
               is_completed_today: nextCompleted,
               current_streak: newStreak,
               best_streak: Math.max(r.best_streak || 0, newStreak),
@@ -920,7 +930,12 @@ export default function TodayTab({
     if (isNaN(val) || val < 0) return;
     hapticFeedback('light');
     recordUserAction();
-    let willComplete = false;
+
+    const routine = (dashboardData?.routine_tasks || []).find((r) => r.id === routineId);
+    const target = routine?.target_value || 1;
+    const nextCompleted = val >= target;
+    const wasCompleted = Boolean(routine?.is_completed_today);
+    const willComplete = !wasCompleted && nextCompleted;
 
     if (setDashboardData) {
       setDashboardData((prev) => {
@@ -928,12 +943,9 @@ export default function TodayTab({
         let deltaCompleted = 0;
         const newRoutines = (prev.routine_tasks || []).map((r) => {
           if (r.id === routineId) {
-            const target = r.target_value || 1;
-            const nextCompleted = val >= target;
             const currentStreak = r.current_streak || 0;
             let newStreak = currentStreak;
             if (!r.is_completed_today && nextCompleted) {
-              willComplete = true;
               deltaCompleted = 1;
               newStreak = currentStreak + 1;
             } else if (r.is_completed_today && !nextCompleted) {

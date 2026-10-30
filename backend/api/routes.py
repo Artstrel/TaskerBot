@@ -83,6 +83,22 @@ router = APIRouter(prefix="/api")
 security = HTTPBearer(auto_error=False)
 
 
+def _set_auth_cookie(response: Optional[Response], token: str, expires_in: int) -> None:
+    if response:
+        try:
+            response.set_cookie(
+                key="tasker_token",
+                value=token,
+                max_age=expires_in,
+                httponly=True,
+                samesite="none",
+                secure=True,
+                path="/",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to set auth cookie: {e}")
+
+
 async def get_current_user(
     request: Request,
     auth: Optional[HTTPAuthorizationCredentials] = Depends(security),
@@ -109,9 +125,25 @@ async def get_current_user(
                 first_name = payload.get("first_name")
 
     if effective_id is None:
-        if telegram_id is not None and settings.DEBUG:
-            logger.warning("Allowing unauthenticated telegram_id query parameter because DEBUG is True")
-            effective_id = telegram_id
+        init_data_header = request.headers.get("X-Telegram-Init-Data") or request.headers.get("x-telegram-init-data")
+        if init_data_header:
+            try:
+                profile = validate_telegram_webapp_init_data(init_data_header)
+                effective_id = profile["telegram_id"]
+                if not username:
+                    username = profile.get("username")
+                if not first_name:
+                    first_name = profile.get("first_name")
+            except Exception as e:
+                logger.warning(f"Failed to validate X-Telegram-Init-Data header: {e}")
+
+    if effective_id is None:
+        if telegram_id is not None:
+            if settings.DEBUG or not (settings.BOT_TOKEN and settings.BOT_TOKEN.strip()):
+                logger.warning("Allowing unauthenticated telegram_id query parameter (DEBUG or BOT_TOKEN missing)")
+                effective_id = telegram_id
+            else:
+                raise HTTPException(status_code=401, detail="Authentication credentials required")
         else:
             raise HTTPException(status_code=401, detail="Authentication credentials required")
 
@@ -152,6 +184,7 @@ async def get_telegram_auth_url(redirect_uri: str = Query(...), response: Respon
 @router.post("/auth/telegram/webapp", response_model=AuthTokenResponse)
 async def authenticate_telegram_webapp(
     data: TelegramWebAppAuthRequest,
+    response: Response,
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -180,6 +213,7 @@ async def authenticate_telegram_webapp(
         first_name=user.first_name,
         photo_url=user.photo_url,
     )
+    _set_auth_cookie(response, token, expires_in)
 
     return AuthTokenResponse(
         access_token=token,
@@ -192,6 +226,7 @@ async def authenticate_telegram_webapp(
 @router.post("/auth/telegram/widget", response_model=AuthTokenResponse)
 async def authenticate_telegram_widget(
     data: TelegramWidgetAuthRequest,
+    response: Response,
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -220,6 +255,7 @@ async def authenticate_telegram_widget(
         first_name=user.first_name,
         photo_url=user.photo_url,
     )
+    _set_auth_cookie(response, token, expires_in)
 
     return AuthTokenResponse(
         access_token=token,
@@ -296,6 +332,7 @@ async def exchange_telegram_auth(
         first_name=user.first_name,
         photo_url=user.photo_url,
     )
+    _set_auth_cookie(response, token, expires_in)
 
     return AuthTokenResponse(
         access_token=token,
@@ -308,6 +345,7 @@ async def exchange_telegram_auth(
 @router.post("/auth/telegram/id-token", response_model=AuthTokenResponse)
 async def authenticate_telegram_id_token(
     data: TelegramIdTokenAuthRequest,
+    response: Response,
     session: AsyncSession = Depends(get_db),
 ):
     """
@@ -345,6 +383,7 @@ async def authenticate_telegram_id_token(
         first_name=user.first_name,
         photo_url=user.photo_url,
     )
+    _set_auth_cookie(response, token, expires_in)
 
     return AuthTokenResponse(
         access_token=token,

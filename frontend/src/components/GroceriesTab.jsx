@@ -247,17 +247,16 @@ export default function GroceriesTab({
   // Step quantity progress change (+/-)
   const handleProgress = (itemId, delta) => {
     hapticFeedback('light');
-    let newTarget = 0;
+    const item = (groceriesData?.active_items || []).find((i) => i.id === itemId);
+    const curVal = item?.target_value || 0;
+    const newTarget = Math.max(0, Math.round((curVal + delta) * 100) / 100);
 
     if (setGroceriesData) {
       setGroceriesData((prev) => {
         if (!prev) return prev;
         const active = (prev.active_items || []).map((i) => {
           if (i.id === itemId) {
-            const current = i.target_value || 0;
-            const updatedVal = Math.max(0, Math.round((current + delta) * 100) / 100);
-            newTarget = updatedVal;
-            return { ...i, target_value: updatedVal };
+            return { ...i, target_value: newTarget };
           }
           return i;
         });

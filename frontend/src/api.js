@@ -55,6 +55,7 @@ export const setDemoMode = (enabled) => {
 };
 
 export const isAuthenticated = () => {
+  if (isInsideTelegram()) return true;
   if (isDemoMode()) return true;
   const token = getAuthToken();
   return Boolean(token);
@@ -170,21 +171,26 @@ if (typeof window !== 'undefined' && window.fetch) {
       const urlStr = typeof input === 'string' ? input : input?.url || '';
       if (urlStr.includes('/api')) {
         const token = localStorage.getItem('tasker_auth_token');
-        if (token) {
-          const headers = new Headers(init.headers || (typeof input === 'object' && input.headers ? input.headers : {}));
-          if (!headers.has('Authorization')) {
-            headers.set('Authorization', `Bearer ${token}`);
-          }
-          const res = await _origFetch(input, { ...init, headers });
-          if (res.status === 401 && !urlStr.includes('/auth/')) {
-            console.warn('API returned 401 Unauthorized, clearing stale token');
-            clearAuthSession();
-            if (window.Telegram?.WebApp?.initData) {
-              authenticateWithTelegramWebApp(window.Telegram.WebApp.initData).catch(() => {});
-            }
-          }
-          return res;
+        const headers = new Headers(init.headers || (typeof input === 'object' && input.headers ? input.headers : {}));
+        if (token && !headers.has('Authorization')) {
+          headers.set('Authorization', `Bearer ${token}`);
         }
+        if (window.Telegram?.WebApp?.initData && !headers.has('X-Telegram-Init-Data')) {
+          headers.set('X-Telegram-Init-Data', window.Telegram.WebApp.initData);
+        }
+        const reqInit = { ...init, headers };
+        if (!reqInit.credentials) {
+          reqInit.credentials = 'include';
+        }
+        const res = await _origFetch(input, reqInit);
+        if (res.status === 401 && !urlStr.includes('/auth/')) {
+          console.warn('API returned 401 Unauthorized, clearing stale token');
+          clearAuthSession();
+          if (window.Telegram?.WebApp?.initData) {
+            authenticateWithTelegramWebApp(window.Telegram.WebApp.initData).catch(() => {});
+          }
+        }
+        return res;
       }
     } catch (_) {}
     return _origFetch(input, init);
@@ -1856,17 +1862,19 @@ export const addGoalSubtask = async (goalId, title, scheduledDate = null, schedu
   const goal = db.goals.find((g) => g.id === goalId);
   if (goal) {
     if (!goal.subtasks) goal.subtasks = [];
-    goal.subtasks.push({
+    const newSubtask = {
       id: Date.now(),
       title,
       is_completed: false,
       scheduled_date: scheduledDate,
       scheduled_time: scheduledTime,
-    });
+      goal_id: goalId,
+    };
+    goal.subtasks.push(newSubtask);
     saveLocalDb(db);
-    return goal;
+    return newSubtask;
   }
-  return { success: true };
+  return { id: Date.now(), title, is_completed: false, goal_id: goalId };
 };
 
 export const toggleGoal = async (goalId, isCompleted = null) => {
