@@ -2,6 +2,7 @@ from datetime import datetime, date, timedelta
 from typing import List, Optional, Tuple, Union
 import zoneinfo
 from sqlalchemy import select, update, delete, and_, func, desc, Integer, case
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -331,11 +332,14 @@ async def update_routine(
 
     log = None
     if target_date:
-        log_stmt = select(RoutineLog).where(
-            and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date)
+        log_stmt = (
+            select(RoutineLog)
+            .where(and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date))
+            .order_by(RoutineLog.current_value.desc(), RoutineLog.id.desc())
+            .limit(1)
         )
         log_res = await session.execute(log_stmt)
-        log = log_res.scalar_one_or_none()
+        log = log_res.scalars().first()
 
     return _routine_to_status(routine, log)
 
@@ -361,7 +365,19 @@ async def get_user_routines_with_status(
         )
         log_res = await session.execute(log_stmt)
         for log in log_res.scalars().all():
-            logs_by_routine_id[log.routine_id] = log
+            existing = logs_by_routine_id.get(log.routine_id)
+            if existing is None:
+                logs_by_routine_id[log.routine_id] = log
+            else:
+                cur_val = log.current_value or 0.0
+                ex_val = existing.current_value or 0.0
+                if cur_val > ex_val:
+                    logs_by_routine_id[log.routine_id] = log
+                elif cur_val == ex_val:
+                    if log.is_completed and not existing.is_completed:
+                        logs_by_routine_id[log.routine_id] = log
+                    elif log.id > existing.id:
+                        logs_by_routine_id[log.routine_id] = log
 
     result = []
     for r in routines:
@@ -388,11 +404,14 @@ async def toggle_routine_completion(
     if not routine:
         return None
 
-    log_stmt = select(RoutineLog).where(
-        and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date)
+    log_stmt = (
+        select(RoutineLog)
+        .where(and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date))
+        .order_by(RoutineLog.current_value.desc(), RoutineLog.id.desc())
+        .limit(1)
     )
     log_res = await session.execute(log_stmt)
-    log = log_res.scalar_one_or_none()
+    log = log_res.scalars().first()
 
     if completed is None:
         new_state = not (log.is_completed if log else False)
@@ -430,7 +449,25 @@ async def toggle_routine_completion(
         if routine.current_streak > 0:
             routine.current_streak -= 1
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        routine_res = await session.execute(stmt)
+        routine = routine_res.scalar_one_or_none()
+        log_res = await session.execute(log_stmt)
+        log = log_res.scalars().first()
+        if not log or not routine:
+            raise
+        log.is_completed = new_state
+        log.completed_at = now_utc if new_state else None
+        if routine.target_value is not None and routine.target_value > 0:
+            if new_state and (log.current_value or 0.0) < routine.target_value:
+                log.current_value = routine.target_value
+            elif not new_state and (log.current_value or 0.0) >= routine.target_value:
+                log.current_value = 0.0
+        await session.commit()
+
     await session.refresh(routine)
     await session.refresh(log)
 
@@ -453,11 +490,14 @@ async def update_routine_progress(
     if not routine:
         return None
 
-    log_stmt = select(RoutineLog).where(
-        and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date)
+    log_stmt = (
+        select(RoutineLog)
+        .where(and_(RoutineLog.routine_id == routine_id, RoutineLog.date == target_date))
+        .order_by(RoutineLog.current_value.desc(), RoutineLog.id.desc())
+        .limit(1)
     )
     log_res = await session.execute(log_stmt)
-    log = log_res.scalar_one_or_none()
+    log = log_res.scalars().first()
 
     now_utc = datetime.utcnow()
     if not log:
@@ -494,7 +534,39 @@ async def update_routine_progress(
             if routine.current_streak > 0:
                 routine.current_streak -= 1
 
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        routine_res = await session.execute(stmt)
+        routine = routine_res.scalar_one_or_none()
+        log_res = await session.execute(log_stmt)
+        log = log_res.scalars().first()
+        if not log or not routine:
+            raise
+        old_val = log.current_value or 0.0
+        if current_value is not None:
+            new_val = current_value
+        elif delta is not None:
+            new_val = old_val + delta
+        else:
+            new_val = old_val
+        new_val = max(0.0, round(float(new_val), 2))
+        log.current_value = new_val
+        if routine.target_value is not None and routine.target_value > 0:
+            if new_val >= routine.target_value and not log.is_completed:
+                log.is_completed = True
+                log.completed_at = now_utc
+                routine.current_streak += 1
+                if routine.current_streak > routine.best_streak:
+                    routine.best_streak = routine.current_streak
+            elif new_val < routine.target_value and log.is_completed:
+                log.is_completed = False
+                log.completed_at = None
+                if routine.current_streak > 0:
+                    routine.current_streak -= 1
+        await session.commit()
+
     await session.refresh(routine)
     await session.refresh(log)
 

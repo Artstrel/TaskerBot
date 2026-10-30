@@ -73,6 +73,10 @@ async def init_db() -> None:
             ("one_time_tasks", "step", "FLOAT DEFAULT 1.0"),
             ("one_time_tasks", "unit", "VARCHAR(32)"),
             ("one_time_tasks", "scheduled_time", "VARCHAR(5)"),
+            ("grocery_items", "target_value", "FLOAT"),
+            ("grocery_items", "current_value", "FLOAT DEFAULT 0.0"),
+            ("grocery_items", "step", "FLOAT DEFAULT 1.0"),
+            ("grocery_items", "unit", "VARCHAR(32)"),
         ]
 
         if conn.dialect.name == "sqlite":
@@ -87,4 +91,70 @@ async def init_db() -> None:
                 await conn.execute(
                     text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {col_def}")
                 )
+
+        # Deduplicate routine_logs before creating unique index
+        try:
+            dup_query = text(
+                "SELECT routine_id, date, count(*) FROM routine_logs "
+                "GROUP BY routine_id, date HAVING count(*) > 1"
+            )
+            dup_res = await conn.execute(dup_query)
+            dup_rows = dup_res.fetchall()
+            for r_id, r_date, _ in dup_rows:
+                logs_res = await conn.execute(
+                    text(
+                        "SELECT id, current_value, is_completed, completed_at FROM routine_logs "
+                        "WHERE routine_id = :r_id AND date = :r_date"
+                    ),
+                    {"r_id": r_id, "r_date": r_date},
+                )
+                all_logs = logs_res.fetchall()
+                if not all_logs:
+                    continue
+
+                def sort_key(row):
+                    cur_val = row[1] if row[1] is not None else 0.0
+                    c_at = row[3].isoformat() if hasattr(row[3], "isoformat") else (str(row[3]) if row[3] is not None else "")
+                    return (cur_val, c_at, row[0])
+
+                sorted_logs = sorted(all_logs, key=sort_key, reverse=True)
+                best_id = sorted_logs[0][0]
+                max_current_value = max(
+                    (row[1] if row[1] is not None else 0.0) for row in all_logs
+                )
+                any_completed = any(bool(row[2]) for row in all_logs)
+                completed_ats = [row[3] for row in all_logs if row[3] is not None]
+                latest_completed_at = max(completed_ats) if completed_ats else None
+
+                await conn.execute(
+                    text(
+                        "UPDATE routine_logs SET current_value = :cur_val, is_completed = :comp, completed_at = :c_at "
+                        "WHERE id = :k_id"
+                    ),
+                    {
+                        "cur_val": max_current_value,
+                        "comp": any_completed,
+                        "c_at": latest_completed_at,
+                        "k_id": best_id,
+                    },
+                )
+                await conn.execute(
+                    text(
+                        "DELETE FROM routine_logs WHERE routine_id = :r_id AND date = :r_date AND id != :k_id"
+                    ),
+                    {"r_id": r_id, "r_date": r_date, "k_id": best_id},
+                )
+        except Exception:
+            pass
+
+        # Ensure unique index idx_routine_logs_routine_date_unique exists
+        try:
+            await conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_routine_logs_routine_date_unique "
+                    "ON routine_logs (routine_id, date)"
+                )
+            )
+        except Exception:
+            pass
 

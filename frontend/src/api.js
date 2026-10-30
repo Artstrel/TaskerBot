@@ -219,6 +219,14 @@ const resolveInitialUser = () => {
 
 export const currentUser = resolveInitialUser();
 
+export const getEffectiveUserId = () => {
+  if (currentUser && currentUser.id > 0) return currentUser.id;
+  if (currentUser && currentUser.telegram_id > 0) return currentUser.telegram_id;
+  const tgUser = extractTelegramUser();
+  if (tgUser && tgUser.id > 0) return tgUser.id;
+  return 0;
+};
+
 export const setAuthSession = (token, user) => {
   if (typeof window !== 'undefined') {
     if (token) localStorage.setItem('tasker_auth_token', token);
@@ -730,7 +738,7 @@ export const hapticFeedback = (style = 'medium') => {
 export const getCachedDashboard = () => {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(`tasker_cache_dashboard_${currentUser.id}`);
+    const raw = localStorage.getItem(`tasker_cache_dashboard_${getEffectiveUserId()}`);
     if (raw) return JSON.parse(raw);
   } catch (e) {}
   return null;
@@ -739,14 +747,14 @@ export const getCachedDashboard = () => {
 export const setCachedDashboard = (data) => {
   if (typeof window === 'undefined' || !data) return;
   try {
-    localStorage.setItem(`tasker_cache_dashboard_${currentUser.id}`, JSON.stringify(data));
+    localStorage.setItem(`tasker_cache_dashboard_${getEffectiveUserId()}`, JSON.stringify(data));
   } catch (e) {}
 };
 
 export const getCachedGoals = () => {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(`tasker_cache_goals_${currentUser.id}`);
+    const raw = localStorage.getItem(`tasker_cache_goals_${getEffectiveUserId()}`);
     if (raw) return JSON.parse(raw);
   } catch (e) {}
   return null;
@@ -755,14 +763,14 @@ export const getCachedGoals = () => {
 export const setCachedGoals = (data) => {
   if (typeof window === 'undefined' || !data) return;
   try {
-    localStorage.setItem(`tasker_cache_goals_${currentUser.id}`, JSON.stringify(data));
+    localStorage.setItem(`tasker_cache_goals_${getEffectiveUserId()}`, JSON.stringify(data));
   } catch (e) {}
 };
 
 export const getCachedGroceries = () => {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(`tasker_cache_groceries_${currentUser.id}`);
+    const raw = localStorage.getItem(`tasker_cache_groceries_${getEffectiveUserId()}`);
     if (raw) return JSON.parse(raw);
   } catch (e) {}
   return null;
@@ -771,14 +779,14 @@ export const getCachedGroceries = () => {
 export const setCachedGroceries = (data) => {
   if (typeof window === 'undefined' || !data) return;
   try {
-    localStorage.setItem(`tasker_cache_groceries_${currentUser.id}`, JSON.stringify(data));
+    localStorage.setItem(`tasker_cache_groceries_${getEffectiveUserId()}`, JSON.stringify(data));
   } catch (e) {}
 };
 
 export const getCachedUserSettings = () => {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(`tasker_cache_settings_${currentUser.id}`);
+    const raw = localStorage.getItem(`tasker_cache_settings_${getEffectiveUserId()}`);
     if (raw) return JSON.parse(raw);
   } catch (e) {}
   return null;
@@ -787,14 +795,14 @@ export const getCachedUserSettings = () => {
 export const setCachedUserSettings = (data) => {
   if (typeof window === 'undefined' || !data) return;
   try {
-    localStorage.setItem(`tasker_cache_settings_${currentUser.id}`, JSON.stringify(data));
+    localStorage.setItem(`tasker_cache_settings_${getEffectiveUserId()}`, JSON.stringify(data));
   } catch (e) {}
 };
 
 // ==============================================================================
 // Pending Sync Queue & Optimistic Mutations Reconciliation Layer
 // ==============================================================================
-const PENDING_SYNC_KEY = `tasker_pending_sync_${currentUser.id}`;
+export const getPendingSyncKey = () => `tasker_pending_sync_${getEffectiveUserId()}`;
 let lastUserActionTimestamp = 0;
 const recentCompletedMutations = new Map(); // key -> { mutation, completedAt }
 const RECENT_MUTATION_TTL = 5000; // 5 seconds grace period to prevent stale backend reads
@@ -822,7 +830,8 @@ export const hasActivePendingMutations = () => {
 export const getPendingSyncQueue = () => {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(PENDING_SYNC_KEY);
+    const key = getPendingSyncKey();
+    const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
@@ -831,9 +840,9 @@ export const getPendingSyncQueue = () => {
         const valid = parsed.filter((m) => m && m.created_at && (now - m.created_at < 30000));
         if (valid.length !== parsed.length) {
           if (valid.length > 0) {
-            localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(valid));
+            localStorage.setItem(key, JSON.stringify(valid));
           } else {
-            localStorage.removeItem(PENDING_SYNC_KEY);
+            localStorage.removeItem(key);
           }
         }
         return valid;
@@ -847,15 +856,17 @@ export const addPendingMutation = (mutation) => {
   if (typeof window === 'undefined' || !mutation) return;
   recordUserAction();
   try {
+    const key = getPendingSyncKey();
     const queue = getPendingSyncQueue();
     queue.push({ ...mutation, created_at: Date.now() });
-    localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(queue));
+    localStorage.setItem(key, JSON.stringify(queue));
   } catch (e) {}
 };
 
 export const removePendingMutation = (mutationId) => {
   if (typeof window === 'undefined' || !mutationId) return;
   try {
+    const key = getPendingSyncKey();
     const queue = getPendingSyncQueue();
     const removed = queue.find((m) => m.id === mutationId);
     if (removed) {
@@ -867,9 +878,9 @@ export const removePendingMutation = (mutationId) => {
     }
     const filtered = queue.filter((m) => m.id !== mutationId);
     if (filtered.length > 0) {
-      localStorage.setItem(PENDING_SYNC_KEY, JSON.stringify(filtered));
+      localStorage.setItem(key, JSON.stringify(filtered));
     } else {
-      localStorage.removeItem(PENDING_SYNC_KEY);
+      localStorage.removeItem(key);
     }
   } catch (e) {}
 };
@@ -878,7 +889,7 @@ export const clearPendingSyncQueue = () => {
   if (typeof window === 'undefined') return;
   recentCompletedMutations.clear();
   try {
-    localStorage.removeItem(PENDING_SYNC_KEY);
+    localStorage.removeItem(getPendingSyncKey());
   } catch (e) {}
 };
 
@@ -1266,9 +1277,10 @@ export const isDemoModeActive = () => {
 
 export const syncUserTimezone = async () => {
   try {
+    const effectiveUserId = getEffectiveUserId();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
     await fetch(
-      `${API_BASE}/user/sync?telegram_id=${currentUser.id}&timezone=${encodeURIComponent(
+      `${API_BASE}/user/sync?telegram_id=${effectiveUserId}&timezone=${encodeURIComponent(
         tz
       )}&first_name=${encodeURIComponent(currentUser.first_name || '')}&username=${encodeURIComponent(
         currentUser.username || ''
@@ -1311,11 +1323,25 @@ export const fetchDashboard = async () => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const effectiveUserId = getEffectiveUserId();
+    const headers = {};
+    const tgInitData =
+      (typeof window !== 'undefined' && window.Telegram?.WebApp?.initData) ||
+      (typeof window !== 'undefined' && window.location.hash.includes('tgWebAppData')
+        ? new URLSearchParams(window.location.hash.slice(1)).get('tgWebAppData')
+        : null);
+    if (tgInitData) {
+      headers['X-Telegram-Init-Data'] = tgInitData;
+    }
+    const token = typeof window !== 'undefined' ? localStorage.getItem('tasker_auth_token') : null;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
     const res = await fetch(
-      `${API_BASE}/dashboard/today?telegram_id=${currentUser.id}&first_name=${encodeURIComponent(
+      `${API_BASE}/dashboard/today?telegram_id=${effectiveUserId}&first_name=${encodeURIComponent(
         currentUser.first_name || ''
       )}`,
-      { signal: controller.signal }
+      { signal: controller.signal, headers }
     );
     clearTimeout(timeoutId);
     if (res.ok) {
@@ -1390,7 +1416,8 @@ export const fetchGoals = async () => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
-    const res = await fetch(`${API_BASE}/goals?telegram_id=${currentUser.id}`, { signal: controller.signal });
+    const effectiveUserId = getEffectiveUserId();
+    const res = await fetch(`${API_BASE}/goals?telegram_id=${effectiveUserId}`, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       if (typeof window !== 'undefined') window.__tasker_server_connected = true;
@@ -1419,7 +1446,8 @@ export const fetchGroceries = async () => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
-    const res = await fetch(`${API_BASE}/groceries?telegram_id=${currentUser.id}`, { signal: controller.signal });
+    const effectiveUserId = getEffectiveUserId();
+    const res = await fetch(`${API_BASE}/groceries?telegram_id=${effectiveUserId}`, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       if (typeof window !== 'undefined') window.__tasker_server_connected = true;
@@ -1446,8 +1474,9 @@ export const fetchGroceries = async () => {
 
 export const createGroceryItem = async (groceryData) => {
   hapticFeedback('light');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/groceries?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/groceries?telegram_id=${effectiveUserId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(groceryData),
@@ -1459,7 +1488,7 @@ export const createGroceryItem = async (groceryData) => {
   if (!db.groceries) db.groceries = { active_items: [], completed_items: [], total_count: 0, completed_count: 0 };
   const newItem = {
     id: Date.now(),
-    user_id: currentUser.id,
+    user_id: effectiveUserId,
     title: groceryData.title,
     target_value: groceryData.target_value || null,
     current_value: 0,
@@ -1478,8 +1507,9 @@ export const createGroceryItem = async (groceryData) => {
 export const updateGroceryItem = async (itemId, updateData) => {
   hapticFeedback('light');
   recordUserAction();
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/groceries/${itemId}?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/groceries/${itemId}?telegram_id=${effectiveUserId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData),
@@ -1523,8 +1553,9 @@ export const updateGroceryItem = async (itemId, updateData) => {
 
 export const deleteGroceryItem = async (itemId) => {
   hapticFeedback('medium');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/groceries/${itemId}?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/groceries/${itemId}?telegram_id=${effectiveUserId}`, {
       method: 'DELETE',
     });
     if (res.ok) return await res.json();
@@ -1544,8 +1575,9 @@ export const deleteGroceryItem = async (itemId) => {
 
 export const clearCompletedGroceries = async () => {
   hapticFeedback('medium');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/groceries/clear-completed?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/groceries/clear-completed?telegram_id=${effectiveUserId}`, {
       method: 'POST',
     });
     if (res.ok) return await res.json();
@@ -1567,7 +1599,8 @@ export const fetchUserSettings = async () => {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 12000);
-    const res = await fetch(`${API_BASE}/user/me?telegram_id=${currentUser.id}`, { signal: controller.signal });
+    const effectiveUserId = getEffectiveUserId();
+    const res = await fetch(`${API_BASE}/user/me?telegram_id=${effectiveUserId}`, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       if (typeof window !== 'undefined') window.__tasker_server_connected = true;
@@ -1587,8 +1620,9 @@ export const fetchUserSettings = async () => {
 };
 
 export const updateUserSettings = async (settingsData) => {
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/user/settings?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/user/settings?telegram_id=${effectiveUserId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settingsData),
@@ -1609,8 +1643,9 @@ export const updateUserSettings = async (settingsData) => {
 
 export const sendTestNotification = async () => {
   hapticFeedback('medium');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/notifications/test?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/notifications/test?telegram_id=${effectiveUserId}`, {
       method: 'POST',
     });
     if (res.ok) return await res.json();
@@ -1625,8 +1660,9 @@ export const sendTestNotification = async () => {
 export const toggleTask = async (taskId, completed = null) => {
   hapticFeedback('light');
   recordUserAction();
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const url = `${API_BASE}/tasks/${taskId}/toggle?telegram_id=${currentUser.id}${
+    const url = `${API_BASE}/tasks/${taskId}/toggle?telegram_id=${effectiveUserId}${
       completed !== null ? `&completed=${completed}` : ''
     }`;
     const res = await fetch(url, { method: 'PATCH' });
@@ -1652,9 +1688,10 @@ export const toggleTask = async (taskId, completed = null) => {
 
 export const postponeTask = async (taskId, newDateStr) => {
   hapticFeedback('medium');
+  const effectiveUserId = getEffectiveUserId();
   try {
     const res = await fetch(
-      `${API_BASE}/tasks/${taskId}/postpone?telegram_id=${currentUser.id}&new_date=${newDateStr}`,
+      `${API_BASE}/tasks/${taskId}/postpone?telegram_id=${effectiveUserId}&new_date=${newDateStr}`,
       { method: 'PATCH' }
     );
     if (res.ok) return await res.json();
@@ -1672,8 +1709,9 @@ export const postponeTask = async (taskId, newDateStr) => {
 
 export const deleteTask = async (taskId) => {
   hapticFeedback('warning');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/tasks/${taskId}?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}?telegram_id=${effectiveUserId}`, {
       method: 'DELETE',
     });
     if (res.ok) return await res.json();
@@ -1687,8 +1725,9 @@ export const deleteTask = async (taskId) => {
 
 export const createTask = async (taskData) => {
   hapticFeedback('success');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/tasks?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/tasks?telegram_id=${effectiveUserId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(taskData),
@@ -1720,8 +1759,9 @@ export const createTask = async (taskData) => {
 
 export const updateTask = async (taskId, updateData) => {
   hapticFeedback('selection');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/tasks/${taskId}?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}?telegram_id=${effectiveUserId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData),
@@ -1743,7 +1783,7 @@ export const updateTaskProgress = async (taskId, { current_value, delta }) => {
   hapticFeedback('light');
   recordUserAction();
   if (!currentUser.id || currentUser.id <= 0) syncTelegramUser();
-  const effectiveUserId = currentUser.id > 0 ? currentUser.id : (extractTelegramUser()?.id || 0);
+  const effectiveUserId = getEffectiveUserId();
   const mutationId = `progress_task_${taskId}_${Date.now()}`;
   if (current_value !== undefined) {
     addPendingMutation({ id: mutationId, type: 'progress_task', taskId, current_value, timestamp: Date.now() });
@@ -1760,7 +1800,7 @@ export const updateTaskProgress = async (taskId, { current_value, delta }) => {
     }
   } catch (e) {}
 
-  if (current_value !== undefined) removePendingMutation(mutationId);
+  // DO NOT remove pendingMutation if !res.ok, keeping optimistic value shielded until backend sync
   const db = getLocalDb();
   const task = db.tasks.find((t) => String(t.id) === String(taskId));
   if (task) {
@@ -1784,7 +1824,7 @@ export const updateRoutine = async (routineId, updateData) => {
   hapticFeedback('selection');
   recordUserAction();
   if (!currentUser.id || currentUser.id <= 0) syncTelegramUser();
-  const effectiveUserId = currentUser.id > 0 ? currentUser.id : (extractTelegramUser()?.id || 0);
+  const effectiveUserId = getEffectiveUserId();
   try {
     const res = await fetch(`${API_BASE}/routines/${routineId}?telegram_id=${effectiveUserId}`, {
       method: 'PATCH',
@@ -1808,7 +1848,7 @@ export const updateRoutineProgress = async (routineId, { current_value, delta })
   hapticFeedback('light');
   recordUserAction();
   if (!currentUser.id || currentUser.id <= 0) syncTelegramUser();
-  const effectiveUserId = currentUser.id > 0 ? currentUser.id : (extractTelegramUser()?.id || 0);
+  const effectiveUserId = getEffectiveUserId();
   const mutationId = `progress_routine_${routineId}_${Date.now()}`;
   if (current_value !== undefined) {
     addPendingMutation({ id: mutationId, type: 'progress_routine', routineId, current_value, timestamp: Date.now() });
@@ -1825,7 +1865,7 @@ export const updateRoutineProgress = async (routineId, { current_value, delta })
     }
   } catch (e) {}
 
-  if (current_value !== undefined) removePendingMutation(mutationId);
+  // DO NOT remove pendingMutation if !res.ok, keeping optimistic value shielded until backend sync
   const db = getLocalDb();
   const r = db.routines.find((item) => String(item.id) === String(routineId));
   if (r) {
@@ -1848,8 +1888,9 @@ export const updateRoutineProgress = async (routineId, { current_value, delta })
 export const toggleRoutine = async (routineId, completed = null) => {
   hapticFeedback('light');
   recordUserAction();
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const url = `${API_BASE}/routines/${routineId}/toggle?telegram_id=${currentUser.id}${
+    const url = `${API_BASE}/routines/${routineId}/toggle?telegram_id=${effectiveUserId}${
       completed !== null ? `&completed=${completed}` : ''
     }`;
     const res = await fetch(url, { method: 'PATCH' });
@@ -1882,8 +1923,9 @@ export const toggleRoutine = async (routineId, completed = null) => {
 
 export const deleteRoutine = async (routineId) => {
   hapticFeedback('warning');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/routines/${routineId}?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/routines/${routineId}?telegram_id=${effectiveUserId}`, {
       method: 'DELETE',
     });
     if (res.ok) return await res.json();
@@ -1897,8 +1939,9 @@ export const deleteRoutine = async (routineId) => {
 
 export const createRoutine = async (routineData) => {
   hapticFeedback('success');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/routines?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/routines?telegram_id=${effectiveUserId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(routineData),
@@ -1929,8 +1972,9 @@ export const createRoutine = async (routineData) => {
 
 export const createGoal = async (goalData) => {
   hapticFeedback('success');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/goals?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/goals?telegram_id=${effectiveUserId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(goalData),
@@ -1954,8 +1998,9 @@ export const createGoal = async (goalData) => {
 
 export const addGoalSubtask = async (goalId, title, scheduledDate = null, scheduledTime = null) => {
   hapticFeedback('light');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    let url = `${API_BASE}/goals/${goalId}/subtasks?telegram_id=${currentUser.id}&title=${encodeURIComponent(
+    let url = `${API_BASE}/goals/${goalId}/subtasks?telegram_id=${effectiveUserId}&title=${encodeURIComponent(
       title
     )}`;
     if (scheduledDate) {
@@ -1990,8 +2035,9 @@ export const addGoalSubtask = async (goalId, title, scheduledDate = null, schedu
 export const toggleGoal = async (goalId, isCompleted = null) => {
   hapticFeedback('medium');
   recordUserAction();
+  const effectiveUserId = getEffectiveUserId();
   try {
-    let url = `${API_BASE}/goals/${goalId}/toggle?telegram_id=${currentUser.id}`;
+    let url = `${API_BASE}/goals/${goalId}/toggle?telegram_id=${effectiveUserId}`;
     if (isCompleted !== null && isCompleted !== undefined) {
       url += `&completed=${isCompleted}`;
     }
@@ -2024,8 +2070,9 @@ export const toggleGoal = async (goalId, isCompleted = null) => {
 
 export const deleteGoal = async (goalId) => {
   hapticFeedback('warning');
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/goals/${goalId}?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/goals/${goalId}?telegram_id=${effectiveUserId}`, {
       method: 'DELETE',
     });
     if (res.ok) return await res.json();
@@ -2095,8 +2142,9 @@ export const setOpenRouterKey = (key) => {
 };
 
 export const fetchAIProviders = async () => {
+  const effectiveUserId = getEffectiveUserId();
   try {
-    const res = await fetch(`${API_BASE}/ai/providers?telegram_id=${currentUser.id}`);
+    const res = await fetch(`${API_BASE}/ai/providers?telegram_id=${effectiveUserId}`);
     if (res.ok) return await res.json();
   } catch (e) {}
 
@@ -2623,9 +2671,16 @@ export const parseTextWithDirectGemini = async (text) => {
 - Очищай "title" от вводных фраз ("напомни мне", "нужно", "надо") и маркеров даты/времени ("в 7 вечера", "завтра"). Например: "напомни мне в 7 вечера сходить полить цветы" -> "title": "Сходить полить цветы", "scheduled_time": "19:00".
 - Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы!
 
+Правила для числовых (количественных) задач и привычек со счётчиком:
+- Если задача или привычка содержит измеримую количественную цель (например: "выпить 2 литра воды", "отжаться 20 раз", "купить 5 помидоров", "пробежать 5 км", "прочитать 30 страниц"):
+  - "target_value": числовое значение цели (float, например: 2.0, 20.0, 5.0, 30.0).
+  - "unit": единица измерения кратко (строка, например: "л", "мл", "раз", "шт", "кг", "км", "стр").
+  - "step": шаг (float, например: 0.25 для литров/кг, 1.0 для штук/раз/км).
+- Если задача обычная и не содержит числовой счётчик, поля target_value, step, unit должны быть null.
+
 Текущая дата: ${todayStr}, текущее время: ${nowTimeStr}.
 Формат ответа строго валидный JSON с ключом "tasks".
-Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null, "scheduled_time": "HH:MM"|null}
+Каждый элемент: {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null, "scheduled_time": "HH:MM"|null, "target_value": float|null, "step": float|null, "unit": string|null}
 Пример структуры:
 {
   "tasks": [
@@ -2633,13 +2688,28 @@ export const parseTextWithDirectGemini = async (text) => {
       "title": "Молоко 2 л",
       "category": "grocery",
       "scheduled_date": null,
-      "scheduled_time": null
+      "scheduled_time": null,
+      "target_value": 2.0,
+      "step": 1.0,
+      "unit": "л"
+    },
+    {
+      "title": "Выпить 2 литра воды",
+      "category": "routine",
+      "scheduled_date": "${todayStr}",
+      "scheduled_time": null,
+      "target_value": 2.0,
+      "step": 0.25,
+      "unit": "л"
     },
     {
       "title": "Сходить полить цветы",
       "category": "one_time",
       "scheduled_date": "${todayStr}",
-      "scheduled_time": "19:00"
+      "scheduled_time": "19:00",
+      "target_value": null,
+      "step": null,
+      "unit": null
     }
   ]
 }
@@ -2705,10 +2775,17 @@ export const parseTextWithDirectGroq = async (text) => {
 - Очищай "title" от вводных слов ("напомни мне", "нужно") и маркеров даты/времени ("в 7 вечера", "завтра").
 - Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы!
 
+Правила для числовых (количественных) задач и привычек со счётчиком:
+- Если задача или привычка содержит измеримую количественную цель (например: "выпить 2 литра воды", "отжаться 20 раз", "купить 5 помидоров", "пробежать 5 км", "прочитать 30 страниц"):
+  - "target_value": числовое значение цели (float, например: 2.0, 20.0, 5.0, 30.0).
+  - "unit": единица измерения кратко (строка, например: "л", "мл", "раз", "шт", "кг", "км", "стр").
+  - "step": шаг (float, например: 0.25 для литров/кг, 1.0 для штук/раз/км).
+- Если задача обычная и не содержит числовой счётчик, поля target_value, step, unit должны быть null.
+
 Текущая дата: ${todayStr}, текущее время: ${nowTimeStr}.
 Формат ответа: строгий JSON с ключом "tasks".
-Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null, "scheduled_time": "HH:MM"|null}
-Пример: {"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null, "scheduled_time": null}, {"category": "one_time", "title": "Сходить полить цветы", "scheduled_date": "${todayStr}", "scheduled_time": "19:00"}]}`;
+Каждый элемент объекта в "tasks": {"category": "routine"|"one_time"|"goal"|"grocery", "title": "краткое название задачи с большой буквы", "scheduled_date": "YYYY-MM-DD"|null, "scheduled_time": "HH:MM"|null, "target_value": float|null, "step": float|null, "unit": string|null}
+Пример: {"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null, "scheduled_time": null, "target_value": 2.0, "step": 1.0, "unit": "л"}, {"category": "routine", "title": "Выпить 2 литра воды", "scheduled_date": "${todayStr}", "scheduled_time": null, "target_value": 2.0, "step": 0.25, "unit": "л"}, {"category": "one_time", "title": "Сходить полить цветы", "scheduled_date": "${todayStr}", "scheduled_time": "19:00", "target_value": null, "step": null, "unit": null}]}`;
 
   for (const model of GROQ_CHAT_MODELS) {
     try {
@@ -2918,8 +2995,15 @@ export const parseTextWithDirectOpenRouter = async (text) => {
 - Если указано время ("в 7 вечера", "в 19:00", "утром в 9"), укажи "scheduled_time": "HH:MM" (24ч) и очисти "title" от вводных фраз ("напомни мне") и маркеров даты/времени.
 - Название каждой задачи ("title") ВСЕГДА пиши с большой (заглавной) буквы!
 
+Правила для числовых (количественных) задач и привычек со счётчиком:
+- Если задача или привычка содержит измеримую количественную цель (например: "выпить 2 литра воды", "отжаться 20 раз", "купить 5 помидоров", "пробежать 5 км", "прочитать 30 страниц"):
+  - "target_value": числовое значение цели (float, например: 2.0, 20.0, 5.0, 30.0).
+  - "unit": единица измерения кратко (строка, например: "л", "мл", "раз", "шт", "кг", "км", "стр").
+  - "step": шаг (float, например: 0.25 для литров/кг, 1.0 для штук/раз/км).
+- Если задача обычная и не содержит числовой счётчик, поля target_value, step, unit должны быть null.
+
 Верни ответ СТРОГО в формате JSON с ключом "tasks":
-{"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null, "scheduled_time": null}, {"category": "one_time", "title": "Сходить полить цветы", "scheduled_date": "YYYY-MM-DD", "scheduled_time": "19:00"}]}`;
+{"tasks": [{"category": "grocery", "title": "Молоко 2 л", "scheduled_date": null, "scheduled_time": null, "target_value": 2.0, "step": 1.0, "unit": "л"}, {"category": "routine", "title": "Выпить 2 литра воды", "scheduled_date": "${todayStr}", "scheduled_time": null, "target_value": 2.0, "step": 0.25, "unit": "л"}, {"category": "one_time", "title": "Сходить полить цветы", "scheduled_date": "YYYY-MM-DD", "scheduled_time": "19:00", "target_value": null, "step": null, "unit": null}]}`;
 
   for (const model of OPENROUTER_FREE_MODELS) {
     try {
@@ -2971,12 +3055,13 @@ export const parseTextWithDirectOpenRouter = async (text) => {
 export const parseSmartText = async (text, provider = null) => {
   // 1. Try Backend API first if reachable
   try {
+    const effectiveUserId = getEffectiveUserId();
     const formData = new FormData();
     formData.append('text', text);
     if (provider) {
       formData.append('provider', provider);
     }
-    const res = await fetch(`${API_BASE}/ai/parse-text?telegram_id=${currentUser.id}`, {
+    const res = await fetch(`${API_BASE}/ai/parse-text?telegram_id=${effectiveUserId}`, {
       method: 'POST',
       body: formData,
     });
@@ -3137,7 +3222,8 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
     if (provider) {
       formData.append('provider', provider);
     }
-    const res = await fetch(`${API_BASE}/ai/parse-audio?telegram_id=${currentUser.id}`, {
+    const effectiveUserId = getEffectiveUserId();
+    const res = await fetch(`${API_BASE}/ai/parse-audio?telegram_id=${effectiveUserId}`, {
       method: 'POST',
       body: formData,
     });

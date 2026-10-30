@@ -1,25 +1,37 @@
 # Handoff Report — Sentinel
 
 ## Observation
-- **Problem**: Intermittent white/light background artifacts behind the status bar and bottom Safari/Liquid Glass toolbar on iOS 26/27 under dark theme (`#0d0d0d`).
-- **Target Outcome**: Seamless matching with the `#0d0d0d` background, conforming to Photo 3.
-- **Workflow Executed**: SWE Light routing to `teamwork_swe`, 1 round of initial implementation (`teamwork_implementer`), 3 adversarial review rounds (`teamwork_reviewer`), and an independent post-victory audit (`teamwork_victory_auditor`).
+- **Problem**: In numeric tasks (tasks with target numeric values), the progress counter was not persisting in the database. The progress was handled optimistically in the frontend UI, but after 30–40 seconds, the counter value reset back to zero.
+- **Root Cause**:
+  1. `RoutineLog` in `backend/models.py` lacked a unique constraint on `(routine_id, date)`.
+  2. Rapid or repeated updates generated duplicate rows in the database (e.g. routine 3 had duplicate rows id=25 and id=26 in Supabase PostgreSQL).
+  3. Subsequent PATCH requests triggered `MultipleResultsFound` on `scalar_one_or_none()` queries, crashing with an unhandled HTTP 500 error and aborting the save transaction.
+  4. The frontend suppressed the 500 error and evicted the mutation from its local queue upon response receipt.
+  5. The background polling loop running every 18 seconds in `frontend/src/App.jsx` fetched stale data from the database on its second tick (~36 seconds), overwriting the optimistic state with the unpersisted zero value.
 
 ## Logic Chain
-1. **Critical Pre-JS Canvas Painting**: In `frontend/index.html`, added `<meta name="color-scheme" content="dark light">`, and ordered `<meta name="theme-color">` per WHATWG HTML § 4.2.5.1 (dark media query first, light media query second, solid dark fallback third).
-2. **First-Paint Root Canvas**: In `<head><style>`, set `:root { color-scheme: dark; }` and styled `html, body, #root` with `background-color: #0d0d0d`, `color-scheme: dark`, and `min-height: 100dvh`, preventing Safari from sampling a default white canvas before Vite JavaScript initializes.
-3. **Synchronous Theme Stamp**: Placed an immediate inline `<script>` at the start of `<body>` to synchronously apply `data-theme`, `colorScheme`, and `#0d0d0d` background to `<body>` prior to child rendering.
-4. **WebKit Media Cache Busting**: Removed the `media` attribute dynamically on `#meta-theme-color` when theme toggles, forcing WebKit to immediately repaint the chrome without requiring user scrolling.
-5. **Safe-Area Inset & Scrim Fallbacks**: In `frontend/src/index.css`, added explicit fallback `#0d0d0d` to CSS custom variables (`var(--bg-app, #0d0d0d)`) on `html`, `body`, `#root`, `.app-shell`, login screen, and edge gradient scrims (`.header-scrim`, `.dock-scrim`).
-6. **Platform & PWA Coherence**: Synchronized `apple-mobile-web-app-status-bar-style` (`black-translucent` for dark, `default` for light) and preserved Telegram WebApp / Android functionality.
+1. **Schema & Database Deduplication**:
+   - Added `UniqueConstraint("routine_id", "date", name="uq_routine_log_routine_date")` to `RoutineLog` in `backend/models.py`.
+   - In `backend/database.py` (`init_db()`), implemented an idempotent deduplication migration that collapses multiple rows into a single highest-value record and creates a unique btree index `idx_routine_logs_routine_date_unique`.
+2. **Deterministic & Concurrency-Safe CRUD Operations**:
+   - Replaced fragile `scalar_one_or_none()` queries in `backend/crud.py` with deterministic `.order_by(RoutineLog.current_value.desc(), RoutineLog.id.desc()).limit(1).scalars().first()`.
+   - Added concurrency race handling using `try ... except IntegrityError` to rollback and re-query the newly inserted row if two concurrent requests attempt initial creation simultaneously.
+3. **Frontend Synchronization & Mutation Resilience**:
+   - Updated `frontend/src/api.js` to dynamically compute `getEffectiveUserId()` and `getPendingSyncKey()`, preventing sync key mismatches.
+   - Guarded optimistic mutation removal so that failures (HTTP 500 or network errors) do not purge the mutation, preserving local state across background polling cycles.
+4. **Independent Post-Victory Verification**:
+   - Iteration Gate was completed by Reviewer 1 & 2 (APPROVE), Challenger 1 & 2 (APPROVE), and internal Auditor 1 (CLEAN).
+   - Independent Victory Auditor conducted a 3-phase audit (Timeline, Anti-Cheating Integrity, Independent Test Execution) and issued a **VICTORY CONFIRMED** verdict.
 
 ## Caveats
-- Proprietary WebKit sampling heuristics in iOS Safari are non-standard; while static declarations, critical CSS, synchronous scripts, and scrim fallbacks satisfy all engine invariants, visual confirmation on physical target hardware remains recommended.
+- Production environment requires restart of backend service so that `init_db()` executes the schema index and deduplication logic against live database instances if not already pre-executed.
 
 ## Conclusion
-- All requirements R1, R2, R3 and acceptance criteria are fully met.
-- Independent victory audit verdict: **VICTORY CONFIRMED** (Phase A: PASS, Phase B: PASS, Phase C: PASS).
+- All requirements R1 (numeric task counter persistence) and R2 (regression prevention) are fully satisfied.
+- Acceptance criteria are met and independently verified.
+- Victory audit verdict: **VICTORY CONFIRMED**.
 
 ## Verification Method
-- Independent build: `npm --prefix frontend run build` (vite v8.3.5, 2383 modules transformed, 0 errors, exit code 0).
-- Independent lint: `npm --prefix frontend run lint` (oxlint v1.88.0, 0 errors, exit code 0).
+- Independent Pytest execution: `.venv/bin/pytest tests/ -v` (52 passed in 4.63s).
+- Live PostgreSQL verification: 0 duplicate rows, unique btree index active, duplicate inserts rejected with `UniqueViolationError`.
+- Frontend lint and build: `npm --prefix frontend run lint` (0 errors), `npm --prefix frontend run build` (Vite production build passed cleanly in 247ms).

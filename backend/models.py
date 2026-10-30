@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -90,6 +91,9 @@ class RoutineTask(Base):
 
 class RoutineLog(Base):
     __tablename__ = "routine_logs"
+    __table_args__ = (
+        UniqueConstraint("routine_id", "date", name="uq_routine_log_routine_date"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     routine_id: Mapped[int] = mapped_column(
