@@ -3282,3 +3282,447 @@ export const parseSmartAudio = async (audioBlob, provider = null) => {
   // Fallback will trigger browser speech recognition in QuickAddModal
   throw new Error('Голосовая AI транскрипция требует подключения бэкенда или доступа к микрофону.');
 };
+
+// ==============================================================================
+// Before Leaving («Перед выходом») API Client & Platform Helper (Milestone 2)
+// ==============================================================================
+
+export const isTelegramIos = () => {
+  if (typeof window === 'undefined') return false;
+  if (!isInsideTelegram()) return false;
+  const tg = window.Telegram?.WebApp;
+  if (!tg) return false;
+  const platform = String(tg.platform || '').toLowerCase();
+  if (platform === 'ios') return true;
+  if (platform && platform !== 'unknown' && platform !== 'ios') {
+    return false;
+  }
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+export const fetchBeforeLeavingItems = async (userId) => {
+  const effectiveUserId = userId || getEffectiveUserId();
+  const cacheKey = `tasker_cache_before_leaving_tpl_${effectiveUserId}`;
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/items?telegram_id=${effectiveUserId}`);
+    if (res.ok) {
+      const data = await res.json();
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      } catch {}
+      return data;
+    }
+  } catch {}
+
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return JSON.parse(cached);
+  } catch {}
+
+  const db = getLocalDb();
+  return db.before_leaving_items || [];
+};
+
+export const fetchBeforeLeavingTemplate = fetchBeforeLeavingItems;
+
+export const createBeforeLeavingItem = async (dataOrTitle, maybeOrderOrUserId, maybeUserId) => {
+  hapticFeedback('light');
+  let title = '';
+  let order = 0;
+  let userId = null;
+  if (typeof dataOrTitle === 'object' && dataOrTitle !== null) {
+    title = dataOrTitle.title || '';
+    order = dataOrTitle.order ?? 0;
+    userId = maybeOrderOrUserId;
+  } else {
+    title = dataOrTitle || '';
+    order = typeof maybeOrderOrUserId === 'number' ? maybeOrderOrUserId : 0;
+    userId = maybeUserId;
+  }
+  const effectiveUserId = userId || getEffectiveUserId();
+  const cacheKey = `tasker_cache_before_leaving_tpl_${effectiveUserId}`;
+
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/items?telegram_id=${effectiveUserId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, order }),
+    });
+    if (res.ok) {
+      const created = await res.json();
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        const list = cachedRaw ? JSON.parse(cachedRaw) : [];
+        list.push(created);
+        localStorage.setItem(cacheKey, JSON.stringify(list));
+      } catch {}
+      return created;
+    }
+  } catch {}
+
+  const newItem = {
+    id: Date.now(),
+    user_id: effectiveUserId,
+    title,
+    order,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  try {
+    const cachedRaw = localStorage.getItem(cacheKey);
+    const list = cachedRaw ? JSON.parse(cachedRaw) : [];
+    list.push(newItem);
+    localStorage.setItem(cacheKey, JSON.stringify(list));
+  } catch {}
+
+  const db = getLocalDb();
+  if (!db.before_leaving_items) db.before_leaving_items = [];
+  db.before_leaving_items.push(newItem);
+  saveLocalDb(db);
+  return newItem;
+};
+
+export const updateBeforeLeavingItem = async (itemId, dataOrTitle, maybeOrderOrUserId, maybeUserId) => {
+  hapticFeedback('light');
+  let title = undefined;
+  let order = undefined;
+  let userId = null;
+  if (typeof dataOrTitle === 'object' && dataOrTitle !== null) {
+    title = dataOrTitle.title;
+    order = dataOrTitle.order;
+    userId = maybeOrderOrUserId;
+  } else {
+    title = dataOrTitle;
+    order = typeof maybeOrderOrUserId === 'number' ? maybeOrderOrUserId : undefined;
+    userId = maybeUserId;
+  }
+  const effectiveUserId = userId || getEffectiveUserId();
+  const cacheKey = `tasker_cache_before_leaving_tpl_${effectiveUserId}`;
+
+  const payload = {};
+  if (title !== undefined) payload.title = title;
+  if (order !== undefined) payload.order = order;
+
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/items/${itemId}?telegram_id=${effectiveUserId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const list = JSON.parse(cachedRaw).map((item) => (item.id === itemId ? updated : item));
+          localStorage.setItem(cacheKey, JSON.stringify(list));
+        }
+      } catch {}
+      return updated;
+    }
+  } catch {}
+
+  const db = getLocalDb();
+  if (db.before_leaving_items) {
+    db.before_leaving_items = db.before_leaving_items.map((item) => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          ...(title !== undefined ? { title } : {}),
+          ...(order !== undefined ? { order } : {}),
+          updated_at: new Date().toISOString(),
+        };
+      }
+      return item;
+    });
+    saveLocalDb(db);
+  }
+  return null;
+};
+
+export const deleteBeforeLeavingItem = async (itemId, userId) => {
+  hapticFeedback('medium');
+  const effectiveUserId = userId || getEffectiveUserId();
+  const cacheKey = `tasker_cache_before_leaving_tpl_${effectiveUserId}`;
+
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/items/${itemId}?telegram_id=${effectiveUserId}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const list = JSON.parse(cachedRaw).filter((item) => item.id !== itemId);
+          localStorage.setItem(cacheKey, JSON.stringify(list));
+        }
+      } catch {}
+      return true;
+    }
+  } catch {}
+
+  const db = getLocalDb();
+  if (db.before_leaving_items) {
+    db.before_leaving_items = db.before_leaving_items.filter((item) => item.id !== itemId);
+    saveLocalDb(db);
+  }
+  try {
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      const list = JSON.parse(cachedRaw).filter((item) => item.id !== itemId);
+      localStorage.setItem(cacheKey, JSON.stringify(list));
+    }
+  } catch {}
+  return true;
+};
+
+export const reorderBeforeLeavingItems = async (itemIds, userId) => {
+  hapticFeedback('selection');
+  const effectiveUserId = userId || getEffectiveUserId();
+  const cacheKey = `tasker_cache_before_leaving_tpl_${effectiveUserId}`;
+
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/items/reorder?telegram_id=${effectiveUserId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_ids: itemIds }),
+    });
+    if (res.ok) {
+      const updatedList = await res.json();
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    }
+  } catch {}
+
+  try {
+    const cachedRaw = localStorage.getItem(cacheKey);
+    if (cachedRaw) {
+      const list = JSON.parse(cachedRaw);
+      const reordered = itemIds
+        .map((id, index) => {
+          const item = list.find((i) => i.id === id);
+          return item ? { ...item, order: index } : null;
+        })
+        .filter(Boolean);
+      localStorage.setItem(cacheKey, JSON.stringify(reordered));
+      return reordered;
+    }
+  } catch {}
+  return null;
+};
+
+// ==============================================================================
+// Before Leaving Active Session Local Cache Helpers (0ms Boot Recovery)
+// ==============================================================================
+
+export const getCachedActiveBeforeLeavingSession = (userId) => {
+  if (typeof window === 'undefined') return null;
+  const effectiveUserId = userId || getEffectiveUserId();
+  try {
+    const raw = localStorage.getItem(`tasker_cache_before_leaving_session_${effectiveUserId}`);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+};
+
+export const setCachedActiveBeforeLeavingSession = (session, userId) => {
+  if (typeof window === 'undefined') return;
+  const effectiveUserId = userId || getEffectiveUserId();
+  const cacheKey = `tasker_cache_before_leaving_session_${effectiveUserId}`;
+  try {
+    if (session && session.is_active) {
+      localStorage.setItem(cacheKey, JSON.stringify(session));
+    } else {
+      localStorage.removeItem(cacheKey);
+    }
+  } catch {}
+};
+
+export const clearCachedActiveBeforeLeavingSession = (userId) => {
+  if (typeof window === 'undefined') return;
+  const effectiveUserId = userId || getEffectiveUserId();
+  try {
+    localStorage.removeItem(`tasker_cache_before_leaving_session_${effectiveUserId}`);
+  } catch {}
+};
+
+export const fetchActiveBeforeLeavingSession = async (userId) => {
+  const effectiveUserId = userId || getEffectiveUserId();
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/session/active?telegram_id=${effectiveUserId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.is_active) {
+        setCachedActiveBeforeLeavingSession(data, effectiveUserId);
+      } else {
+        clearCachedActiveBeforeLeavingSession(effectiveUserId);
+      }
+      return data;
+    }
+  } catch {}
+
+  // Fallback to cached session during cold start / offline
+  const cached = getCachedActiveBeforeLeavingSession(effectiveUserId);
+  if (cached && cached.is_active) {
+    return cached;
+  }
+
+  // Demo mode fallback
+  if (isDemoMode()) {
+    const db = getLocalDb();
+    return db.active_before_leaving_session || null;
+  }
+
+  return null;
+};
+
+export const startBeforeLeavingSession = async (resetOrOpts = false, maybeUserId) => {
+  hapticFeedback('medium');
+  let reset = false;
+  let userId = null;
+  if (typeof resetOrOpts === 'object' && resetOrOpts !== null) {
+    reset = Boolean(resetOrOpts.reset);
+    userId = maybeUserId;
+  } else if (typeof resetOrOpts === 'boolean') {
+    reset = resetOrOpts;
+    userId = maybeUserId;
+  } else {
+    userId = resetOrOpts;
+  }
+  const effectiveUserId = userId || getEffectiveUserId();
+
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/session/start?telegram_id=${effectiveUserId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setCachedActiveBeforeLeavingSession(data, effectiveUserId);
+      return data;
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { error: errData.detail || 'Failed to start session', status: res.status };
+  } catch {
+    // Demo mode fallback
+    if (isDemoMode()) {
+      const db = getLocalDb();
+      const tplItems = db.before_leaving_items || [];
+      if (!tplItems.length) {
+        return { error: 'No template items configured', status: 400 };
+      }
+      const mockSession = {
+        id: Date.now(),
+        user_id: effectiveUserId,
+        is_active: true,
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        items: tplItems.map((item, idx) => ({
+          id: Date.now() + idx,
+          session_id: Date.now(),
+          template_item_id: item.id,
+          title: item.title,
+          order: item.order ?? idx,
+          is_checked: false,
+          checked_at: null,
+        })),
+        total_count: tplItems.length,
+        completed_count: 0,
+        is_all_completed: false,
+      };
+      db.active_before_leaving_session = mockSession;
+      saveLocalDb(db);
+      setCachedActiveBeforeLeavingSession(mockSession, effectiveUserId);
+      return mockSession;
+    }
+    return { error: 'Network error', status: 0 };
+  }
+};
+
+export const toggleBeforeLeavingCheckItem = async (itemId, isChecked, userId) => {
+  hapticFeedback('selection');
+  const effectiveUserId = userId || getEffectiveUserId();
+  try {
+    const payload = isChecked !== undefined ? { is_checked: isChecked } : {};
+    const res = await fetch(`${API_BASE}/before-leaving/session/items/${itemId}/toggle?telegram_id=${effectiveUserId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const updatedSession = await res.json();
+      setCachedActiveBeforeLeavingSession(updatedSession, effectiveUserId);
+      return updatedSession;
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { error: errData.detail || 'Failed to toggle check item', status: res.status };
+  } catch {
+    // Demo mode fallback
+    if (isDemoMode()) {
+      const db = getLocalDb();
+      const session = db.active_before_leaving_session;
+      if (session && session.items) {
+        session.items = session.items.map((item) => {
+          if (item.id === itemId) {
+            const nextChecked = isChecked !== undefined ? isChecked : !item.is_checked;
+            return {
+              ...item,
+              is_checked: nextChecked,
+              checked_at: nextChecked ? new Date().toISOString() : null,
+            };
+          }
+          return item;
+        });
+        session.completed_count = session.items.filter((i) => i.is_checked).length;
+        session.is_all_completed = session.items.length > 0 && session.completed_count === session.items.length;
+        saveLocalDb(db);
+        setCachedActiveBeforeLeavingSession(session, effectiveUserId);
+        return session;
+      }
+    }
+    return { error: 'Network error', status: 0 };
+  }
+};
+
+export const finishBeforeLeavingSession = async (userId) => {
+  hapticFeedback('success');
+  const effectiveUserId = userId || getEffectiveUserId();
+  try {
+    const res = await fetch(`${API_BASE}/before-leaving/session/finish?telegram_id=${effectiveUserId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (res.ok) {
+      const finishedSession = await res.json();
+      clearCachedActiveBeforeLeavingSession(effectiveUserId);
+      return finishedSession;
+    }
+    const errData = await res.json().catch(() => ({}));
+    return { error: errData.detail || 'Failed to finish session', status: res.status };
+  } catch {
+    // Demo mode fallback
+    if (isDemoMode()) {
+      const db = getLocalDb();
+      const session = db.active_before_leaving_session;
+      if (!session || !session.is_active) {
+        return { error: 'No active session found', status: 404 };
+      }
+      if (!session.is_all_completed) {
+        return { error: 'Cannot finish session: unfinished items remain', status: 400 };
+      }
+      session.is_active = false;
+      session.completed_at = new Date().toISOString();
+      delete db.active_before_leaving_session;
+      saveLocalDb(db);
+      clearCachedActiveBeforeLeavingSession(effectiveUserId);
+      return session;
+    }
+    return { error: 'Network error', status: 0 };
+  }
+};
+
+

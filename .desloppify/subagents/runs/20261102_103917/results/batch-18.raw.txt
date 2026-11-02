@@ -1,0 +1,26 @@
+{
+  "batch": "contract_coherence",
+  "batch_index": 18,
+  "assessments": {
+    "contract_coherence": 88.0
+  },
+  "dimension_notes": {
+    "contract_coherence": {
+      "evidence": [
+        "Pydantic models in schemas.py define strict contracts for frontend interactions.",
+        "SQLAlchemy models define strict database column constraints and foreign keys."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Database models and Pydantic schemas have slight differences in optional field defaults."
+    }
+  },
+  "dimension_judgment": {
+    "contract_coherence": {
+      "dimension_character": "Interface and database contracts are robust and typed.",
+      "score_rationale": "Schema validation ensures integrity of data crossing network and storage boundaries."
+    }
+  },
+  "issues": []
+}

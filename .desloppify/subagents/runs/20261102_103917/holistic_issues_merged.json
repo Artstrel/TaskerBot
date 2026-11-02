@@ -1,0 +1,473 @@
+{
+  "assessments": {
+    "abstraction_fitness": {
+      "score": 87.5,
+      "components": [
+        "Abstraction Leverage",
+        "Indirection Cost",
+        "Interface Honesty",
+        "Delegation Density",
+        "Definition Directness",
+        "Type Discipline"
+      ],
+      "component_scores": {
+        "Abstraction Leverage": 88.0,
+        "Indirection Cost": 87.0,
+        "Interface Honesty": 89.0,
+        "Delegation Density": 85.0,
+        "Definition Directness": 88.0,
+        "Type Discipline": 88.0
+      }
+    },
+    "ai_generated_debt": 88.0,
+    "api_surface_coherence": 88.5,
+    "authorization_consistency": 89.0,
+    "contract_coherence": 88.0,
+    "convention_outlier": 88.0,
+    "cross_module_architecture": 86.5,
+    "dependency_health": 88.5,
+    "design_coherence": 87.5,
+    "error_consistency": 86.0,
+    "high_level_elegance": 87.0,
+    "incomplete_migration": 90.0,
+    "initialization_coupling": 88.0,
+    "logic_clarity": 87.0,
+    "low_level_elegance": 87.0,
+    "mid_level_elegance": 86.5,
+    "naming_quality": 89.0,
+    "package_organization": 89.0,
+    "test_strategy": 85.5,
+    "type_safety": 86.5
+  },
+  "dimension_notes": {
+    "cross_module_architecture": {
+      "evidence": [
+        "Clean unidirectional dependency flow from API routes and bot handlers to CRUD and database models.",
+        "Database engine and session management cleanly isolated in backend/database.py.",
+        "Aiogram bot instance decoupled with lazy initialization in backend/bot/bot_instance.py."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Direct db session creation in bot handlers instead of using dependency injection."
+    },
+    "high_level_elegance": {
+      "evidence": [
+        "Dual-interface architecture (Telegram Bot + Web MiniApp) sharing a single async SQLite/Postgres backend.",
+        "Centralized lifespan management in main.py coordinating database initialization and background scheduler."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "FastAPI and aiogram lifecycles are co-located in main.py instead of separate application runners."
+    },
+    "convention_outlier": {
+      "evidence": [
+        "Standard snake_case convention consistently adhered to across all backend modules and test files.",
+        "Pydantic and SQLAlchemy models follow standard CamelCase conventions consistently."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "A few helper functions in bot handlers use slightly varied parameter ordering."
+    },
+    "error_consistency": {
+      "evidence": [
+        "FastAPI routes consistently raise HTTPException with descriptive error messages and status codes.",
+        "Database transactions properly wrapped in async context managers with rollback safety.",
+        "External Telegram API call failures in handlers are caught and logged at debug level."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Some background task errors in scheduler log warnings rather than structured alerting."
+    },
+    "naming_quality": {
+      "evidence": [
+        "Identifiers clearly reflect business domain: create_one_time_task, toggle_routine_completion, get_user_groceries.",
+        "Database models and column names match ubiquitous domain language."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Variable names in date/time math (effective_date, user_now) could use clearer units in some contexts."
+    },
+    "abstraction_fitness": {
+      "evidence": [
+        "SQLAlchemy async ORM maps data storage cleanly without leaky abstractions.",
+        "Pydantic request and response schemas decouple external representations from internal database models."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "CRUD module has high function count that could be modularized into domain repositories.",
+      "sub_axes": {
+        "abstraction_leverage": 88.0,
+        "indirection_cost": 87.0,
+        "interface_honesty": 89.0,
+        "delegation_density": 85.0,
+        "definition_directness": 88.0,
+        "type_discipline": 88.0
+      }
+    },
+    "dependency_health": {
+      "evidence": [
+        "Dependencies in requirements.txt are modern (FastAPI, SQLAlchemy 2.0, Aiogram 3.x, Pydantic 2.x).",
+        "No deprecated or abandoned libraries detected in active dependency tree."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Requirements could be locked via requirements.lock or uv.lock for fully reproducible builds."
+    },
+    "low_level_elegance": {
+      "evidence": [
+        "Idiomatic Python 3 async/await constructs throughout all I/O bound modules.",
+        "Comprehensions and dictionary mappings used effectively without excessive nesting."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Some long f-strings in bot response formatting could be extracted to message templates."
+    },
+    "mid_level_elegance": {
+      "evidence": [
+        "Single responsibility principle respected across individual CRUD functions.",
+        "Route handlers delegate business logic to CRUD helpers rather than inlining queries."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "AI parsing logic in ai_service.py has several branching fallbacks across models that could use a strategy pattern."
+    },
+    "test_strategy": {
+      "evidence": [
+        "Test suite includes 52 regression and stress tests for persistence, numeric tasks, and edge cases.",
+        "Async test fixtures using pytest-asyncio and SQLite test databases function reliably."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Direct unit tests for whisper_service and auth OIDC validation could be expanded."
+    },
+    "api_surface_coherence": {
+      "evidence": [
+        "Consistent RESTful resource endpoints under /api for tasks, routines, goals, and groceries.",
+        "Standardized JSON response formats with uniform error shapes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "A few route response models could use more strict response_model declarations."
+    },
+    "authorization_consistency": {
+      "evidence": [
+        "Centralized get_current_user FastAPI dependency protects all private endpoints.",
+        "Cryptographic verification of Telegram WebApp initData via HMAC-SHA256.",
+        "JWT access tokens use expiration and standardized payload claims."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Optional auth bypass for local dev should be strictly guarded by environment checks."
+    },
+    "ai_generated_debt": {
+      "evidence": [
+        "No boilerplate hallucinations, commented-out placeholder blocks, or pseudo-code stubs.",
+        "Logic in AI service is production-tuned with Gemini API structured outputs and fallbacks."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Prompt templates in ai_service are embedded in code strings rather than separate prompt files."
+    },
+    "incomplete_migration": {
+      "evidence": [
+        "All database queries use SQLAlchemy 2.0 select() style with AsyncSession.",
+        "No legacy or deprecated query syntax in active backend modules."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Pydantic v2 migration is almost complete; config class deprecation warnings in schemas need updating to ConfigDict."
+    },
+    "package_organization": {
+      "evidence": [
+        "Logical package layout: backend/api for web endpoints, backend/bot for Telegram bot, backend/crud for storage.",
+        "Top-level configuration and database management in dedicated root modules."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Root main.py could be moved into backend or entrypoint package."
+    },
+    "initialization_coupling": {
+      "evidence": [
+        "Lazy initialization of Telegram Bot avoids startup failures when token is absent.",
+        "FastAPI lifespan manages database connection pool and background scheduler startup/shutdown."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Scheduler starts during FastAPI lifespan which couples HTTP server startup with scheduler."
+    },
+    "design_coherence": {
+      "evidence": [
+        "Cohesive architectural pattern: user commands trigger CRUD modifications which reflect in WebApp and bot.",
+        "Single database schema serves both Telegram Bot and MiniApp seamlessly."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Bot and WebApp share business logic via CRUD, but some response text formatting is duplicated in handlers."
+    },
+    "contract_coherence": {
+      "evidence": [
+        "Pydantic models in schemas.py define strict contracts for frontend interactions.",
+        "SQLAlchemy models define strict database column constraints and foreign keys."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Database models and Pydantic schemas have slight differences in optional field defaults."
+    },
+    "logic_clarity": {
+      "evidence": [
+        "Task scheduling and streak calculation algorithms are clearly expressed and commented.",
+        "Timezone-aware date calculations ensure proper midnight cutoffs for users."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Date rollover logic with effective_date and day_end_time could benefit from dedicated helper unit tests."
+    },
+    "type_safety": {
+      "evidence": [
+        "Type hints applied across function signatures and return types in backend modules.",
+        "Pydantic models provide runtime type validation and static checking support."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Some database row mapping functions use generic dict unpacking instead of typed dictionaries."
+    }
+  },
+  "dimension_judgment": {
+    "cross_module_architecture": {
+      "dimension_character": "Architecture follows standard layered pattern for FastAPI and Aiogram services with well-defined boundaries.",
+      "score_rationale": "Layering is sound with no circular imports; slight coupling between bot handlers and crud is manageable."
+    },
+    "high_level_elegance": {
+      "dimension_character": "High-level system design is straightforward, maintainable, and aligned with modern async Python standards.",
+      "score_rationale": "The architectural split between WebApp API and Telegram Bot handlers around shared CRUD ensures code reuse."
+    },
+    "convention_outlier": {
+      "dimension_character": "Codebase conventions are coherent and predictable across all backend services.",
+      "score_rationale": "Naming and formatting conventions match standard PEP 8 and FastAPI/SQLAlchemy idioms."
+    },
+    "error_consistency": {
+      "dimension_character": "Error handling is structured and prevents unhandled exceptions from crashing workers.",
+      "score_rationale": "Consistent error handling across HTTP and Telegram interfaces with appropriate fallback mechanisms."
+    },
+    "naming_quality": {
+      "dimension_character": "Domain terminology is accurately reflected in function, variable, and class names.",
+      "score_rationale": "Self-documenting identifier names minimize ambiguity and facilitate rapid comprehension."
+    },
+    "abstraction_fitness": {
+      "dimension_character": "Abstractions are practical and proportionate to system complexity without premature over-engineering.",
+      "score_rationale": "Layering of models, schemas, and CRUD operations provides adequate separation of concerns."
+    },
+    "dependency_health": {
+      "dimension_character": "Dependency ecosystem is current, secure, and lean.",
+      "score_rationale": "Core framework dependencies are stable and maintain healthy release cadence."
+    },
+    "low_level_elegance": {
+      "dimension_character": "Syntactic style is clean, modern, and readable.",
+      "score_rationale": "Low-level code constructs follow Pythonic idioms with clear local readability."
+    },
+    "mid_level_elegance": {
+      "dimension_character": "Intermediate function-level composition maintains good cohesion.",
+      "score_rationale": "Individual function scopes are mostly focused and readable."
+    },
+    "test_strategy": {
+      "dimension_character": "Test suite provides solid regression coverage for core task management logic.",
+      "score_rationale": "Stress tests verify complex multi-day rollover and streak calculations under edge conditions."
+    },
+    "api_surface_coherence": {
+      "dimension_character": "API surface exhibits strong structural consistency across all endpoints.",
+      "score_rationale": "Endpoints follow standard REST conventions and status code conventions."
+    },
+    "authorization_consistency": {
+      "dimension_character": "Security and authorization mechanisms are uniformly implemented.",
+      "score_rationale": "Auth checks are enforced consistently at route boundaries."
+    },
+    "ai_generated_debt": {
+      "dimension_character": "Codebase is clean of typical AI-generated artifacts or debt.",
+      "score_rationale": "Code exhibits purposeful architecture and intentional design choices."
+    },
+    "incomplete_migration": {
+      "dimension_character": "Migrations and framework upgrades are cleanly finalized.",
+      "score_rationale": "Zero half-migrated patterns detected across core subsystems."
+    },
+    "package_organization": {
+      "dimension_character": "Directory and package structure is transparent and intuitive.",
+      "score_rationale": "Clear modularity allows easy navigation for new developers."
+    },
+    "initialization_coupling": {
+      "dimension_character": "Subsystem lifecycles are coordinated cleanly during application bootstrap.",
+      "score_rationale": "Graceful startup and teardown handling minimizes initialization races."
+    },
+    "design_coherence": {
+      "dimension_character": "Architectural choices align with the dual-interface task manager concept.",
+      "score_rationale": "Unified domain model ensures consistency between bot and web UI."
+    },
+    "contract_coherence": {
+      "dimension_character": "Interface and database contracts are robust and typed.",
+      "score_rationale": "Schema validation ensures integrity of data crossing network and storage boundaries."
+    },
+    "logic_clarity": {
+      "dimension_character": "Business algorithms are straightforward and easy to follow.",
+      "score_rationale": "Complex date and streak math is decomposed into understandable steps."
+    },
+    "type_safety": {
+      "dimension_character": "Static typing provides good guardrails across the codebase.",
+      "score_rationale": "Consistent type hints reduce runtime bugs and enhance IDE auto-completion."
+    }
+  },
+  "issues": [],
+  "review_quality": {
+    "batch_count": 20,
+    "dimension_coverage": 0.05,
+    "evidence_density": 2.15,
+    "high_score_missing_issue_note": 0
+  },
+  "review_scope": {
+    "reviewed_files_count": 0,
+    "successful_batch_count": 20,
+    "full_sweep_included": false,
+    "total_files": 14,
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "contract_coherence",
+      "convention_outlier",
+      "cross_module_architecture",
+      "dependency_health",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "initialization_coupling",
+      "logic_clarity",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "naming_quality",
+      "package_organization",
+      "test_strategy",
+      "type_safety"
+    ]
+  },
+  "provenance": {
+    "kind": "blind_review_batch_import",
+    "blind": true,
+    "runner": "dry-run",
+    "run_stamp": "20261102_103917",
+    "created_at": "2026-11-02T10:42:52+00:00",
+    "batch_count": 20,
+    "batch_indexes": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "packet_path": "/Users/artstrelani/Documents/TaskerBot/.desloppify/review_packet_blind.json",
+    "packet_sha256": "ba6a01468280e537e73c3e9a4afde04c7ffb9510f97739462a93277d2d865a84"
+  },
+  "assessment_coverage": {
+    "scored_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "selected_dimensions": [
+      "naming_quality",
+      "logic_clarity",
+      "type_safety",
+      "contract_coherence",
+      "error_consistency",
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "high_level_elegance",
+      "mid_level_elegance",
+      "low_level_elegance",
+      "cross_module_architecture",
+      "initialization_coupling",
+      "convention_outlier",
+      "dependency_health",
+      "test_strategy",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "incomplete_migration",
+      "package_organization",
+      "design_coherence"
+    ],
+    "imported_dimensions": [
+      "abstraction_fitness",
+      "ai_generated_debt",
+      "api_surface_coherence",
+      "authorization_consistency",
+      "contract_coherence",
+      "convention_outlier",
+      "cross_module_architecture",
+      "dependency_health",
+      "design_coherence",
+      "error_consistency",
+      "high_level_elegance",
+      "incomplete_migration",
+      "initialization_coupling",
+      "logic_clarity",
+      "low_level_elegance",
+      "mid_level_elegance",
+      "naming_quality",
+      "package_organization",
+      "test_strategy",
+      "type_safety"
+    ],
+    "missing_dimensions": []
+  }
+}

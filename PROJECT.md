@@ -1,48 +1,89 @@
-# Project: TaskerBot Numeric Task Persistence Fix
+# Project: TaskerBot "Before Leaving" («Перед выходом») Mode
 
 ## Architecture
-- **Backend**: FastAPI, SQLAlchemy 2.0 (asyncio mode), Supabase PostgreSQL (production) & SQLite (local fallback/dev), Pydantic v2.
-- **Frontend**: React 19, Vite, Telegram WebApp SPA (`frontend/src/api.js`, `frontend/src/App.jsx`, `frontend/src/components/TodayTab.jsx`).
+- **Backend**: FastAPI, SQLAlchemy 2.0 (asyncio mode with SQLite dev/test and Supabase PostgreSQL production), Pydantic v2 schemas, `get_current_user` auth dependency.
+- **Frontend**: React 19, Vite, custom design system (`index.css` CSS custom properties, `motion/react`, `lucide-react`), Telegram WebApp SDK integration.
 - **Core Data Flow**:
-  1. User increments numeric task via stepper (+/-) or checkbox in `TodayTab.jsx`.
-  2. Frontend applies optimistic state and queues mutation in `localStorage` under dynamic `getPendingSyncKey()`.
-  3. `updateRoutineProgress` / `updateTaskProgress` sends `PATCH /api/routines/{id}/progress` or `PATCH /api/tasks/{id}/progress` with `getEffectiveUserId()`.
-  4. Backend retrieves/creates `RoutineLog` for `(routine_id, target_date)` protected by `UniqueConstraint("routine_id", "date")` with `try ... except IntegrityError` concurrency retry, commits to DB, and returns updated task.
-  5. Background poller runs every 18 seconds via `setInterval` in `App.jsx`, fetching `/api/dashboard/today`.
-  6. Reconciler merges active pending mutations with server snapshot and renders UI without resetting counter to zero.
+  1. **Template Setup (R1)**: User configures list of items/tasks to check before leaving in `BeforeLeavingConfigModal`. Data is saved via `POST/PATCH/DELETE/PUT /api/before-leaving/items`.
+  2. **Adaptive Launch (R3)**:
+     - On Telegram WebApp iOS: Trigger button is placed inside the Profile Bubble context menu (`ProfileBubbleContextMenu`).
+     - On all other devices & breakpoints: Trigger button is placed inline at the same horizontal level as the Profile Bubble.
+  3. **Active Mode & Navigation Lock (R2)**:
+     - Triggering launches `POST /api/before-leaving/session/start`, which snapshots current template items into `BeforeLeavingCheckItem` rows attached to an active `BeforeLeavingSession`.
+     - `BeforeLeavingActiveOverlay` renders at `z-index: 100`, covering 100vw x 100dvh, concealing all navigation elements.
+     - Multi-layer hard lock engages: no close button, tab switching concealed/disabled, keyboard shortcuts intercepted, Telegram `enableClosingConfirmation()` and `disableVerticalSwipes()` engaged, browser `popstate` trapped.
+     - Checkbox toggles call `PATCH /api/before-leaving/session/items/{id}/toggle`, updating database state.
+     - On browser refresh or app restart, `GET /api/before-leaving/session/active` automatically re-locks the UI into the active checklist.
+  4. **Unlock & Finish (R2)**:
+     - Once all items are checked (`is_all_completed == True`), lock transitions to unlocked state with completion action.
+     - User clicks "Завершить и выйти" (`POST /api/before-leaving/session/finish`), which deactivates the session, restores standard navigation, and cleans up closing confirmation locks.
 
 ## Feature Inventory
 | # | Feature | Description | Milestone | Source |
 |---|---------|-------------|-----------|--------|
-| 1 | DB UniqueConstraint & Deduplication | RoutineLog table UniqueConstraint("routine_id", "date") and database migration to clean existing duplicates | M1 | explorer_survey_2 |
-| 2 | Robust Backend CRUD queries | Replace unsafe scalar_one_or_none() in update_routine_progress, toggle_routine_completion, update_routine; handle deduplication in get_user_routines_with_status | M1 | explorer_survey_2 |
-| 3 | Frontend Auth Context & Sync Key | Consistent effectiveUserId and dynamic getPendingSyncKey across fetchDashboard, createTask, updateTask, createRoutine; retain X-Telegram-Init-Data | M1 | explorer_survey_1 |
-| 4 | Frontend Error & Polling Resilience | Do not evict pending mutations on network/HTTP failure in updateRoutineProgress/updateTaskProgress; prevent unpersisted DB overwrite | M1 | explorer_survey_3 |
-| 5 | Secondary Fixes | Add grocery_items numeric columns to database.py init_db(); add quantitative fields to frontend direct AI prompts | M1 | explorer_survey_1 |
-| 6 | E2E Testing Suite | Comprehensive test suite verifying persistence across >40s polling interval and no regression on other task types | M-TEST | survey |
+| 1 | DB Models for Template & Active Session | SQLAlchemy models `BeforeLeavingItem`, `BeforeLeavingSession`, `BeforeLeavingCheckItem` with User relationships in `backend/models.py` | M1 | survey_explorer_1 |
+| 2 | Template CRUD & Reorder Endpoints | REST endpoints in `backend/api/routes.py` for `GET`, `POST`, `PATCH`, `DELETE`, `PUT /reorder` on `/api/before-leaving/items` | M1 | survey_explorer_1 |
+| 3 | Active Session & Toggle Endpoints | REST endpoints for active session lifecycle (`/session/active`, `/session/start`, `/session/items/{id}/toggle`, `/session/finish` with completion validation) | M1 | survey_explorer_1 |
+| 4 | Backend Automated API Tests | Pytest test suite `tests/test_before_leaving_backend.py` verifying template CRUD, session snapshotting, toggle sync, and finish validation | M1 | survey_explorer_1, survey_explorer_3 |
+| 5 | Frontend API Client & State Sync | Methods in `frontend/src/api.js` for template CRUD, session start, item toggle, finish, and active session query | M2 | survey_explorer_2 |
+| 6 | Template Configuration Modal (R1) | `BeforeLeavingConfigModal.jsx` allowing users to add, edit, delete, and reorder template items with backend persistence | M2 | survey_explorer_2 |
+| 7 | Adaptive Trigger & Context Menu (R3) | `ProfileBubbleContextMenu.jsx` on iOS Telegram WebApp; inline button on same horizontal level as profile bubble on other platforms | M2 | survey_explorer_2 |
+| 8 | Fullscreen Blocking Overlay (R2) | `BeforeLeavingActiveOverlay.jsx` with full viewport coverage, progress bar, and interactive checkboxes | M3 | survey_explorer_2 |
+| 9 | Multi-Layer Navigation Hard-Lock (R2) | Total lock preventing dismissal or navigation until all items checked (no close button, keyboard trap, popstate trap, Telegram WebApp closing confirmation & swipe disable) | M3 | survey_explorer_2 |
+| 10 | Session Sync & Finish Transition (R2) | Checkbox toggle sync with DB, reload recovery, unlock button transition upon 100% completion, and clean exit | M3 | survey_explorer_2 |
+| 11 | Comprehensive E2E Test Suite (Tiers 1-4) | End-to-end tests covering Feature Coverage, Boundaries, Cross-Feature interactions, and Real-World Scenarios | M4 | survey_explorer_3 |
+| 12 | Adversarial Hardening (Tier 5) & Zero Regression | White-box stress tests, concurrency race verification, and 100% pass on existing 52-test regression suite | M4 | survey_explorer_3 |
 
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
-| M1 | Numeric Task Persistence Fix | backend/models.py, backend/database.py, backend/crud.py, frontend/src/api.js | none | DONE |
-| M-TEST | E2E Testing Suite & Regression Verification | Comprehensive test harness: 40s+ persistence verification, routine/one-off/goal regression tests (52 tests across 3 modules) | M1 | DONE |
+| M1 | Backend Data Models, API Endpoints & Tests | `backend/models.py`, `backend/schemas.py`, `backend/crud.py`, `backend/api/routes.py`, `tests/test_before_leaving_backend.py` | none | DONE |
+| M2 | Frontend Template Editor & Adaptive Trigger | `frontend/src/api.js`, `frontend/src/components/BeforeLeavingConfigModal.jsx`, `frontend/src/components/ProfileBubbleContextMenu.jsx`, `frontend/src/App.jsx`, `frontend/src/index.css` | M1 | DONE |
+| M3 | Fullscreen Blocking Checklist & Hard-Lock | `frontend/src/components/BeforeLeavingActiveOverlay.jsx`, `frontend/src/App.jsx`, `frontend/src/index.css`, reload recovery | M1, M2 | PLANNED |
+| M4 | Comprehensive E2E Testing & Hardening | Full 4-tier E2E test suite + Tier 5 adversarial testing + 52-test baseline verification | M1, M2, M3 | PLANNED |
 
 ## Interface Contracts
-### Frontend ↔ Backend (PATCH /api/routines/{id}/progress)
-- **Request**: `PATCH /api/routines/{id}/progress?telegram_id={id}`, body: `{"current_value": float, "delta": float}`
-- **Response**: `200 OK` with `RoutineStatusRead` schema: `{"id": int, "title": str, "target_value": float, "current_value": float, "step": float, "unit": str, "is_completed": bool}`
-- **Error**: `404 Not Found` if routine not found or not owned by user, `401 Unauthorized` if unauthenticated.
 
-### Frontend ↔ Backend (PATCH /api/tasks/{id}/progress)
-- **Request**: `PATCH /api/tasks/{id}/progress?telegram_id={id}`, body: `{"current_value": float, "delta": float}`
-- **Response**: `200 OK` with `OneTimeTaskRead` schema: `{"id": int, "title": str, "target_value": float, "current_value": float, "step": float, "unit": str, "is_completed": bool}`
+### Frontend ↔ Backend: Template Items (`/api/before-leaving/items`)
+- `GET /api/before-leaving/items?telegram_id={id}`
+  - Response: `200 OK` `List[BeforeLeavingItemRead]`: `[{"id": int, "user_id": int, "title": str, "order": int, "created_at": str, "updated_at": str}]`
+- `POST /api/before-leaving/items?telegram_id={id}`
+  - Request: `{"title": str, "order": Optional[int]}`
+  - Response: `200 OK` `BeforeLeavingItemRead`
+- `PATCH /api/before-leaving/items/{item_id}?telegram_id={id}`
+  - Request: `{"title": Optional[str], "order": Optional[int]}`
+  - Response: `200 OK` `BeforeLeavingItemRead`
+- `DELETE /api/before-leaving/items/{item_id}?telegram_id={id}`
+  - Response: `200 OK` `{"status": "deleted"}`
+- `PUT /api/before-leaving/items/reorder?telegram_id={id}`
+  - Request: `{"item_ids": List[int]}`
+  - Response: `200 OK` `List[BeforeLeavingItemRead]`
+
+### Frontend ↔ Backend: Active Session (`/api/before-leaving/session`)
+- `GET /api/before-leaving/session/active?telegram_id={id}`
+  - Response: `200 OK` `Optional[BeforeLeavingSessionRead]`
+  - Schema: `{"id": int, "user_id": int, "is_active": bool, "started_at": str, "completed_at": Optional[str], "items": [{"id": int, "session_id": int, "template_item_id": Optional[int], "title": str, "order": int, "is_checked": bool, "checked_at": Optional[str]}], "total_count": int, "completed_count": int, "is_all_completed": bool}`
+- `POST /api/before-leaving/session/start?telegram_id={id}`
+  - Request: `{"reset": bool = False}`
+  - Response: `200 OK` `BeforeLeavingSessionRead`
+  - Error: `400 Bad Request` if template is empty
+- `PATCH /api/before-leaving/session/items/{item_id}/toggle?telegram_id={id}`
+  - Request: `{"is_checked": Optional[bool] = None}`
+  - Response: `200 OK` `BeforeLeavingSessionRead`
+- `POST /api/before-leaving/session/finish?telegram_id={id}`
+  - Response: `200 OK` `BeforeLeavingSessionRead`
+  - Error: `400 Bad Request` if `is_all_completed == False` (`"Cannot finish session: unfinished items remain"`)
 
 ## Code Layout
-- `backend/models.py`: SQLAlchemy models (`RoutineLog`, `RoutineTask`, `OneTimeTask`, `GroceryItem`)
-- `backend/database.py`: `init_db()`, migration runner, `AsyncSessionLocal`
-- `backend/crud.py`: `update_routine_progress`, `toggle_routine_completion`, `update_routine`, `get_user_routines_with_status`, `update_task_progress`
-- `frontend/src/api.js`: `updateRoutineProgress`, `updateTaskProgress`, `fetchDashboard`, `getEffectiveUserId`, `getPendingSyncKey`
-- `frontend/src/App.jsx`: 18s polling loop
-- `tests/test_numeric_tasks_persistence.py`: E2E 4-tier test suite (22 tests)
-- `tests/test_numeric_challenge_stress.py`: Concurrency and time persistence stress tests (13 tests)
-- `tests/test_non_numeric_regressions_stress.py`: Non-numeric regression stress tests (17 tests)
+- `backend/models.py`: Database models (`BeforeLeavingItem`, `BeforeLeavingSession`, `BeforeLeavingCheckItem`)
+- `backend/schemas.py`: Pydantic validation schemas
+- `backend/crud.py`: Database CRUD and transaction logic
+- `backend/api/routes.py`: REST API route registrations under `/api/before-leaving`
+- `frontend/src/api.js`: API client functions for template and session operations
+- `frontend/src/components/BeforeLeavingConfigModal.jsx`: Template configuration modal (R1)
+- `frontend/src/components/ProfileBubbleContextMenu.jsx`: iOS Telegram context menu (R3)
+- `frontend/src/components/BeforeLeavingActiveOverlay.jsx`: Fullscreen blocking checklist (R2)
+- `frontend/src/App.jsx`: Top-level state, adaptive button integration, and hard-lock coordination
+- `frontend/src/index.css`: Styles and design tokens for modal, overlay, and context menu
+- `tests/test_before_leaving_backend.py`: Backend API and regression test suite
+- `tests/test_before_leaving_e2e.py`: End-to-end integration test suite (Tiers 1-4)

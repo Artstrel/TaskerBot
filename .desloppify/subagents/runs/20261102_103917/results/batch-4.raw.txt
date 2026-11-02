@@ -1,0 +1,27 @@
+{
+  "batch": "error_consistency",
+  "batch_index": 4,
+  "assessments": {
+    "error_consistency": 86.0
+  },
+  "dimension_notes": {
+    "error_consistency": {
+      "evidence": [
+        "FastAPI routes consistently raise HTTPException with descriptive error messages and status codes.",
+        "Database transactions properly wrapped in async context managers with rollback safety.",
+        "External Telegram API call failures in handlers are caught and logged at debug level."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Some background task errors in scheduler log warnings rather than structured alerting."
+    }
+  },
+  "dimension_judgment": {
+    "error_consistency": {
+      "dimension_character": "Error handling is structured and prevents unhandled exceptions from crashing workers.",
+      "score_rationale": "Consistent error handling across HTTP and Telegram interfaces with appropriate fallback mechanisms."
+    }
+  },
+  "issues": []
+}

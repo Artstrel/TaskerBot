@@ -58,6 +58,12 @@ class User(Base):
     notifications_sent: Mapped[List["SentNotification"]] = relationship(
         "SentNotification", back_populates="user", cascade="all, delete-orphan"
     )
+    before_leaving_items: Mapped[List["BeforeLeavingItem"]] = relationship(
+        "BeforeLeavingItem", back_populates="user", cascade="all, delete-orphan"
+    )
+    before_leaving_sessions: Mapped[List["BeforeLeavingSession"]] = relationship(
+        "BeforeLeavingSession", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 
@@ -191,5 +197,65 @@ class SentNotification(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="notifications_sent")
+
+
+class BeforeLeavingItem(Base):
+    __tablename__ = "before_leaving_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    order: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    created_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
+    updated_at: Mapped[dt_datetime] = mapped_column(
+        DateTime, default=dt_datetime.utcnow, onupdate=dt_datetime.utcnow
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="before_leaving_items")
+
+
+class BeforeLeavingSession(Base):
+    __tablename__ = "before_leaving_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.telegram_id", ondelete="CASCADE"), index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    started_at: Mapped[dt_datetime] = mapped_column(DateTime, default=dt_datetime.utcnow)
+    completed_at: Mapped[Optional[dt_datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", back_populates="before_leaving_sessions")
+    items: Mapped[List["BeforeLeavingCheckItem"]] = relationship(
+        "BeforeLeavingCheckItem",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        order_by="BeforeLeavingCheckItem.order",
+    )
+
+
+class BeforeLeavingCheckItem(Base):
+    __tablename__ = "before_leaving_check_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("before_leaving_sessions.id", ondelete="CASCADE"), index=True
+    )
+    template_item_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("before_leaving_items.id", ondelete="SET NULL"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    order: Mapped[int] = mapped_column(Integer, default=0)
+    is_checked: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    checked_at: Mapped[Optional[dt_datetime]] = mapped_column(DateTime, nullable=True)
+
+    # Relationships
+    session: Mapped["BeforeLeavingSession"] = relationship(
+        "BeforeLeavingSession", back_populates="items"
+    )
 
 

@@ -1,0 +1,26 @@
+{
+  "batch": "dependency_health",
+  "batch_index": 7,
+  "assessments": {
+    "dependency_health": 88.5
+  },
+  "dimension_notes": {
+    "dependency_health": {
+      "evidence": [
+        "Dependencies in requirements.txt are modern (FastAPI, SQLAlchemy 2.0, Aiogram 3.x, Pydantic 2.x).",
+        "No deprecated or abandoned libraries detected in active dependency tree."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Requirements could be locked via requirements.lock or uv.lock for fully reproducible builds."
+    }
+  },
+  "dimension_judgment": {
+    "dependency_health": {
+      "dimension_character": "Dependency ecosystem is current, secure, and lean.",
+      "score_rationale": "Core framework dependencies are stable and maintain healthy release cadence."
+    }
+  },
+  "issues": []
+}

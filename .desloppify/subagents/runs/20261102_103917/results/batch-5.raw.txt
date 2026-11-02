@@ -1,0 +1,26 @@
+{
+  "batch": "naming_quality",
+  "batch_index": 5,
+  "assessments": {
+    "naming_quality": 89.0
+  },
+  "dimension_notes": {
+    "naming_quality": {
+      "evidence": [
+        "Identifiers clearly reflect business domain: create_one_time_task, toggle_routine_completion, get_user_groceries.",
+        "Database models and column names match ubiquitous domain language."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Variable names in date/time math (effective_date, user_now) could use clearer units in some contexts."
+    }
+  },
+  "dimension_judgment": {
+    "naming_quality": {
+      "dimension_character": "Domain terminology is accurately reflected in function, variable, and class names.",
+      "score_rationale": "Self-documenting identifier names minimize ambiguity and facilitate rapid comprehension."
+    }
+  },
+  "issues": []
+}

@@ -1,0 +1,26 @@
+{
+  "batch": "design_coherence",
+  "batch_index": 17,
+  "assessments": {
+    "design_coherence": 87.5
+  },
+  "dimension_notes": {
+    "design_coherence": {
+      "evidence": [
+        "Cohesive architectural pattern: user commands trigger CRUD modifications which reflect in WebApp and bot.",
+        "Single database schema serves both Telegram Bot and MiniApp seamlessly."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Bot and WebApp share business logic via CRUD, but some response text formatting is duplicated in handlers."
+    }
+  },
+  "dimension_judgment": {
+    "design_coherence": {
+      "dimension_character": "Architectural choices align with the dual-interface task manager concept.",
+      "score_rationale": "Unified domain model ensures consistency between bot and web UI."
+    }
+  },
+  "issues": []
+}

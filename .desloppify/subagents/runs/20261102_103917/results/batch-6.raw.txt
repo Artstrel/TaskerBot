@@ -1,0 +1,34 @@
+{
+  "batch": "abstraction_fitness",
+  "batch_index": 6,
+  "assessments": {
+    "abstraction_fitness": 87.5
+  },
+  "dimension_notes": {
+    "abstraction_fitness": {
+      "evidence": [
+        "SQLAlchemy async ORM maps data storage cleanly without leaky abstractions.",
+        "Pydantic request and response schemas decouple external representations from internal database models."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "CRUD module has high function count that could be modularized into domain repositories.",
+      "sub_axes": {
+        "abstraction_leverage": 88.0,
+        "indirection_cost": 87.0,
+        "interface_honesty": 89.0,
+        "delegation_density": 85.0,
+        "definition_directness": 88.0,
+        "type_discipline": 88.0
+      }
+    }
+  },
+  "dimension_judgment": {
+    "abstraction_fitness": {
+      "dimension_character": "Abstractions are practical and proportionate to system complexity without premature over-engineering.",
+      "score_rationale": "Layering of models, schemas, and CRUD operations provides adequate separation of concerns."
+    }
+  },
+  "issues": []
+}

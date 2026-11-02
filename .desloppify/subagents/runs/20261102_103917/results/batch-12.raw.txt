@@ -1,0 +1,27 @@
+{
+  "batch": "authorization_consistency",
+  "batch_index": 12,
+  "assessments": {
+    "authorization_consistency": 89.0
+  },
+  "dimension_notes": {
+    "authorization_consistency": {
+      "evidence": [
+        "Centralized get_current_user FastAPI dependency protects all private endpoints.",
+        "Cryptographic verification of Telegram WebApp initData via HMAC-SHA256.",
+        "JWT access tokens use expiration and standardized payload claims."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Optional auth bypass for local dev should be strictly guarded by environment checks."
+    }
+  },
+  "dimension_judgment": {
+    "authorization_consistency": {
+      "dimension_character": "Security and authorization mechanisms are uniformly implemented.",
+      "score_rationale": "Auth checks are enforced consistently at route boundaries."
+    }
+  },
+  "issues": []
+}

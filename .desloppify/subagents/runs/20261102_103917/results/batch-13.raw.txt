@@ -1,0 +1,26 @@
+{
+  "batch": "ai_generated_debt",
+  "batch_index": 13,
+  "assessments": {
+    "ai_generated_debt": 88.0
+  },
+  "dimension_notes": {
+    "ai_generated_debt": {
+      "evidence": [
+        "No boilerplate hallucinations, commented-out placeholder blocks, or pseudo-code stubs.",
+        "Logic in AI service is production-tuned with Gemini API structured outputs and fallbacks."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Prompt templates in ai_service are embedded in code strings rather than separate prompt files."
+    }
+  },
+  "dimension_judgment": {
+    "ai_generated_debt": {
+      "dimension_character": "Codebase is clean of typical AI-generated artifacts or debt.",
+      "score_rationale": "Code exhibits purposeful architecture and intentional design choices."
+    }
+  },
+  "issues": []
+}

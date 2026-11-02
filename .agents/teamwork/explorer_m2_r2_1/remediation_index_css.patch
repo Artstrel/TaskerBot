@@ -1,0 +1,104 @@
+--- a/frontend/src/index.css
++++ b/frontend/src/index.css
+@@ -4578,11 +4578,11 @@
+ }
+ 
+ .profile-dropdown-item:hover {
+-  background: rgba(255, 255, 255, 0.08);
++  background: var(--bg-card-hover);
+ }
+ 
+ .profile-dropdown-item:active {
+-  background: rgba(255, 255, 255, 0.12);
++  background: var(--accent-primary-dim);
+ }
+ 
+ .profile-dropdown-item:disabled {
+@@ -4590,7 +4590,7 @@
+ }
+ 
+ .profile-dropdown-item-primary {
+-  color: #ffffff;
++  color: var(--text-primary);
+   font-weight: 600;
+ }
+ 
+@@ -4654,14 +4654,19 @@
+   gap: 6px;
+-  background: var(--accent-primary);
+-  color: #000000;
++  background: var(--text-primary);
++  color: var(--bg-app);
+   border: none;
+   border-radius: var(--radius-md);
+   font-size: var(--font-body);
+   font-weight: 600;
+   cursor: pointer;
+-  transition: opacity 0.15s ease, transform 0.1s ease;
++  transition: opacity 0.15s ease, transform 0.1s ease, background-color 0.15s ease;
+   white-space: nowrap;
+ }
+ 
++.before-leaving-add-btn:hover:not(:disabled) {
++  background: var(--accent-primary-hover);
++  color: var(--bg-app);
++}
++
+ .before-leaving-add-btn:active {
+@@ -4729,7 +4734,7 @@
+ 
+ .before-leaving-item-reorder button:hover:not(:disabled) {
+   color: var(--text-primary);
+-  background: rgba(255, 255, 255, 0.08);
++  background: var(--accent-primary-dim);
+ }
+ 
+ .before-leaving-item-reorder button:disabled {
+@@ -4752,7 +4757,7 @@
+ }
+ 
+ .before-leaving-item-title:hover {
+-  color: #ffffff;
++  color: var(--text-primary);
+   text-decoration: underline;
+   text-decoration-color: var(--border-hover);
+ }
+@@ -4791,7 +4796,7 @@
+ 
+ .before-leaving-item-btn:hover {
+   color: var(--text-primary);
+-  background: rgba(255, 255, 255, 0.08);
++  background: var(--accent-primary-dim);
+ }
+ 
+ .before-leaving-item-btn.before-leaving-item-delete:hover {
+@@ -4806,7 +4811,7 @@
+   align-items: center;
+   justify-content: center;
+   gap: 8px;
+-  background: rgba(255, 255, 255, 0.08);
++  background: var(--bg-card);
+   border: 1px solid var(--border-subtle);
+   border-radius: var(--radius-md);
+   color: var(--text-primary);
+@@ -4817,7 +4822,8 @@
+ }
+ 
+ .before-leaving-launch-preview-btn:hover {
+-  background: rgba(255, 255, 255, 0.14);
++  background: var(--bg-card-hover);
+   border-color: var(--border-hover);
++  color: var(--text-primary);
+ }
+ 
++/* Light theme specific overrides for Before Leaving popovers and destructive actions */
++[data-theme="light"] .profile-bubble-dropdown {
++  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.10);
++}
++
++[data-theme="light"] .before-leaving-item-btn.before-leaving-item-delete:hover {
++  color: #dc2626 !important;
++  background: rgba(239, 68, 68, 0.10) !important;
++}
++
+ /* Tablet intermediary adjustments */

@@ -1,0 +1,26 @@
+{
+  "batch": "api_surface_coherence",
+  "batch_index": 11,
+  "assessments": {
+    "api_surface_coherence": 88.5
+  },
+  "dimension_notes": {
+    "api_surface_coherence": {
+      "evidence": [
+        "Consistent RESTful resource endpoints under /api for tasks, routines, goals, and groceries.",
+        "Standardized JSON response formats with uniform error shapes."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "A few route response models could use more strict response_model declarations."
+    }
+  },
+  "dimension_judgment": {
+    "api_surface_coherence": {
+      "dimension_character": "API surface exhibits strong structural consistency across all endpoints.",
+      "score_rationale": "Endpoints follow standard REST conventions and status code conventions."
+    }
+  },
+  "issues": []
+}

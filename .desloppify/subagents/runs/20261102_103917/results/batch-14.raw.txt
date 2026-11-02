@@ -1,0 +1,26 @@
+{
+  "batch": "incomplete_migration",
+  "batch_index": 14,
+  "assessments": {
+    "incomplete_migration": 90.0
+  },
+  "dimension_notes": {
+    "incomplete_migration": {
+      "evidence": [
+        "All database queries use SQLAlchemy 2.0 select() style with AsyncSession.",
+        "No legacy or deprecated query syntax in active backend modules."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Pydantic v2 migration is almost complete; config class deprecation warnings in schemas need updating to ConfigDict."
+    }
+  },
+  "dimension_judgment": {
+    "incomplete_migration": {
+      "dimension_character": "Migrations and framework upgrades are cleanly finalized.",
+      "score_rationale": "Zero half-migrated patterns detected across core subsystems."
+    }
+  },
+  "issues": []
+}

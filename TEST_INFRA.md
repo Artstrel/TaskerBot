@@ -1,91 +1,40 @@
-# Test Infrastructure Documentation (TEST_INFRA.md)
+# E2E Test Infra: TaskerBot "Before Leaving" Mode
 
-## 1. Overview & Architecture
+## Test Philosophy
+- Opaque-box, requirement-driven, validating behavior against user requirements in `ORIGINAL_REQUEST.md`.
+- Methodology: Category-Partition + Boundary Value Analysis (BVA) + Pairwise Combinatorial Testing + Real-World Workload Testing.
+- Zero-regression policy against existing 52-test suite (`tests/test_numeric_tasks_persistence.py`, `tests/test_numeric_challenge_stress.py`, `tests/test_non_numeric_regressions_stress.py`).
 
-This document describes the test harness and infrastructure for validating numeric tasks ("числительные задачи") persistence and regression safety across all task categories in TaskerBot.
+## Feature Inventory & Test Mapping
+| # | Feature | Requirement | Tier 1 (Coverage) | Tier 2 (Boundary) | Tier 3 (Cross) | Tier 4 (Workload) |
+|---|---------|-------------|:-----------------:|:-----------------:|:--------------:|:-----------------:|
+| 1 | Template CRUD | R1 (Template config) | 5 | 5 | ✓ | ✓ |
+| 2 | Template Reordering | R1 (Ordering) | 5 | 5 | ✓ | ✓ |
+| 3 | Active Session Start & Snapshotting | R2 (Start mode) | 5 | 5 | ✓ | ✓ |
+| 4 | Checkbox Interaction & DB Sync | R2 (Checklist sync) | 5 | 5 | ✓ | ✓ |
+| 5 | Fullscreen Navigation Hard-Lock | R2 (Navigation lock) | 5 | 5 | ✓ | ✓ |
+| 6 | Finish Validation & Unlock Transition | R2 (Unlock on 100%) | 5 | 5 | ✓ | ✓ |
+| 7 | Session Persistence Across Reloads | R2 (State persistence) | 5 | 5 | ✓ | ✓ |
+| 8 | Adaptive Button Placement (iOS vs Desktop) | R3 (Placement) | 5 | 5 | ✓ | ✓ |
 
-The test suite is designed following an **opaque-box, contract-driven, 4-tier methodology**, exercising the backend REST API endpoints via asynchronous HTTP calls (`httpx.AsyncClient` with `ASGITransport`) directly against the FastAPI `app` instance.
+## Test Architecture
+- **Backend Test Runner**: `.venv/bin/pytest tests/ -v`
+- **Harness**: Ephemeral SQLite DB with `aiosqlite` and `ASGITransport(app=app)`, zero external network dependencies.
+- **Frontend Verification**: Production build verification `npm --prefix frontend run build` + lint check `npm --prefix frontend run lint` + simulated UI contract/E2E test suite.
+- **Pass/Fail Semantics**: Exit code 0, 100% test pass, zero regressions.
 
-### Key Goals
-1. **Zero External Dependency**: Tests execute against an isolated temporary database instance via FastAPI's `app.dependency_overrides[get_db]`. No remote Supabase or network connection is required.
-2. **Deterministic State Isolation**: Each test run or test suite execution starts with a fresh database schema (`Base.metadata.create_all`), guaranteeing complete test independence.
-3. **High Fidelity**: Matches exact production schemas, ORM models, Pydantic request/response validators, and authentication dependencies.
-4. **4-Tier Coverage**:
-   - **Tier 1**: Feature Coverage (Routine/Task creation with quantitative fields, progress update via stepper delta & absolute values, dashboard queries, auto-completion on target reach).
-   - **Tier 2**: Boundary & Corner Cases (Float precision e.g. 0.25/0.33, clamping at 0.0, exceeding target, concurrent updates deduplication).
-   - **Tier 3**: Cross-Feature Combinations (Progress update vs. completion checkbox toggle, quantitative tasks linked to goals, multiple routines per date).
-   - **Tier 4**: Real-World Workload & 30–40s Persistence Verification (Simulated 18s/36s/>40s polling loops, auth isolation, non-numeric regression tests).
+## Real-World Application Scenarios (Tier 4)
+| # | Scenario | Features Exercised | Expected Outcome |
+|---|----------|--------------------|------------------|
+| 1 | Standard Morning Departure | F1, F3, F4, F5, F6, F7 | User sets 4 items, starts mode, checks items one by one, exits upon completion cleanly |
+| 2 | Mid-Session Interruption & Browser Refresh | F3, F4, F5, F7 | User checks 2 of 4 items, reloads page; UI immediately restores locked overlay with 2 items checked |
+| 3 | Concurrent Template Modification | F1, F3, F4 | User has active session with 3 items; template item is edited/deleted in background; active session snapshot remains intact |
+| 4 | iOS Telegram Context Menu Launch | F7, F8, F5 | Simulated Telegram iOS environment; trigger appears in profile bubble menu; opens lock; BackButton locked |
+| 5 | Premature Escape Prevention Stress | F4, F5, F6 | User attempts to call finish endpoint or press Escape/back while 1 item unchecked; server and UI reject escape |
 
----
-
-## 2. Environment & Prerequisites
-
-The test suite runs on Python 3.9+ (specifically Python 3.9/3.12 within `.venv`).
-
-### Required Packages
-- `pytest` (>= 8.0)
-- `pytest-asyncio` (>= 1.2.0)
-- `httpx` (>= 0.27.0)
-- `aiosqlite` (>= 0.20.0)
-- `SQLAlchemy` (>= 2.0.0)
-- `fastapi` (>= 0.110.0)
-- `pydantic` (>= 2.6.0)
-
-Installed in the project virtualenv:
-```bash
-.venv/bin/pip install pytest pytest-asyncio
-```
-
----
-
-## 3. Database Isolation Strategy
-
-### Isolation Mechanism
-Instead of connecting to the production Supabase PostgreSQL pooler configured in `.env`, the test harness:
-1. Provisions a dedicated SQLite database in a temporary directory (`tempfile.mkdtemp()`).
-2. Creates an `AsyncEngine` using `sqlite+aiosqlite:///...`.
-3. Runs table creation: `Base.metadata.create_all(conn)`.
-4. Overrides the FastAPI database dependency:
-   ```python
-   app.dependency_overrides[get_db] = override_get_db
-   ```
-5. Executes tests with isolated user Telegram IDs (e.g. `10000001`, `10000002`).
-6. Tears down tables and disposes of the engine on test completion.
-
-### Concurrent Request Handling
-SQLite with `aiosqlite` enables testing of concurrent requests (`asyncio.gather`) to verify that simultaneous progress updates on the same routine on the same date do not trigger `sqlalchemy.exc.MultipleResultsFound` or duplicate records in `routine_logs`.
-
----
-
-## 4. Test Suite Structure
-
-The test file `tests/test_numeric_tasks_persistence.py` contains 4 structured test classes:
-
-| Class | Tier | Description |
-|---|---|---|
-| `TestTier1FeatureCoverage` | Tier 1 | CRUD creation, stepper delta & absolute progress, dashboard verification, auto-completion |
-| `TestTier2BoundaryAndCornerCases` | Tier 2 | Float steps, negative clamping, exceeding target, concurrent updates race handling |
-| `TestTier3CrossFeatureCombinations` | Tier 3 | Checkbox toggle vs stepper, goal rollup sync, multi-routine isolation |
-| `TestTier4PersistenceAndRegression` | Tier 4 | 18s/36s/>40s polling persistence, auth resilience, non-numeric regression tests |
-
----
-
-## 5. Execution Commands
-
-### Run Full Test Suite
-```bash
-.venv/bin/pytest tests/test_numeric_tasks_persistence.py -v
-```
-
-### Run Specific Tier
-```bash
-.venv/bin/pytest tests/test_numeric_tasks_persistence.py -k "TestTier1" -v
-.venv/bin/pytest tests/test_numeric_tasks_persistence.py -k "TestTier2" -v
-.venv/bin/pytest tests/test_numeric_tasks_persistence.py -k "TestTier3" -v
-.venv/bin/pytest tests/test_numeric_tasks_persistence.py -k "TestTier4" -v
-```
-
-### Run with Short Tracebacks
-```bash
-.venv/bin/pytest tests/test_numeric_tasks_persistence.py --tb=short
-```
+## Coverage Thresholds
+- Tier 1: ≥5 test cases per feature
+- Tier 2: ≥5 boundary/edge test cases per feature
+- Tier 3: Pairwise combinations of state transitions (start, toggle, reload, finish, template edit)
+- Tier 4: ≥5 realistic full user journey workloads
+- Baseline Regression: 52/52 existing tests pass

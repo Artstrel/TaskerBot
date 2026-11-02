@@ -1,12 +1,23 @@
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Dict, Any
 import zoneinfo
+import asyncio
 from sqlalchemy import select, update, delete, and_, func, desc, Integer, case
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.models import User, RoutineTask, RoutineLog, Goal, OneTimeTask, GroceryItem
+from backend.models import (
+    User,
+    RoutineTask,
+    RoutineLog,
+    Goal,
+    OneTimeTask,
+    GroceryItem,
+    BeforeLeavingItem,
+    BeforeLeavingSession,
+    BeforeLeavingCheckItem,
+)
 from backend.schemas import (
     UserUpdate,
     RoutineWithStatus,
@@ -16,6 +27,9 @@ from backend.schemas import (
     DaySummary,
     GroceryItemRead,
     GroceryListResponse,
+    BeforeLeavingItemRead,
+    BeforeLeavingCheckItemRead,
+    BeforeLeavingSessionRead,
     capitalize_first,
     normalize_scheduled_time,
 )
@@ -1257,4 +1271,310 @@ async def clear_completed_groceries(session: AsyncSession, user_id: int) -> int:
     res = await session.execute(stmt)
     await session.commit()
     return res.rowcount
+
+
+# --- Before Leaving CRUD (R1 & R2) ---
+
+def _before_leaving_item_to_read(item: BeforeLeavingItem) -> BeforeLeavingItemRead:
+    return BeforeLeavingItemRead(
+        id=item.id,
+        user_id=item.user_id,
+        title=item.title,
+        order=item.order,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+    )
+
+
+def _before_leaving_session_to_read(session_obj: BeforeLeavingSession) -> BeforeLeavingSessionRead:
+    raw_items = session_obj.items or []
+    sorted_items = sorted(raw_items, key=lambda x: (x.order, x.id))
+    items_read = [
+        BeforeLeavingCheckItemRead(
+            id=item.id,
+            session_id=item.session_id,
+            template_item_id=item.template_item_id,
+            title=item.title,
+            order=item.order,
+            is_checked=item.is_checked,
+            checked_at=item.checked_at,
+        )
+        for item in sorted_items
+    ]
+    total_count = len(items_read)
+    completed_count = sum(1 for item in items_read if item.is_checked)
+    is_all_completed = total_count > 0 and completed_count == total_count
+    return BeforeLeavingSessionRead(
+        id=session_obj.id,
+        user_id=session_obj.user_id,
+        is_active=session_obj.is_active,
+        started_at=session_obj.started_at,
+        completed_at=session_obj.completed_at,
+        items=items_read,
+        total_count=total_count,
+        completed_count=completed_count,
+        is_all_completed=is_all_completed,
+    )
+
+
+async def get_before_leaving_items(session: AsyncSession, user_id: int) -> List[BeforeLeavingItemRead]:
+    stmt = (
+        select(BeforeLeavingItem)
+        .where(BeforeLeavingItem.user_id == user_id)
+        .order_by(BeforeLeavingItem.order.asc(), BeforeLeavingItem.id.asc())
+    )
+    res = await session.execute(stmt)
+    items = res.scalars().all()
+    return [_before_leaving_item_to_read(item) for item in items]
+
+
+async def create_before_leaving_item(
+    session: AsyncSession,
+    user_id: int,
+    title: str,
+    order: Optional[int] = None,
+) -> BeforeLeavingItemRead:
+    clean_title = capitalize_first(title.strip()) if title else ""
+    if not clean_title:
+        raise ValueError("Title cannot be empty")
+
+    if order is None:
+        stmt = select(func.coalesce(func.max(BeforeLeavingItem.order), -1)).where(
+            BeforeLeavingItem.user_id == user_id
+        )
+        res = await session.execute(stmt)
+        max_val = res.scalar()
+        max_order = -1 if max_val is None else max_val
+        order = max_order + 1
+
+    item = BeforeLeavingItem(
+        user_id=user_id,
+        title=clean_title,
+        order=order,
+    )
+    session.add(item)
+    await session.commit()
+    await session.refresh(item)
+    return _before_leaving_item_to_read(item)
+
+
+async def update_before_leaving_item(
+    session: AsyncSession,
+    item_id: int,
+    user_id: int,
+    title: Optional[str] = None,
+    order: Optional[int] = None,
+) -> Optional[BeforeLeavingItemRead]:
+    stmt = select(BeforeLeavingItem).where(
+        and_(BeforeLeavingItem.id == item_id, BeforeLeavingItem.user_id == user_id)
+    )
+    res = await session.execute(stmt)
+    item = res.scalar_one_or_none()
+    if not item:
+        return None
+
+    if title is not None:
+        clean_title = capitalize_first(title.strip())
+        if not clean_title:
+            raise ValueError("Title cannot be empty")
+        item.title = clean_title
+    if order is not None:
+        item.order = order
+
+    item.updated_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(item)
+    return _before_leaving_item_to_read(item)
+
+
+async def delete_before_leaving_item(session: AsyncSession, item_id: int, user_id: int) -> bool:
+    stmt = delete(BeforeLeavingItem).where(
+        and_(BeforeLeavingItem.id == item_id, BeforeLeavingItem.user_id == user_id)
+    )
+    res = await session.execute(stmt)
+    await session.commit()
+    return res.rowcount > 0
+
+
+async def reorder_before_leaving_items(
+    session: AsyncSession,
+    user_id: int,
+    item_ids: List[int],
+) -> List[BeforeLeavingItemRead]:
+    for idx, item_id in enumerate(item_ids):
+        await session.execute(
+            update(BeforeLeavingItem)
+            .where(and_(BeforeLeavingItem.id == item_id, BeforeLeavingItem.user_id == user_id))
+            .values(order=idx, updated_at=datetime.utcnow())
+        )
+    await session.commit()
+    return await get_before_leaving_items(session, user_id)
+
+
+_before_leaving_locks: Dict[int, asyncio.Lock] = {}
+
+def _get_before_leaving_lock(user_id: int) -> asyncio.Lock:
+    if user_id not in _before_leaving_locks:
+        _before_leaving_locks[user_id] = asyncio.Lock()
+    return _before_leaving_locks[user_id]
+
+
+async def get_active_before_leaving_session(
+    session: AsyncSession,
+    user_id: int,
+) -> Optional[BeforeLeavingSessionRead]:
+    stmt = (
+        select(BeforeLeavingSession)
+        .options(selectinload(BeforeLeavingSession.items))
+        .where(and_(BeforeLeavingSession.user_id == user_id, BeforeLeavingSession.is_active == True))
+        .order_by(BeforeLeavingSession.id.desc())
+    )
+    res = await session.execute(stmt)
+    active = res.scalars().first()
+    if not active:
+        return None
+    return _before_leaving_session_to_read(active)
+
+
+async def start_before_leaving_session(
+    session: AsyncSession,
+    user_id: int,
+    reset: bool = False,
+) -> BeforeLeavingSessionRead:
+    async with _get_before_leaving_lock(user_id):
+        # 1. Check for existing active session
+        stmt = (
+            select(BeforeLeavingSession)
+            .options(selectinload(BeforeLeavingSession.items))
+            .where(and_(BeforeLeavingSession.user_id == user_id, BeforeLeavingSession.is_active == True))
+            .order_by(BeforeLeavingSession.id.desc())
+        )
+        res = await session.execute(stmt)
+        existing = res.scalars().first()
+        if existing:
+            if not reset:
+                return _before_leaving_session_to_read(existing)
+            else:
+                await session.execute(
+                    update(BeforeLeavingSession)
+                    .where(and_(BeforeLeavingSession.user_id == user_id, BeforeLeavingSession.is_active == True))
+                    .values(is_active=False)
+                )
+                await session.flush()
+        else:
+            # Ensure any duplicate or orphaned active sessions are cleanly deactivated
+            await session.execute(
+                update(BeforeLeavingSession)
+                .where(and_(BeforeLeavingSession.user_id == user_id, BeforeLeavingSession.is_active == True))
+                .values(is_active=False)
+            )
+            await session.flush()
+
+        # 2. Check template items
+        items_stmt = (
+            select(BeforeLeavingItem)
+            .where(BeforeLeavingItem.user_id == user_id)
+            .order_by(BeforeLeavingItem.order.asc(), BeforeLeavingItem.id.asc())
+        )
+        items_res = await session.execute(items_stmt)
+        template_items = items_res.scalars().all()
+        if not template_items:
+            raise ValueError("No template items configured")
+
+        # 3. Create new session and snapshot items
+        new_session = BeforeLeavingSession(
+            user_id=user_id,
+            is_active=True,
+            started_at=datetime.utcnow(),
+        )
+        session.add(new_session)
+        await session.flush()
+
+        for item in template_items:
+            check_item = BeforeLeavingCheckItem(
+                session_id=new_session.id,
+                template_item_id=item.id,
+                title=item.title,
+                order=item.order,
+                is_checked=False,
+                checked_at=None,
+            )
+            session.add(check_item)
+
+        await session.commit()
+
+        # 4. Return new session with loaded items
+        stmt_created = (
+            select(BeforeLeavingSession)
+            .options(selectinload(BeforeLeavingSession.items))
+            .where(BeforeLeavingSession.id == new_session.id)
+        )
+        res_created = await session.execute(stmt_created)
+        created_session = res_created.scalar_one()
+        return _before_leaving_session_to_read(created_session)
+
+
+async def toggle_before_leaving_check_item(
+    session: AsyncSession,
+    check_item_id: int,
+    user_id: int,
+    is_checked: Optional[bool] = None,
+) -> Optional[BeforeLeavingSessionRead]:
+    stmt = (
+        select(BeforeLeavingCheckItem)
+        .join(BeforeLeavingSession)
+        .where(
+            and_(
+                BeforeLeavingCheckItem.id == check_item_id,
+                BeforeLeavingSession.user_id == user_id,
+                BeforeLeavingSession.is_active == True,
+            )
+        )
+    )
+    res = await session.execute(stmt)
+    item = res.scalars().first()
+    if not item:
+        return None
+
+    if is_checked is None:
+        item.is_checked = not item.is_checked
+    else:
+        item.is_checked = bool(is_checked)
+
+    item.checked_at = datetime.utcnow() if item.is_checked else None
+    await session.commit()
+
+    return await get_active_before_leaving_session(session, user_id)
+
+
+async def finish_before_leaving_session(
+    session: AsyncSession,
+    user_id: int,
+) -> BeforeLeavingSessionRead:
+    async with _get_before_leaving_lock(user_id):
+        stmt = (
+            select(BeforeLeavingSession)
+            .options(selectinload(BeforeLeavingSession.items))
+            .where(and_(BeforeLeavingSession.user_id == user_id, BeforeLeavingSession.is_active == True))
+            .order_by(BeforeLeavingSession.id.desc())
+        )
+        res = await session.execute(stmt)
+        active = res.scalars().first()
+        if not active:
+            raise LookupError("No active session found")
+
+        items = active.items or []
+        if not items or any(not item.is_checked for item in items):
+            raise ValueError("Cannot finish session: unfinished items remain")
+
+        now = datetime.utcnow()
+        await session.execute(
+            update(BeforeLeavingSession)
+            .where(and_(BeforeLeavingSession.user_id == user_id, BeforeLeavingSession.is_active == True))
+            .values(is_active=False, completed_at=now)
+        )
+        active.is_active = False
+        active.completed_at = now
+        await session.commit()
+        return _before_leaving_session_to_read(active)
 

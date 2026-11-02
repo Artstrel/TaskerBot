@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import List, Optional
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, Request, Response, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,13 @@ from backend.schemas import (
     TelegramWebAppAuthRequest,
     TelegramWidgetAuthRequest,
     AuthTokenResponse,
+    BeforeLeavingItemCreate,
+    BeforeLeavingItemUpdate,
+    BeforeLeavingItemRead,
+    BeforeLeavingItemsReorderRequest,
+    BeforeLeavingCheckItemToggle,
+    BeforeLeavingSessionStart,
+    BeforeLeavingSessionRead,
 )
 from backend.crud import (
     get_or_create_user,
@@ -64,6 +71,15 @@ from backend.crud import (
     update_grocery_item,
     delete_grocery_item,
     clear_completed_groceries,
+    get_before_leaving_items,
+    create_before_leaving_item,
+    update_before_leaving_item,
+    delete_before_leaving_item,
+    reorder_before_leaving_items,
+    get_active_before_leaving_session,
+    start_before_leaving_session,
+    toggle_before_leaving_check_item,
+    finish_before_leaving_session,
 )
 from backend.ai_service import ai_service
 from backend.auth import (
@@ -915,5 +931,134 @@ async def trigger_test_notification(
         return await send_test_notification(session, user)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send test notification: {e}")
+
+
+# --- Before Leaving Endpoints (R1 & R2) ---
+
+@router.get("/before-leaving/items", response_model=List[BeforeLeavingItemRead])
+async def list_before_leaving_items(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Retrieve all template checklist items configured by the user, ordered by order ASC."""
+    return await get_before_leaving_items(session, user.telegram_id)
+
+
+@router.post("/before-leaving/items", response_model=BeforeLeavingItemRead)
+async def create_new_before_leaving_item(
+    payload: BeforeLeavingItemCreate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Create a new template checklist item."""
+    try:
+        return await create_before_leaving_item(
+            session,
+            user_id=user.telegram_id,
+            title=payload.title,
+            order=payload.order,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/before-leaving/items/{item_id}", response_model=BeforeLeavingItemRead)
+async def update_existing_before_leaving_item(
+    item_id: int,
+    payload: BeforeLeavingItemUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Update title or order of a template checklist item."""
+    try:
+        item = await update_before_leaving_item(
+            session,
+            item_id=item_id,
+            user_id=user.telegram_id,
+            title=payload.title,
+            order=payload.order,
+        )
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+        return item
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/before-leaving/items/{item_id}")
+async def delete_existing_before_leaving_item(
+    item_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Delete a template checklist item."""
+    success = await delete_before_leaving_item(session, item_id=item_id, user_id=user.telegram_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return {"status": "deleted"}
+
+
+@router.put("/before-leaving/items/reorder", response_model=List[BeforeLeavingItemRead])
+async def reorder_template_items(
+    payload: BeforeLeavingItemsReorderRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Batch reorder template items according to the provided list of IDs."""
+    return await reorder_before_leaving_items(session, user_id=user.telegram_id, item_ids=payload.item_ids)
+
+
+@router.get("/before-leaving/session/active", response_model=Optional[BeforeLeavingSessionRead])
+async def get_active_session(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get the currently active Before Leaving session, or null if no session is active."""
+    return await get_active_before_leaving_session(session, user_id=user.telegram_id)
+
+
+@router.post("/before-leaving/session/start", response_model=BeforeLeavingSessionRead)
+async def start_session(
+    payload: Optional[BeforeLeavingSessionStart] = Body(None),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Start or resume a Before Leaving session by snapshotting template items."""
+    try:
+        reset = payload.reset if payload else False
+        return await start_before_leaving_session(session, user_id=user.telegram_id, reset=reset)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/before-leaving/session/items/{item_id}/toggle", response_model=BeforeLeavingSessionRead)
+async def toggle_session_item(
+    item_id: int,
+    payload: Optional[BeforeLeavingCheckItemToggle] = Body(None),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Toggle or set the checked state of a checklist item in the active session."""
+    is_checked = payload.is_checked if payload else None
+    result = await toggle_before_leaving_check_item(
+        session, check_item_id=item_id, user_id=user.telegram_id, is_checked=is_checked
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Check item or active session not found")
+    return result
+
+
+@router.post("/before-leaving/session/finish", response_model=BeforeLeavingSessionRead)
+async def finish_session(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Finish the active session. Only permitted if all checklist items are checked."""
+    try:
+        return await finish_before_leaving_session(session, user_id=user.telegram_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 

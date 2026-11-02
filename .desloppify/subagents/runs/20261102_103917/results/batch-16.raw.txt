@@ -1,0 +1,26 @@
+{
+  "batch": "initialization_coupling",
+  "batch_index": 16,
+  "assessments": {
+    "initialization_coupling": 88.0
+  },
+  "dimension_notes": {
+    "initialization_coupling": {
+      "evidence": [
+        "Lazy initialization of Telegram Bot avoids startup failures when token is absent.",
+        "FastAPI lifespan manages database connection pool and background scheduler startup/shutdown."
+      ],
+      "impact_scope": "subsystem",
+      "fix_scope": "single_edit",
+      "confidence": "high",
+      "issues_preventing_higher_score": "Scheduler starts during FastAPI lifespan which couples HTTP server startup with scheduler."
+    }
+  },
+  "dimension_judgment": {
+    "initialization_coupling": {
+      "dimension_character": "Subsystem lifecycles are coordinated cleanly during application bootstrap.",
+      "score_rationale": "Graceful startup and teardown handling minimizes initialization races."
+    }
+  },
+  "issues": []
+}

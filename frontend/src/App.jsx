@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus } from 'lucide-react';
+import { Plus, DoorOpen } from 'lucide-react';
 import {
   AnimatedCalendar,
   AnimatedShoppingCart,
@@ -26,12 +26,20 @@ import {
   reconcileGroceriesWithPending,
   isAuthenticated,
   isInsideTelegram,
+  isTelegramIos,
   isDemoMode,
   setDemoMode,
   clearAuthSession,
   authenticateWithTelegramWebApp,
   getAppHomeUrl,
   wakeBackend,
+  fetchActiveBeforeLeavingSession,
+  startBeforeLeavingSession,
+  toggleBeforeLeavingCheckItem,
+  finishBeforeLeavingSession,
+  getCachedActiveBeforeLeavingSession,
+  setCachedActiveBeforeLeavingSession,
+  clearCachedActiveBeforeLeavingSession,
 } from './api';
 import Mascot from './components/Mascot';
 import TodayTab from './components/TodayTab';
@@ -39,6 +47,9 @@ import GoalsTab from './components/GoalsTab';
 import GroceriesTab from './components/GroceriesTab';
 import SettingsTab from './components/SettingsTab';
 import QuickAddModal from './components/QuickAddModal';
+import BeforeLeavingConfigModal from './components/BeforeLeavingConfigModal';
+import BeforeLeavingActiveOverlay from './components/BeforeLeavingActiveOverlay';
+import ProfileBubbleContextMenu from './components/ProfileBubbleContextMenu';
 import LoginScreen from './components/LoginScreen';
 import AuthCallback from './components/AuthCallback';
 import { initTheme } from './theme';
@@ -131,6 +142,151 @@ export default function App() {
   const [avatarError, setAvatarError] = useState(false);
   const [tabSwitchTrigger, setTabSwitchTrigger] = useState(0);
   const [hoveredTab, setHoveredTab] = useState(null);
+
+  // Before Leaving («Перед выходом») state (Milestones 2 & 3)
+  const [isTgIos, setIsTgIos] = useState(() => isTelegramIos());
+  const [isBeforeLeavingConfigOpen, setIsBeforeLeavingConfigOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [activeBeforeLeavingSession, setActiveBeforeLeavingSession] = useState(() =>
+    getCachedActiveBeforeLeavingSession()
+  );
+  const [isBeforeLeavingActive, setIsBeforeLeavingActive] = useState(() =>
+    Boolean(getCachedActiveBeforeLeavingSession()?.is_active)
+  );
+  const [isFinishingBeforeLeaving, setIsFinishingBeforeLeaving] = useState(false);
+
+  const handleStartBeforeLeaving = useCallback(async () => {
+    hapticFeedback('medium');
+    if (activeBeforeLeavingSession && activeBeforeLeavingSession.is_active) {
+      setIsBeforeLeavingActive(true);
+      return;
+    }
+    const res = await startBeforeLeavingSession();
+    if (res && res.id) {
+      setActiveBeforeLeavingSession(res);
+      setIsBeforeLeavingActive(true);
+      setCachedActiveBeforeLeavingSession(res);
+    } else {
+      setIsBeforeLeavingConfigOpen(true);
+    }
+  }, [activeBeforeLeavingSession]);
+
+  const handleToggleBeforeLeavingItem = useCallback(async (itemId, isChecked) => {
+    hapticFeedback('selection');
+    let originalChecked = false;
+    let targetChecked = false;
+
+    // Granular optimistic local update
+    setActiveBeforeLeavingSession((prev) => {
+      if (!prev || !prev.items) return prev;
+      const item = prev.items.find((i) => i.id === itemId);
+      if (!item) return prev;
+      originalChecked = item.is_checked;
+      targetChecked = isChecked !== undefined ? isChecked : !item.is_checked;
+
+      const newItems = prev.items.map((i) =>
+        i.id === itemId
+          ? { ...i, is_checked: targetChecked, checked_at: targetChecked ? new Date().toISOString() : null }
+          : i
+      );
+      const newCompleted = newItems.filter((i) => Boolean(i.is_checked)).length;
+      const optimistic = {
+        ...prev,
+        items: newItems,
+        completed_count: newCompleted,
+        is_all_completed: newItems.length > 0 && newCompleted === newItems.length,
+      };
+      setCachedActiveBeforeLeavingSession(optimistic);
+      return optimistic;
+    });
+
+    try {
+      const res = await toggleBeforeLeavingCheckItem(itemId, targetChecked);
+      if (res && res.id) {
+        setActiveBeforeLeavingSession((prev) => {
+          if (!prev) return res;
+          const serverItemMap = new Map(res.items.map((i) => [i.id, i]));
+          const mergedItems = prev.items.map((localItem) => {
+            if (localItem.id === itemId) {
+              return serverItemMap.get(itemId) || localItem;
+            }
+            return localItem;
+          });
+          const completedCount = mergedItems.filter((i) => Boolean(i.is_checked)).length;
+          const merged = {
+            ...res,
+            items: mergedItems,
+            completed_count: completedCount,
+            is_all_completed: mergedItems.length > 0 && completedCount === mergedItems.length,
+          };
+          setCachedActiveBeforeLeavingSession(merged);
+          return merged;
+        });
+        if (res.is_all_completed) {
+          hapticFeedback('success');
+        }
+      } else {
+        throw new Error(res?.error || 'Failed to toggle check item');
+      }
+    } catch (err) {
+      console.error('Error toggling check item:', err);
+      hapticFeedback('error');
+      // Granular Rollback: revert ONLY target itemId
+      setActiveBeforeLeavingSession((prev) => {
+        if (!prev || !prev.items) return prev;
+        const rolledBackItems = prev.items.map((i) =>
+          i.id === itemId
+            ? { ...i, is_checked: originalChecked, checked_at: originalChecked ? i.checked_at : null }
+            : i
+        );
+        const rolledBackCompleted = rolledBackItems.filter((i) => Boolean(i.is_checked)).length;
+        const rolledBack = {
+          ...prev,
+          items: rolledBackItems,
+          completed_count: rolledBackCompleted,
+          is_all_completed: rolledBackItems.length > 0 && rolledBackCompleted === rolledBackItems.length,
+        };
+        setCachedActiveBeforeLeavingSession(rolledBack);
+        return rolledBack;
+      });
+      throw err;
+    }
+  }, []);
+
+  const handleFinishBeforeLeavingSession = useCallback(async () => {
+    if (isFinishingBeforeLeaving) return;
+    setIsFinishingBeforeLeaving(true);
+    hapticFeedback('success');
+
+    try {
+      const res = await finishBeforeLeavingSession();
+      if (res && (!res.is_active || !res.error)) {
+        setActiveBeforeLeavingSession(null);
+        setIsBeforeLeavingActive(false);
+        clearCachedActiveBeforeLeavingSession();
+
+        if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+          const tg = window.Telegram.WebApp;
+          try {
+            tg.disableClosingConfirmation?.();
+            tg.enableVerticalSwipes?.();
+          } catch {}
+        }
+
+        setMascotMood('done');
+        setTimeout(() => setMascotMood('idle'), 3500);
+        loadData(false, true);
+      } else {
+        throw new Error(res?.error || 'Failed to finish session');
+      }
+    } catch (err) {
+      console.error('Error finishing before-leaving session:', err);
+      hapticFeedback('error');
+      throw err;
+    } finally {
+      setIsFinishingBeforeLeaving(false);
+    }
+  }, [isFinishingBeforeLeaving, loadData]);
 
   const handleLoginSuccess = useCallback((user) => {
     setAuthed(true);
@@ -244,6 +400,7 @@ export default function App() {
             document.documentElement.classList.remove('is-ios');
             document.body.classList.remove('is-ios');
           }
+          setIsTgIos(isTelegramIos());
 
           const rawSafeTop = tg.safeAreaInset?.top ?? 0;
           const contentSafeTop = tg.contentSafeAreaInset?.top ?? rawSafeTop;
@@ -292,6 +449,7 @@ export default function App() {
   // Global desktop keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (isBeforeLeavingActive) return;
       if (['c', 'n', 'с', 'т'].includes(e.key.toLowerCase())) {
         const target = e.target;
         const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
@@ -306,7 +464,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isQuickAddOpen, activeTab]);
+  }, [isQuickAddOpen, activeTab, isBeforeLeavingActive]);
 
   const lastFetchedRef = useRef(0);
   const isFetchingRef = useRef(false);
@@ -363,6 +521,21 @@ export default function App() {
         const reconciledGroceries = reconcileGroceriesWithPending(groceries);
         setGroceriesData(reconciledGroceries);
       }
+
+      // Check active Before Leaving session
+      fetchActiveBeforeLeavingSession()
+        .then((session) => {
+          if (session && session.is_active) {
+            setActiveBeforeLeavingSession(session);
+            setIsBeforeLeavingActive(true);
+            setCachedActiveBeforeLeavingSession(session);
+          } else {
+            setActiveBeforeLeavingSession(null);
+            setIsBeforeLeavingActive(false);
+            clearCachedActiveBeforeLeavingSession();
+          }
+        })
+        .catch(() => {});
 
       // Check if day is completed to celebrate
       if (dash && dash.total_count > 0 && dash.completed_count === dash.total_count) {
@@ -468,6 +641,9 @@ export default function App() {
   };
 
   const handleTabSwitch = (tab) => {
+    if (isBeforeLeavingActive) {
+      return;
+    }
     hapticFeedback('selection');
     setActiveTab(tab);
     setTabSwitchTrigger((prev) => prev + 1);
@@ -608,42 +784,81 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="app-shell">
+      <div className={`app-shell ${isBeforeLeavingActive ? 'before-leaving-mode-active' : ''}`}>
         {/* Desktop Sidebar (hidden on mobile, visible >= 768px) */}
-        <aside className="desktop-sidebar">
+        <aside
+          className="desktop-sidebar"
+          inert={isBeforeLeavingActive ? '' : undefined}
+          aria-hidden={isBeforeLeavingActive ? 'true' : undefined}
+        >
           {/* Desktop Sidebar Top: Profile Bubble (Tap to refresh) */}
           <div className="sidebar-top-bar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <button
-              type="button"
-              className={`header-profile-bubble ${isSyncing ? 'is-syncing' : ''}`}
-              onClick={handlePillRefresh}
-              disabled={isSyncing}
-              title={isSyncing ? 'Синхронизация с сервером...' : 'Нажмите для обновления'}
-              aria-label={isSyncing ? 'Синхронизация данных' : 'Обновить данные'}
-              aria-busy={isSyncing}
-            >
-              <div className="header-avatar-wrapper">
-                <div className="header-avatar-circle">
-                  {(userProfile?.photo_url || currentUser.photo_url) && !avatarError ? (
-                    <img
-                      src={userProfile?.photo_url || currentUser.photo_url}
-                      alt={userProfile?.first_name || currentUser.first_name || 'User'}
-                      className="header-avatar-img"
-                      referrerPolicy="no-referrer"
-                      onError={() => setAvatarError(true)}
-                    />
-                  ) : (
-                    <span className="header-avatar-initial">
-                      {(userProfile?.first_name || currentUser.first_name || 'П').charAt(0).toUpperCase()}
-                    </span>
-                  )}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className={`header-profile-bubble ${isSyncing ? 'is-syncing' : ''}`}
+                onClick={() => {
+                  if (isTgIos) {
+                    setIsProfileMenuOpen((prev) => !prev);
+                  } else {
+                    handlePillRefresh();
+                  }
+                }}
+                disabled={isSyncing}
+                title={isSyncing ? 'Синхронизация с сервером...' : (isTgIos ? 'Меню профиля' : 'Нажмите для обновления')}
+                aria-label={isSyncing ? 'Синхронизация данных' : (isTgIos ? 'Меню профиля' : 'Обновить данные')}
+                aria-busy={isSyncing}
+                aria-haspopup={isTgIos ? 'true' : undefined}
+                aria-expanded={isTgIos ? isProfileMenuOpen : undefined}
+              >
+                <div className="header-avatar-wrapper">
+                  <div className="header-avatar-circle">
+                    {(userProfile?.photo_url || currentUser.photo_url) && !avatarError ? (
+                      <img
+                        src={userProfile?.photo_url || currentUser.photo_url}
+                        alt={userProfile?.first_name || currentUser.first_name || 'User'}
+                        className="header-avatar-img"
+                        referrerPolicy="no-referrer"
+                        onError={() => setAvatarError(true)}
+                      />
+                    ) : (
+                      <span className="header-avatar-initial">
+                        {(userProfile?.first_name || currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="header-bubble-text">
-                <span className="header-bubble-name">{userProfile?.first_name || currentUser.first_name || 'TaskerBot'}</span>
-                <span className="header-bubble-date">{todayFormatted}</span>
-              </div>
-            </button>
+                <div className="header-bubble-text">
+                  <span className="header-bubble-name">{userProfile?.first_name || currentUser.first_name || 'TaskerBot'}</span>
+                  <span className="header-bubble-date">{todayFormatted}</span>
+                </div>
+              </button>
+
+              {isTgIos && (
+                <ProfileBubbleContextMenu
+                  isOpen={isProfileMenuOpen}
+                  onClose={() => setIsProfileMenuOpen(false)}
+                  onStartBeforeLeaving={handleStartBeforeLeaving}
+                  onOpenConfig={() => setIsBeforeLeavingConfigOpen(true)}
+                  onRefresh={handlePillRefresh}
+                  isSyncing={isSyncing}
+                />
+              )}
+            </div>
+
+            {!isTgIos && (
+              <button
+                type="button"
+                className="header-before-leaving-btn"
+                onClick={handleStartBeforeLeaving}
+                title="Режим «Перед выходом»"
+                aria-label="Режим «Перед выходом»"
+              >
+                <DoorOpen size={16} />
+                <span>Перед выходом</span>
+              </button>
+            )}
+
             {(userProfile?.isDemo ?? currentUser.isDemo) && (
               <button
                 type="button"
@@ -759,40 +974,79 @@ export default function App() {
         </aside>
 
         {/* Main Application Area */}
-        <div className="app-main-wrapper">
+        <div
+          className="app-main-wrapper"
+          inert={isBeforeLeavingActive ? '' : undefined}
+          aria-hidden={isBeforeLeavingActive ? 'true' : undefined}
+        >
           {/* Top Sticky Header */}
           <header className="app-header">
-            <button
-              type="button"
-              className={`header-profile-bubble ${isSyncing ? 'is-syncing' : ''}`}
-              onClick={handlePillRefresh}
-              disabled={isSyncing}
-              title={isSyncing ? 'Синхронизация с сервером...' : 'Нажмите для обновления'}
-              aria-label={isSyncing ? 'Синхронизация данных' : 'Обновить данные'}
-              aria-busy={isSyncing}
-            >
-              <div className="header-avatar-wrapper">
-                <div className="header-avatar-circle">
-                  {(userProfile?.photo_url || currentUser.photo_url) && !avatarError ? (
-                    <img
-                      src={userProfile?.photo_url || currentUser.photo_url}
-                      alt={userProfile?.first_name || currentUser.first_name || 'User'}
-                      className="header-avatar-img"
-                      referrerPolicy="no-referrer"
-                      onError={() => setAvatarError(true)}
-                    />
-                  ) : (
-                    <span className="header-avatar-initial">
-                      {(userProfile?.first_name || currentUser.first_name || 'П').charAt(0).toUpperCase()}
-                    </span>
-                  )}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className={`header-profile-bubble ${isSyncing ? 'is-syncing' : ''}`}
+                onClick={() => {
+                  if (isTgIos) {
+                    setIsProfileMenuOpen((prev) => !prev);
+                  } else {
+                    handlePillRefresh();
+                  }
+                }}
+                disabled={isSyncing}
+                title={isSyncing ? 'Синхронизация с сервером...' : (isTgIos ? 'Меню профиля' : 'Нажмите для обновления')}
+                aria-label={isSyncing ? 'Синхронизация данных' : (isTgIos ? 'Меню профиля' : 'Обновить данные')}
+                aria-busy={isSyncing}
+                aria-haspopup={isTgIos ? 'true' : undefined}
+                aria-expanded={isTgIos ? isProfileMenuOpen : undefined}
+              >
+                <div className="header-avatar-wrapper">
+                  <div className="header-avatar-circle">
+                    {(userProfile?.photo_url || currentUser.photo_url) && !avatarError ? (
+                      <img
+                        src={userProfile?.photo_url || currentUser.photo_url}
+                        alt={userProfile?.first_name || currentUser.first_name || 'User'}
+                        className="header-avatar-img"
+                        referrerPolicy="no-referrer"
+                        onError={() => setAvatarError(true)}
+                      />
+                    ) : (
+                      <span className="header-avatar-initial">
+                        {(userProfile?.first_name || currentUser.first_name || 'П').charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="header-bubble-text">
-                <span className="header-bubble-name">{userProfile?.first_name || currentUser.first_name || 'TaskerBot'}</span>
-                <span className="header-bubble-date">{todayFormatted}</span>
-              </div>
-            </button>
+                <div className="header-bubble-text">
+                  <span className="header-bubble-name">{userProfile?.first_name || currentUser.first_name || 'TaskerBot'}</span>
+                  <span className="header-bubble-date">{todayFormatted}</span>
+                </div>
+              </button>
+
+              {isTgIos && (
+                <ProfileBubbleContextMenu
+                  isOpen={isProfileMenuOpen}
+                  onClose={() => setIsProfileMenuOpen(false)}
+                  onStartBeforeLeaving={handleStartBeforeLeaving}
+                  onOpenConfig={() => setIsBeforeLeavingConfigOpen(true)}
+                  onRefresh={handlePillRefresh}
+                  isSyncing={isSyncing}
+                />
+              )}
+            </div>
+
+            {!isTgIos && (
+              <button
+                type="button"
+                className="header-before-leaving-btn"
+                onClick={handleStartBeforeLeaving}
+                title="Режим «Перед выходом»"
+                aria-label="Режим «Перед выходом»"
+              >
+                <DoorOpen size={16} />
+                <span>Перед выходом</span>
+              </button>
+            )}
+
             {(userProfile?.isDemo ?? currentUser.isDemo) && (
               <button
                 type="button"
@@ -994,6 +1248,34 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* Before Leaving Config Modal (R1) */}
+      <AnimatePresence>
+        {isBeforeLeavingConfigOpen && (
+          <BeforeLeavingConfigModal
+            isOpen={isBeforeLeavingConfigOpen}
+            onClose={() => setIsBeforeLeavingConfigOpen(false)}
+            onStartSession={handleStartBeforeLeaving}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Before Leaving Active Session Overlay (Milestone 3 / R2) */}
+      <AnimatePresence>
+        {isBeforeLeavingActive && activeBeforeLeavingSession && (
+          <BeforeLeavingActiveOverlay
+            session={activeBeforeLeavingSession}
+            onToggleItem={handleToggleBeforeLeavingItem}
+            onFinishSession={handleFinishBeforeLeavingSession}
+            isFinishing={isFinishingBeforeLeaving}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Before Leaving Active Session State (M2 / M3) */}
+      {isBeforeLeavingActive && (
+        <div style={{ display: 'none' }} data-before-leaving-active={isBeforeLeavingActive} />
+      )}
       </div>
     </ErrorBoundary>
   );

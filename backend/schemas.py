@@ -558,3 +558,96 @@ class GroceryListResponse(BaseModel):
     total_count: int
     completed_count: int
 
+
+# --- Before Leaving Schemas (R1 & R2) ---
+
+class BeforeLeavingItemBase(BaseModel):
+    title: str = Field(..., max_length=500)
+    order: Optional[int] = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            clean = capitalize_first(v.strip())
+            if not clean:
+                raise ValueError("Title cannot be empty")
+            if len(clean) > 500:
+                raise ValueError("Title cannot exceed 500 characters")
+            return clean
+        if v is None:
+            raise ValueError("Title cannot be empty")
+        return v
+
+
+class BeforeLeavingItemCreate(BeforeLeavingItemBase):
+    pass
+
+
+class BeforeLeavingItemUpdate(BaseModel):
+    title: Optional[str] = Field(None, max_length=500)
+    order: Optional[int] = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def validate_title(cls, v: Any) -> Any:
+        if v is not None and isinstance(v, str):
+            clean = capitalize_first(v.strip())
+            if not clean:
+                raise ValueError("Title cannot be empty")
+            if len(clean) > 500:
+                raise ValueError("Title cannot exceed 500 characters")
+            return clean
+        return v
+
+
+class BeforeLeavingItemRead(BeforeLeavingItemBase):
+    id: int
+    user_id: int
+    order: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class BeforeLeavingItemsReorderRequest(BaseModel):
+    item_ids: List[int]
+
+
+class BeforeLeavingCheckItemRead(BaseModel):
+    id: int
+    session_id: int
+    template_item_id: Optional[int] = None
+    title: str
+    order: int
+    is_checked: bool
+    checked_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class BeforeLeavingCheckItemToggle(BaseModel):
+    is_checked: Optional[bool] = None
+
+
+class BeforeLeavingSessionStart(BaseModel):
+    reset: bool = False
+
+
+class BeforeLeavingSessionRead(BaseModel):
+    id: int
+    user_id: int
+    is_active: bool
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    items: List[BeforeLeavingCheckItemRead] = Field(default_factory=list)
+    total_count: int
+    completed_count: int
+    is_all_completed: bool
+
+    class Config:
+        from_attributes = True
+
