@@ -54,7 +54,7 @@ import LoginScreen from './components/LoginScreen';
 import AuthCallback from './components/AuthCallback';
 import { initTheme } from './theme';
 
-class ErrorBoundary extends React.Component {
+export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -154,6 +154,111 @@ export default function App() {
     Boolean(getCachedActiveBeforeLeavingSession()?.is_active)
   );
   const [isFinishingBeforeLeaving, setIsFinishingBeforeLeaving] = useState(false);
+
+  const lastFetchedRef = useRef(0);
+  const isFetchingRef = useRef(false);
+  const latestFetchIdRef = useRef(0);
+  const coldStartRetryRef = useRef(0);
+
+  const loadData = useCallback(async (forceFullLoading = false, silent = false, isInitial = false) => {
+    const now = Date.now();
+    // Prevent background fetches if user recently clicked a toggle or mutations are pending (except for initial or forced load)
+    if (!forceFullLoading && !isInitial && (now - getLastUserActionTime() < 4000 || hasActivePendingMutations())) {
+      return;
+    }
+    if (isFetchingRef.current || (!forceFullLoading && !isInitial && now - lastFetchedRef.current < 2500)) {
+      return;
+    }
+
+    const currentFetchId = ++latestFetchIdRef.current;
+    isFetchingRef.current = true;
+    lastFetchedRef.current = now;
+
+    if (forceFullLoading || !dashboardData) {
+      setIsLoading(true);
+    }
+    if (!silent) {
+      setIsSyncing(true);
+    }
+
+    const timer = setTimeout(() => {
+      setWarmupTimerElapsed(true);
+    }, 2500);
+
+    try {
+      const [dash, goals, groceries] = await Promise.all([
+        fetchDashboard(),
+        fetchGoals(),
+        fetchGroceries(),
+        fetchUserSettings().catch(() => null),
+      ]);
+
+      // If a newer fetch was launched, discard this stale response
+      if (currentFetchId !== latestFetchIdRef.current) {
+        return;
+      }
+
+      if (dash) {
+        const reconciledDash = reconcileDashboardWithPending(dash);
+        setDashboardData(reconciledDash);
+      }
+      if (goals) {
+        const reconciledGoals = reconcileGoalsWithPending(goals);
+        setGoalsData(reconciledGoals);
+      }
+      if (groceries) {
+        const reconciledGroceries = reconcileGroceriesWithPending(groceries);
+        setGroceriesData(reconciledGroceries);
+      }
+
+      // Check active Before Leaving session
+      fetchActiveBeforeLeavingSession()
+        .then((session) => {
+          if (session && session.is_active) {
+            setActiveBeforeLeavingSession(session);
+            setIsBeforeLeavingActive(true);
+            setCachedActiveBeforeLeavingSession(session);
+          } else {
+            setActiveBeforeLeavingSession(null);
+            setIsBeforeLeavingActive(false);
+            clearCachedActiveBeforeLeavingSession();
+          }
+        })
+        .catch(() => {});
+
+      // Check if day is completed to celebrate
+      if (dash && dash.total_count > 0 && dash.completed_count === dash.total_count) {
+        setMascotMood('done');
+      } else {
+        setMascotMood('idle');
+      }
+
+      // Auto-retry cold start if server has not responded yet (e.g. Render waking up)
+      if (typeof window !== 'undefined' && window.__tasker_server_connected) {
+        coldStartRetryRef.current = 0;
+      } else if (isInitial && coldStartRetryRef.current < 8) {
+        coldStartRetryRef.current++;
+        setTimeout(() => {
+          loadData(false, true, true);
+        }, 3500);
+      }
+    } catch (e) {
+      console.error('Error loading data:', e);
+      if (isInitial && coldStartRetryRef.current < 8) {
+        coldStartRetryRef.current++;
+        setTimeout(() => {
+          loadData(false, true, true);
+        }, 3500);
+      }
+    } finally {
+      clearTimeout(timer);
+      setWarmupTimerElapsed(false);
+      setIsLoading(false);
+      setIsSyncing(false);
+      setIsInitialLoading(false);
+      isFetchingRef.current = false;
+    }
+  }, [dashboardData]);
 
   const handleStartBeforeLeaving = useCallback(async () => {
     hapticFeedback('medium');
@@ -465,111 +570,6 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isQuickAddOpen, activeTab, isBeforeLeavingActive]);
-
-  const lastFetchedRef = useRef(0);
-  const isFetchingRef = useRef(false);
-  const latestFetchIdRef = useRef(0);
-  const coldStartRetryRef = useRef(0);
-
-  const loadData = useCallback(async (forceFullLoading = false, silent = false, isInitial = false) => {
-    const now = Date.now();
-    // Prevent background fetches if user recently clicked a toggle or mutations are pending (except for initial or forced load)
-    if (!forceFullLoading && !isInitial && (now - getLastUserActionTime() < 4000 || hasActivePendingMutations())) {
-      return;
-    }
-    if (isFetchingRef.current || (!forceFullLoading && !isInitial && now - lastFetchedRef.current < 2500)) {
-      return;
-    }
-
-    const currentFetchId = ++latestFetchIdRef.current;
-    isFetchingRef.current = true;
-    lastFetchedRef.current = now;
-
-    if (forceFullLoading || !dashboardData) {
-      setIsLoading(true);
-    }
-    if (!silent) {
-      setIsSyncing(true);
-    }
-
-    const timer = setTimeout(() => {
-      setWarmupTimerElapsed(true);
-    }, 2500);
-
-    try {
-      const [dash, goals, groceries] = await Promise.all([
-        fetchDashboard(),
-        fetchGoals(),
-        fetchGroceries(),
-        fetchUserSettings().catch(() => null),
-      ]);
-
-      // If a newer fetch was launched, discard this stale response
-      if (currentFetchId !== latestFetchIdRef.current) {
-        return;
-      }
-
-      if (dash) {
-        const reconciledDash = reconcileDashboardWithPending(dash);
-        setDashboardData(reconciledDash);
-      }
-      if (goals) {
-        const reconciledGoals = reconcileGoalsWithPending(goals);
-        setGoalsData(reconciledGoals);
-      }
-      if (groceries) {
-        const reconciledGroceries = reconcileGroceriesWithPending(groceries);
-        setGroceriesData(reconciledGroceries);
-      }
-
-      // Check active Before Leaving session
-      fetchActiveBeforeLeavingSession()
-        .then((session) => {
-          if (session && session.is_active) {
-            setActiveBeforeLeavingSession(session);
-            setIsBeforeLeavingActive(true);
-            setCachedActiveBeforeLeavingSession(session);
-          } else {
-            setActiveBeforeLeavingSession(null);
-            setIsBeforeLeavingActive(false);
-            clearCachedActiveBeforeLeavingSession();
-          }
-        })
-        .catch(() => {});
-
-      // Check if day is completed to celebrate
-      if (dash && dash.total_count > 0 && dash.completed_count === dash.total_count) {
-        setMascotMood('done');
-      } else {
-        setMascotMood('idle');
-      }
-
-      // Auto-retry cold start if server has not responded yet (e.g. Render waking up)
-      if (typeof window !== 'undefined' && window.__tasker_server_connected) {
-        coldStartRetryRef.current = 0;
-      } else if (isInitial && coldStartRetryRef.current < 8) {
-        coldStartRetryRef.current++;
-        setTimeout(() => {
-          loadData(false, true, true);
-        }, 3500);
-      }
-    } catch (e) {
-      console.error('Error loading data:', e);
-      if (isInitial && coldStartRetryRef.current < 8) {
-        coldStartRetryRef.current++;
-        setTimeout(() => {
-          loadData(false, true, true);
-        }, 3500);
-      }
-    } finally {
-      clearTimeout(timer);
-      setWarmupTimerElapsed(false);
-      setIsLoading(false);
-      setIsSyncing(false);
-      setIsInitialLoading(false);
-      isFetchingRef.current = false;
-    }
-  }, [dashboardData]);
 
   // Smart auto-refresh: visibility change, window focus, Telegram WebApp viewport change, and periodic polling
   useEffect(() => {

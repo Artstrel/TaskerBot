@@ -402,9 +402,15 @@ describe('M3 Suite 3: BeforeLeavingActiveOverlay Component & Hard-Lock Architect
     assert.match(source, /const\s+handleToggleBeforeLeavingItem\s*=\s*useCallback/);
     assert.match(source, /toggleBeforeLeavingCheckItem\(itemId/);
 
-    // 5. Session finish handler
+    // 5. Session finish handler and TDZ order guarantee (loadData must be initialized before handleFinishBeforeLeavingSession)
     assert.match(source, /const\s+handleFinishBeforeLeavingSession\s*=\s*useCallback/);
     assert.match(source, /finishBeforeLeavingSession\(\)/);
+    const loadDataIndex = source.indexOf('const loadData = useCallback');
+    const finishSessionIndex = source.indexOf('const handleFinishBeforeLeavingSession = useCallback');
+    assert.ok(
+      loadDataIndex !== -1 && finishSessionIndex !== -1 && loadDataIndex < finishSessionIndex,
+      'loadData must be declared before handleFinishBeforeLeavingSession to prevent Temporal Dead Zone (TDZ) ReferenceError during initial render'
+    );
 
     // 6. Hard-lock defenses:
     // Tab switch guard
