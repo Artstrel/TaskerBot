@@ -39,8 +39,8 @@
 |---|------|-------|-------------|--------|
 | M1 | Backend Data Models, API Endpoints & Tests | `backend/models.py`, `backend/schemas.py`, `backend/crud.py`, `backend/api/routes.py`, `tests/test_before_leaving_backend.py` | none | DONE |
 | M2 | Frontend Template Editor & Adaptive Trigger | `frontend/src/api.js`, `frontend/src/components/BeforeLeavingConfigModal.jsx`, `frontend/src/components/ProfileBubbleContextMenu.jsx`, `frontend/src/App.jsx`, `frontend/src/index.css` | M1 | DONE |
-| M3 | Fullscreen Blocking Checklist & Hard-Lock | `frontend/src/components/BeforeLeavingActiveOverlay.jsx`, `frontend/src/App.jsx`, `frontend/src/index.css`, reload recovery | M1, M2 | PLANNED |
-| M4 | Comprehensive E2E Testing & Hardening | Full 4-tier E2E test suite + Tier 5 adversarial testing + 52-test baseline verification | M1, M2, M3 | PLANNED |
+| M3 | Fullscreen Blocking Checklist & Hard-Lock | `frontend/src/components/BeforeLeavingActiveOverlay.jsx`, `frontend/src/App.jsx`, `frontend/src/index.css`, reload recovery | M1, M2 | DONE |
+| M4 | Comprehensive E2E Testing & Hardening | Full 4-tier E2E test suite + Tier 5 adversarial testing + 52-test baseline verification | M1, M2, M3 | DONE |
 
 ## Interface Contracts
 

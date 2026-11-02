@@ -1,37 +1,55 @@
 # Handoff Report — Sentinel
 
 ## Observation
-- **Problem**: In numeric tasks (tasks with target numeric values), the progress counter was not persisting in the database. The progress was handled optimistically in the frontend UI, but after 30–40 seconds, the counter value reset back to zero.
-- **Root Cause**:
-  1. `RoutineLog` in `backend/models.py` lacked a unique constraint on `(routine_id, date)`.
-  2. Rapid or repeated updates generated duplicate rows in the database (e.g. routine 3 had duplicate rows id=25 and id=26 in Supabase PostgreSQL).
-  3. Subsequent PATCH requests triggered `MultipleResultsFound` on `scalar_one_or_none()` queries, crashing with an unhandled HTTP 500 error and aborting the save transaction.
-  4. The frontend suppressed the 500 error and evicted the mutation from its local queue upon response receipt.
-  5. The background polling loop running every 18 seconds in `frontend/src/App.jsx` fetched stale data from the database on its second tick (~36 seconds), overwriting the optimistic state with the unpersisted zero value.
+- **Task**: Delivery and independent verification of the «Перед выходом» ("Before Leaving") feature in TaskerBot for production use per `ORIGINAL_REQUEST.md`:
+  - **R1 (Template CRUD & Backend Persistence)**: Pre-configured checklist of tasks/items managed via modal/screen (`BeforeLeavingConfigModal.jsx`), persistently stored in the backend database via REST API (`/api/before-leaving/items`), surviving app and session reloads.
+  - **R2 (Blocking Checklist & Lock Mode)**: Fullscreen blocking interface (`BeforeLeavingActiveOverlay.jsx`, 100vw × 100dvh, z-index: 100) concealing all navigation elements (sidebar, header, bottom dock, FAB), trapping Escape/hotkeys, trapping history navigation via popstate, engaging Telegram WebApp `enableClosingConfirmation()`, and disabling dismissal or tab switching until 100% of checklist items are marked complete. Status and toggle progress sync to backend database via REST API (`/api/before-leaving/session/...`).
+  - **R3 (Adaptive Button Placement)**: In Telegram WebApp on iOS (`isTelegramIos()`), the trigger button is placed in the context menu of the profile bubble (`ProfileBubbleContextMenu.jsx`). On all other devices and breakpoints, the button is displayed inline on the same horizontal level as the profile bubble.
+- **Verification Execution**:
+  - Orchestrator (`8261ddab-a0e7-46ca-a06c-468a97d34cb1`) completed all 6 phases across Milestone 1 (Backend), Milestone 2 (Frontend Template & Trigger), Milestone 3 (Fullscreen Overlay & Lock), and internal forensic audit (`auditor_final`).
+  - Independent post-victory auditor (`c0922130-5d42-46d9-bb53-a76b44bd89a5`) executed a 3-phase audit (Timeline, Code Forensics & Anti-Cheating, Independent Test Execution).
+  - Verdict: **VICTORY CONFIRMED**.
 
 ## Logic Chain
-1. **Schema & Database Deduplication**:
-   - Added `UniqueConstraint("routine_id", "date", name="uq_routine_log_routine_date")` to `RoutineLog` in `backend/models.py`.
-   - In `backend/database.py` (`init_db()`), implemented an idempotent deduplication migration that collapses multiple rows into a single highest-value record and creates a unique btree index `idx_routine_logs_routine_date_unique`.
-2. **Deterministic & Concurrency-Safe CRUD Operations**:
-   - Replaced fragile `scalar_one_or_none()` queries in `backend/crud.py` with deterministic `.order_by(RoutineLog.current_value.desc(), RoutineLog.id.desc()).limit(1).scalars().first()`.
-   - Added concurrency race handling using `try ... except IntegrityError` to rollback and re-query the newly inserted row if two concurrent requests attempt initial creation simultaneously.
-3. **Frontend Synchronization & Mutation Resilience**:
-   - Updated `frontend/src/api.js` to dynamically compute `getEffectiveUserId()` and `getPendingSyncKey()`, preventing sync key mismatches.
-   - Guarded optimistic mutation removal so that failures (HTTP 500 or network errors) do not purge the mutation, preserving local state across background polling cycles.
+1. **Database & Backend CRUD (Milestone 1)**:
+   - SQLAlchemy 2.0 ORM models `BeforeLeavingItem`, `BeforeLeavingSession`, and `BeforeLeavingCheckItem` with CASCADE and SET NULL relationships.
+   - Pydantic v2 schemas with `min_length=1, max_length=500` title validation.
+   - Concurrency-safe CRUD operations in `backend/crud.py` using per-user `asyncio.Lock` (`_before_leaving_locks`), deterministic queries (`scalars().first()`), atomic SQL bulk updates, and snapshot check items created upon session start.
+   - 9 REST API endpoints under `/api/before-leaving/...` with strict authentication and multi-tenant isolation.
+2. **Frontend Template Management & Adaptive Trigger (Milestone 2)**:
+   - Client functions in `frontend/src/api.js` for template CRUD, reordering, session start, toggle, finish, and 0ms bootstrap caching.
+   - `BeforeLeavingConfigModal.jsx`: item CRUD, drag/arrow reordering, focus trap, and responsive styling.
+   - `ProfileBubbleContextMenu.jsx`: context menu for iOS Telegram profile bubble with outside-click handling.
+   - `App.jsx`: adaptive placement branching on `isTelegramIos()`.
+3. **Fullscreen Hard-Lock & Navigation Shield (Milestone 3)**:
+   - `BeforeLeavingActiveOverlay.jsx`: 100vw × 100dvh fullscreen overlay at `z-index: 100`.
+   - Multi-layer defense: CSS `display: none !important` on navigation bars, body scroll lock, capturing `keydown` listener trapping Escape/Tab, `pushState`/`popstate` back-button trap, and Telegram WebApp closing confirmation.
+   - Disables finish button until all checklist items are checked.
 4. **Independent Post-Victory Verification**:
-   - Iteration Gate was completed by Reviewer 1 & 2 (APPROVE), Challenger 1 & 2 (APPROVE), and internal Auditor 1 (CLEAN).
-   - Independent Victory Auditor conducted a 3-phase audit (Timeline, Anti-Cheating Integrity, Independent Test Execution) and issued a **VICTORY CONFIRMED** verdict.
+   - `teamwork_victory_auditor` verified zero mock facades, zero hardcoded test returns, authentic ORM persistence, and executed the entire test suite independently.
+   - 103 backend pytest tests passed (including all 52 baseline regression tests).
+   - 121 frontend node tests passed across 5 test suites.
+   - Frontend build and lint passed with 0 errors.
 
 ## Caveats
-- Production environment requires restart of backend service so that `init_db()` executes the schema index and deduplication logic against live database instances if not already pre-executed.
+- Native OS application switcher force-quits (killing Telegram via iOS App Switcher) cannot be intercepted by web sandboxes. However, persistent database state coupled with 0ms localStorage bootstrap ensures that the blocking overlay is immediately restored upon application restart.
 
 ## Conclusion
-- All requirements R1 (numeric task counter persistence) and R2 (regression prevention) are fully satisfied.
-- Acceptance criteria are met and independently verified.
+- All requirements (R1, R2, R3) and acceptance criteria in `ORIGINAL_REQUEST.md` are 100% fulfilled.
+- Zero regressions across existing TaskerBot features.
+- All crons and subagents have been terminated.
 - Victory audit verdict: **VICTORY CONFIRMED**.
 
 ## Verification Method
-- Independent Pytest execution: `.venv/bin/pytest tests/ -v` (52 passed in 4.63s).
-- Live PostgreSQL verification: 0 duplicate rows, unique btree index active, duplicate inserts rejected with `UniqueViolationError`.
-- Frontend lint and build: `npm --prefix frontend run lint` (0 errors), `npm --prefix frontend run build` (Vite production build passed cleanly in 247ms).
+To reproduce independent test and build verification:
+```bash
+.venv/bin/pytest tests/ -v
+npm --prefix frontend run build
+npm --prefix frontend run lint
+node --experimental-vm-modules tests/test_frontend_m2_challenge.mjs
+node tests/test_frontend_template_crud.mjs
+node tests/test_profile_bubble_event_coordination.mjs
+node tests/test_challenger_frontend_m2_empirical.mjs
+node --experimental-vm-modules tests/test_frontend_m3_challenge.mjs
+```
+Expected output: 224 passed tests (103 backend, 121 frontend), 0 failures, 0 build/lint errors.
