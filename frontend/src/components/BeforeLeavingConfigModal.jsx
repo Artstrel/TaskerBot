@@ -183,7 +183,7 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
 
   return (
     <motion.div
-      className="sheet-backdrop"
+      className="sheet-backdrop before-leaving-config-backdrop"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -356,7 +356,7 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
                 className="before-leaving-launch-preview-btn"
                 onClick={() => {
                   onClose();
-                  onStartSession();
+                  onStartSession({ startDirectly: true });
                 }}
               >
                 <DoorOpen size={16} />

@@ -260,20 +260,24 @@ export default function App() {
     }
   }, [dashboardData]);
 
-  const handleStartBeforeLeaving = useCallback(async () => {
+  const handleStartBeforeLeaving = useCallback(async (opts = {}) => {
     hapticFeedback('medium');
-    if (activeBeforeLeavingSession && activeBeforeLeavingSession.is_active) {
+    if (activeBeforeLeavingSession && activeBeforeLeavingSession.is_active && !opts?.openConfig) {
       setIsBeforeLeavingActive(true);
       return;
     }
-    const res = await startBeforeLeavingSession();
-    if (res && res.id) {
-      setActiveBeforeLeavingSession(res);
-      setIsBeforeLeavingActive(true);
-      setCachedActiveBeforeLeavingSession(res);
-    } else {
-      setIsBeforeLeavingConfigOpen(true);
+    if (opts?.startDirectly) {
+      const res = await startBeforeLeavingSession({ reset: true });
+      if (res && res.id) {
+        setActiveBeforeLeavingSession(res);
+        setIsBeforeLeavingActive(true);
+        setCachedActiveBeforeLeavingSession(res);
+      } else {
+        setIsBeforeLeavingConfigOpen(true);
+      }
+      return;
     }
+    setIsBeforeLeavingConfigOpen(true);
   }, [activeBeforeLeavingSession]);
 
   const handleToggleBeforeLeavingItem = useCallback(async (itemId, isChecked) => {
@@ -849,7 +853,7 @@ export default function App() {
             {!isTgIos && (
               <button
                 type="button"
-                className="header-before-leaving-btn"
+                className="header-before-leaving-btn desktop-icon-btn"
                 onClick={handleStartBeforeLeaving}
                 title="Режим «Перед выходом»"
                 aria-label="Режим «Перед выходом»"
@@ -1267,6 +1271,7 @@ export default function App() {
             session={activeBeforeLeavingSession}
             onToggleItem={handleToggleBeforeLeavingItem}
             onFinishSession={handleFinishBeforeLeavingSession}
+            onOpenConfig={() => setIsBeforeLeavingConfigOpen(true)}
             isFinishing={isFinishingBeforeLeaving}
           />
         )}

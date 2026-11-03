@@ -4830,11 +4830,30 @@ body.is-tg-fullscreen .header-actions {
 /* Tablet intermediary adjustments */
 @media (min-width: 768px) and (max-width: 1023px) {
   .sidebar-top-bar .header-before-leaving-btn {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
     padding: 0;
     border-radius: 50%;
     justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .sidebar-top-bar .header-before-leaving-btn span {
+    display: none !important;
+  }
+}
+
+/* Desktop Sidebar (>= 1024px): compact icon-only button so it fits cleanly in 260px navbar */
+@media (min-width: 1024px) {
+  .sidebar-top-bar .header-before-leaving-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
+    border-radius: 50%;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
   .sidebar-top-bar .header-before-leaving-btn span {
@@ -4905,7 +4924,7 @@ body.before-leaving-lock-body {
   height: 100vh;
   height: 100dvh;
   z-index: 100;
-  background-color: var(--bg-app);
+  background-color: var(--bg-surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4921,12 +4940,34 @@ body.before-leaving-lock-body {
   outline: none;
 }
 
-/* Header Container */
+/* Header Container on unified surface with smooth gradient scrim */
 .before-leaving-overlay-header {
+  position: relative;
+  z-index: 10;
   flex-shrink: 0;
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 14px 20px 16px;
+  background: transparent;
+  border-bottom: none;
+  padding: 16px 20px 14px;
+}
+
+.before-leaving-overlay-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: -22px;
+  background: linear-gradient(
+    to bottom,
+    var(--sheet-scrim-stop1) 0%,
+    var(--sheet-scrim-stop2) 30%,
+    var(--sheet-scrim-stop3) 55%,
+    var(--sheet-scrim-stop4) 75%,
+    var(--sheet-scrim-stop5) 88%,
+    var(--sheet-scrim-zero) 100%
+  );
+  pointer-events: none;
+  z-index: -1;
 }
 
 .before-leaving-header-inner {
@@ -4959,24 +5000,29 @@ body.before-leaving-lock-body {
   text-transform: uppercase;
 }
 
-.before-leaving-counter-pill {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
+.before-leaving-header-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-full);
-  padding: 3px 10px;
-  font-variant-numeric: tabular-nums;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
 }
 
-.before-leaving-counter-pill .counter-sep {
-  margin: 0 3px;
-  color: var(--text-tertiary);
+.before-leaving-header-edit-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+  border-color: var(--border-hover);
 }
 
-.before-leaving-counter-pill .counter-total {
-  color: var(--text-secondary);
+.before-leaving-header-edit-btn:active {
+  transform: scale(0.96);
 }
 
 .before-leaving-header-title-row {
@@ -5001,15 +5047,24 @@ body.before-leaving-lock-body {
   line-height: 1.4;
 }
 
-/* Progress Bar */
-.before-leaving-progress-container {
-  margin-top: 6px;
+/* Unified Progress Row: Track + Indicator on the same line */
+.before-leaving-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
   width: 100%;
+}
+
+.before-leaving-progress-container {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
 }
 
 .before-leaving-progress-track {
   width: 100%;
-  height: 6px;
+  height: 8px;
   background: var(--border-subtle);
   border-radius: var(--radius-full);
   overflow: hidden;
@@ -5027,6 +5082,34 @@ body.before-leaving-lock-body {
   height: 100%;
   background: var(--text-primary);
   border-radius: var(--radius-full);
+}
+
+/* Prominent Top Progress Counter Pill */
+.before-leaving-counter-pill {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 4px 12px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.before-leaving-counter-pill .counter-sep {
+  margin: 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.before-leaving-counter-pill .counter-total {
+  color: var(--text-secondary);
 }
 
 /* Error Banner */
@@ -5173,12 +5256,38 @@ body.before-leaving-lock-body {
   max-width: 320px;
 }
 
-/* Sticky Bottom Action Footer */
+/* Sticky Bottom Action Footer with Scrim Gradient */
 .before-leaving-overlay-footer {
+  position: relative;
+  z-index: 10;
   flex-shrink: 0;
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border-subtle);
-  padding: 12px 20px 14px;
+  background: transparent;
+  border-top: none;
+  padding: 14px 20px max(14px, var(--safe-bottom));
+}
+
+.before-leaving-overlay-footer::before {
+  content: '';
+  position: absolute;
+  top: -24px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    var(--sheet-scrim-stop1) 0%,
+    var(--sheet-scrim-stop2) 30%,
+    var(--sheet-scrim-stop3) 55%,
+    var(--sheet-scrim-stop4) 75%,
+    var(--sheet-scrim-stop5) 88%,
+    var(--sheet-scrim-zero) 100%
+  );
+  pointer-events: none;
+  z-index: -1;
+}
+
+.before-leaving-config-backdrop {
+  z-index: 120 !important;
 }
 
 .before-leaving-footer-inner {

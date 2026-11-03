@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, DoorOpen, CheckCircle2, ShieldCheck, Check, AlertCircle, Sparkles } from 'lucide-react';
+import { Lock, DoorOpen, CheckCircle2, ShieldCheck, Check, AlertCircle, Sparkles, Pencil } from 'lucide-react';
 import AnimatedCheckbox from './ui/AnimatedCheckbox';
 import { hapticFeedback } from '../api';
 
@@ -13,6 +13,7 @@ export default function BeforeLeavingActiveOverlay({
   onToggleItem,
   onFinishSession,
   onSessionUpdate,
+  onOpenConfig,
   isFinishing = false,
 }) {
   const overlayRef = useRef(null);
@@ -212,7 +213,7 @@ export default function BeforeLeavingActiveOverlay({
       aria-labelledby="before-leaving-overlay-title"
       aria-label="Режим «Перед выходом»: блокирующий чеклист"
     >
-      {/* HEADER SECTION */}
+      {/* HEADER SECTION (Unified surface with scrim gradient) */}
       <header className="before-leaving-overlay-header before-leaving-header">
         <div className="before-leaving-header-inner">
           <div className="before-leaving-header-top-row before-leaving-header-top">
@@ -220,15 +221,21 @@ export default function BeforeLeavingActiveOverlay({
               <Lock size={12} strokeWidth={2.4} aria-hidden="true" />
               <span>Режим блокировки</span>
             </div>
-            <div
-              className="before-leaving-counter-pill before-leaving-counter"
-              aria-live="polite"
-              aria-label={`Выполнено ${completedCount} из ${totalCount}`}
-            >
-              <span className="counter-current before-leaving-counter-current">{completedCount}</span>
-              <span className="counter-sep before-leaving-counter-divider"> из </span>
-              <span className="counter-total before-leaving-counter-total">{totalCount}</span>
-            </div>
+            {onOpenConfig && (
+              <button
+                type="button"
+                className="before-leaving-header-edit-btn"
+                onClick={() => {
+                  hapticFeedback('light');
+                  onOpenConfig();
+                }}
+                title="Редактировать список чеклиста"
+                aria-label="Редактировать чеклист"
+              >
+                <Pencil size={12} strokeWidth={2.2} />
+                <span>Редактировать</span>
+              </button>
+            )}
           </div>
 
           <div className="before-leaving-header-title-row before-leaving-title-group">
@@ -241,22 +248,34 @@ export default function BeforeLeavingActiveOverlay({
             Отметьте все пункты чеклиста, чтобы разблокировать интерфейс и выйти из дома.
           </p>
 
-          {/* ANIMATED PROGRESS BAR */}
-          <div
-            className="before-leaving-progress-container before-leaving-progress-track"
-            role="progressbar"
-            aria-valuenow={progressPercent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label="Прогресс сборов"
-          >
-            <div className="before-leaving-progress-track-inner">
-              <motion.div
-                className="before-leaving-progress-fill"
-                initial={false}
-                animate={{ width: `${progressPercent}%` }}
-                transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              />
+          {/* UNIFIED PROGRESS BAR & INDICATOR ROW */}
+          <div className="before-leaving-progress-row">
+            <div
+              className="before-leaving-progress-container before-leaving-progress-track"
+              role="progressbar"
+              aria-valuenow={progressPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Прогресс сборов"
+            >
+              <div className="before-leaving-progress-track-inner">
+                <motion.div
+                  className="before-leaving-progress-fill"
+                  initial={false}
+                  animate={{ width: `${progressPercent}%` }}
+                  transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                />
+              </div>
+            </div>
+
+            <div
+              className="before-leaving-counter-pill before-leaving-counter before-leaving-progress-counter"
+              aria-live="polite"
+              aria-label={`Выполнено ${completedCount} из ${totalCount}`}
+            >
+              <span className="counter-current before-leaving-counter-current">{completedCount}</span>
+              <span className="counter-sep before-leaving-counter-divider"> из </span>
+              <span className="counter-total before-leaving-counter-total">{totalCount}</span>
             </div>
           </div>
         </div>
@@ -343,10 +362,10 @@ export default function BeforeLeavingActiveOverlay({
         </div>
       </main>
 
-      {/* STICKY BOTTOM ACTION FOOTER */}
-      <footer className="before-leaving-overlay-footer before-leaving-footer">
-        <div className="before-leaving-footer-inner">
-          {isAllCompleted ? (
+      {/* ACTION FOOTER */}
+      {isAllCompleted && (
+        <footer className="before-leaving-overlay-footer before-leaving-footer">
+          <div className="before-leaving-footer-inner">
             <motion.button
               type="button"
               className="before-leaving-finish-btn"
@@ -361,17 +380,9 @@ export default function BeforeLeavingActiveOverlay({
               <DoorOpen size={18} strokeWidth={2.2} />
               <span>{finishingState ? 'Завершение...' : 'Завершить и выйти'}</span>
             </motion.button>
-          ) : (
-            <div className="before-leaving-locked-footer-hint before-leaving-lock-badge">
-              <ShieldCheck size={16} />
-              <span>
-                Осталось проверить: <strong>{totalCount - completedCount}</strong>{' '}
-                {totalCount - completedCount === 1 ? 'пункт' : 'пунктов'}
-              </span>
-            </div>
-          )}
-        </div>
-      </footer>
+          </div>
+        </footer>
+      )}
     </motion.div>
   );
 }
