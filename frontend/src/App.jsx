@@ -1271,7 +1271,6 @@ export default function App() {
             session={activeBeforeLeavingSession}
             onToggleItem={handleToggleBeforeLeavingItem}
             onFinishSession={handleFinishBeforeLeavingSession}
-            onOpenConfig={() => setIsBeforeLeavingConfigOpen(true)}
             isFinishing={isFinishingBeforeLeaving}
           />
         )}

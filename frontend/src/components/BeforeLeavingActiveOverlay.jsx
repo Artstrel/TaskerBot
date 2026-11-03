@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Lock, DoorOpen, CheckCircle2, ShieldCheck, Check, AlertCircle, Sparkles, Pencil } from 'lucide-react';
+import { Lock, DoorOpen, CheckCircle2, ShieldCheck, Check, AlertCircle, Sparkles } from 'lucide-react';
 import AnimatedCheckbox from './ui/AnimatedCheckbox';
 import { hapticFeedback } from '../api';
 
@@ -13,7 +13,6 @@ export default function BeforeLeavingActiveOverlay({
   onToggleItem,
   onFinishSession,
   onSessionUpdate,
-  onOpenConfig,
   isFinishing = false,
 }) {
   const overlayRef = useRef(null);
@@ -221,21 +220,6 @@ export default function BeforeLeavingActiveOverlay({
               <Lock size={12} strokeWidth={2.4} aria-hidden="true" />
               <span>Режим блокировки</span>
             </div>
-            {onOpenConfig && (
-              <button
-                type="button"
-                className="before-leaving-header-edit-btn"
-                onClick={() => {
-                  hapticFeedback('light');
-                  onOpenConfig();
-                }}
-                title="Редактировать список чеклиста"
-                aria-label="Редактировать чеклист"
-              >
-                <Pencil size={12} strokeWidth={2.2} />
-                <span>Редактировать</span>
-              </button>
-            )}
           </div>
 
           <div className="before-leaving-header-title-row before-leaving-title-group">

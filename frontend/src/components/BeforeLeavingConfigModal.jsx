@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { X, Plus, Trash2, ArrowUp, ArrowDown, DoorOpen, ListChecks, Check, Pencil } from 'lucide-react';
+import { X, Trash2, ArrowUp, ArrowDown, DoorOpen, ListChecks, Check, Pencil } from 'lucide-react';
+import QuickAddBar from './QuickAddBar';
 import {
   fetchBeforeLeavingItems,
   createBeforeLeavingItem,
@@ -19,7 +20,6 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const editInputRef = useRef(null);
-  const addInputRef = useRef(null);
   const sheetRef = useRef(null);
 
   useEffect(() => {
@@ -79,7 +79,8 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
-        addInputRef.current?.focus();
+        const input = sheetRef.current?.querySelector('.quick-bar-input');
+        input?.focus();
       }, 50);
       return () => clearTimeout(timer);
     }
@@ -224,28 +225,16 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
             Сформируйте список вещей и проверок (ключи, документы, выключить утюг...), который будет блокировать интерфейс перед выходом из дома.
           </p>
 
-          <form onSubmit={handleAddItem} className="before-leaving-add-form">
-            <input
-              ref={addInputRef}
-              autoFocus
-              type="text"
-              className="before-leaving-input"
-              placeholder="Добавить пункт (например, «Ключи»)..."
-              value={newItemTitle}
-              maxLength={500}
-              onChange={(e) => setNewItemTitle(e.target.value)}
-              aria-label="Название пункта чеклиста"
-            />
-            <button
-              type="submit"
-              className="before-leaving-add-btn"
-              disabled={!newItemTitle.trim() || isSubmitting}
-              aria-label="Добавить"
-            >
-              <Plus size={18} />
-              <span>Добавить</span>
-            </button>
-          </form>
+          <QuickAddBar
+            placeholder="Добавить пункт (например, «Ключи»)..."
+            value={newItemTitle}
+            onChange={setNewItemTitle}
+            onSubmit={handleAddItem}
+            isSubmitting={isSubmitting}
+            submitTitle="Добавить"
+            autoFocus
+            className="before-leaving-quick-add"
+          />
 
           <div className="before-leaving-items-list" role="list">
             {loading ? (
@@ -263,6 +252,7 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
                   <div className="before-leaving-item-reorder">
                     <button
                       type="button"
+                      className="item-mini-btn"
                       disabled={index === 0}
                       onClick={() => handleMove(index, -1)}
                       aria-label="Переместить выше"
@@ -272,6 +262,7 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
                     </button>
                     <button
                       type="button"
+                      className="item-mini-btn"
                       disabled={index === items.length - 1}
                       onClick={() => handleMove(index, 1)}
                       aria-label="Переместить ниже"
@@ -300,7 +291,7 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
                         />
                         <button
                           type="button"
-                          className="before-leaving-item-btn"
+                          className="item-mini-btn btn-success"
                           onMouseDown={(e) => {
                             e.preventDefault();
                             handleSaveEdit(item.id);
@@ -308,7 +299,7 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
                           title="Сохранить"
                           aria-label="Сохранить"
                         >
-                          <Check size={16} />
+                          <Check size={14} />
                         </button>
                       </div>
                     ) : (
@@ -326,22 +317,22 @@ export default function BeforeLeavingConfigModal({ isOpen, onClose, onStartSessi
                     {editingId !== item.id && (
                       <button
                         type="button"
-                        className="before-leaving-item-btn"
+                        className="item-mini-btn"
                         onClick={() => handleStartEdit(item)}
                         title="Редактировать"
                         aria-label="Редактировать"
                       >
-                        <Pencil size={15} />
+                        <Pencil size={14} />
                       </button>
                     )}
                     <button
                       type="button"
-                      className="before-leaving-item-btn before-leaving-item-delete"
+                      className="item-mini-btn btn-danger"
                       onClick={() => handleDeleteItem(item.id)}
                       aria-label="Удалить пункт"
                       title="Удалить"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
