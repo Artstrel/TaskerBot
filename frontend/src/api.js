@@ -11,6 +11,20 @@ export const isInsideTelegram = () => {
   return false;
 };
 
+export const isIosDevice = () => {
+  if (typeof window === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent || '') ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
+export const isStandalonePwa = () => {
+  if (typeof window === 'undefined') return false;
+  return Boolean(
+    window.navigator.standalone ||
+    (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+  );
+};
+
 export const getAuthToken = () => {
   if (typeof window !== 'undefined') {
     return localStorage.getItem('tasker_auth_token') || '';

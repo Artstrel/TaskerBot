@@ -52,6 +52,7 @@ import BeforeLeavingActiveOverlay from './components/BeforeLeavingActiveOverlay'
 import ProfileBubbleContextMenu from './components/ProfileBubbleContextMenu';
 import LoginScreen from './components/LoginScreen';
 import AuthCallback from './components/AuthCallback';
+import IosPwaPrompt from './components/IosPwaPrompt';
 import { initTheme } from './theme';
 
 export class ErrorBoundary extends React.Component {
@@ -1280,6 +1281,9 @@ export default function App() {
       {isBeforeLeavingActive && (
         <div style={{ display: 'none' }} data-before-leaving-active={isBeforeLeavingActive} />
       )}
+
+      {/* iOS Safari PWA Smart Banner & Install Flow */}
+      <IosPwaPrompt />
       </div>
     </ErrorBoundary>
   );

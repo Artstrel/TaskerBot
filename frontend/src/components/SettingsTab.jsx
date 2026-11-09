@@ -15,6 +15,8 @@ import {
   Sunrise,
   Sunset,
   LogOut,
+  Smartphone,
+  CheckCircle2,
 } from 'lucide-react';
 import {
   fetchUserSettings,
@@ -33,9 +35,11 @@ import {
   getCachedUserSettings,
   clearAuthSession,
   isInsideTelegram,
+  isStandalonePwa,
 } from '../api';
 import { applyTheme, getStoredThemeConfig } from '../theme';
 import ViewHeader from './ViewHeader';
+import IosPwaPrompt from './IosPwaPrompt';
 
 export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing, isInitialLoading = false }) {
   const [settings, setSettings] = useState(() => getCachedUserSettings());
@@ -43,6 +47,7 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing, isIn
   const [customBackend, setCustomBackend] = useState(getCustomBackendUrl());
   const [backendInput, setBackendInput] = useState(getCustomBackendUrl());
   const [geminiKeyInput, setGeminiKeyInput] = useState(getGeminiKey());
+  const [isPwaModalOpen, setIsPwaModalOpen] = useState(false);
   const [groqKeyInput, setGroqKeyInput] = useState(getGroqKey());
   const [openRouterKeyInput, setOpenRouterKeyInput] = useState(getOpenRouterKey());
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -606,9 +611,48 @@ export default function SettingsTab({ onRefresh, onForceRefresh, isSyncing, isIn
                   </div>
                 )}
               </div>
+
+              {/* SECTION: PWA Fullscreen Mode */}
+              <div className="settings-section-title" style={{ marginTop: '16px' }}>
+                Полноэкранный режим (PWA)
+              </div>
+              <div className="settings-group" style={{ padding: '12px 14px' }}>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: 1.45 }}>
+                  {isStandalonePwa() ? (
+                    <span style={{ color: 'var(--success, #22c55e)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
+                      <CheckCircle2 size={15} /> Полноэкранный режим активен (без системных панелей Safari)
+                    </span>
+                  ) : (
+                    'В iOS Safari системные панели навигации и адресную строку можно убрать, сохранив сайт на экран «Домой».'
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="filter-chip active"
+                  onClick={() => {
+                    hapticFeedback('medium');
+                    setIsPwaModalOpen(true);
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    fontSize: '12px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Smartphone size={14} />
+                  <span>Инструкция по установке на экран «Домой»</span>
+                </button>
+              </div>
             </div>
           )}
         </section>
+
+        {isPwaModalOpen && (
+          <IosPwaPrompt forceOpen={true} onCloseForce={() => setIsPwaModalOpen(false)} />
+        )}
 
         {/* ========================================================
             ACCORDION 1: Уведомления и расписание (Open by default)
