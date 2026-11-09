@@ -362,7 +362,7 @@ h4,
   width: 100%;
   margin: 0 auto;
   position: relative;
-  padding-bottom: calc(116px + var(--safe-bottom));
+  padding-bottom: calc(92px + max(calc(var(--safe-bottom) - 12px), 12px));
 }
 
 .main-content-viewport {
@@ -383,7 +383,7 @@ h4,
   display: flex;
   flex-direction: column;
   position: relative;
-  padding-bottom: calc(116px + var(--safe-bottom));
+  padding-bottom: calc(92px + max(calc(var(--safe-bottom) - 12px), 12px));
 }
 
 /* Minimalist App Header with Dynamic Telegram Safe Areas & Sticky Pinned Pill */
@@ -424,12 +424,12 @@ h4,
   z-index: -1;
 }
 
-/* iOS: keep 12px top clearance in standalone/Safari so top fixedContainerEdges shim never overlaps header pill */
+/* iOS: 24px top clearance in standalone/Safari so header clears status bar, Dynamic Island & blur zone */
 body.is-ios .app-header,
 html.is-ios .app-header {
-  padding-top: calc(max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px)) + 12px);
-  padding-bottom: 6px;
-  min-height: 44px;
+  padding-top: calc(max(var(--tg-raw-safe-top, 0px), env(safe-area-inset-top, 0px)) + 24px);
+  padding-bottom: 8px;
+  min-height: 50px;
 }
 
 body.is-tg-fullscreen.is-ios .app-header,
@@ -889,7 +889,7 @@ body.is-tg-fullscreen .header-actions {
 .app-fab {
   position: fixed;
   right: 20px;
-  bottom: calc(96px + var(--safe-bottom));
+  bottom: calc(76px + max(calc(var(--safe-bottom) - 12px), 12px));
   z-index: 45;
   width: 52px;
   height: 52px;
@@ -938,7 +938,7 @@ body.is-tg-fullscreen .header-actions {
   z-index: 50;
   display: flex;
   justify-content: center;
-  padding: 0 16px calc(14px + var(--safe-bottom)) 16px;
+  padding: 0 16px max(calc(var(--safe-bottom) - 12px), 12px) 16px;
   pointer-events: none;
 }
 
@@ -5244,7 +5244,7 @@ body.before-leaving-lock-body {
   position: fixed;
   left: 16px;
   right: 16px;
-  bottom: calc(var(--safe-bottom, 0px) + 76px);
+  bottom: calc(max(calc(var(--safe-bottom, 0px) - 12px), 12px) + 54px);
   margin: 0 auto;
   max-width: 440px;
   z-index: 85;
